@@ -7,7 +7,8 @@ use std::thread;
 
 use super::input;
 use super::output;
-use super::terminal::Terminal;
+use super::terminal::{Terminal , LastInputEvent , TerminalActions};
+use super::render;
 
 fn spawn_shell() -> Result<(Box<dyn Read + Send>, Box<dyn Write + Send>), std::io::Error> {
     let pty_system = NativePtySystem::default();
@@ -56,6 +57,7 @@ pub fn pty_agent() -> Result<(), std::io::Error> {
     let (reader, writer) = spawn_shell()?;
 
     let (tx, rx) = channel::<Vec<u8>>();
+    let (event_writter , events_reader) = channel::<LastInputEvent>();
     init_shell(&tx);
 
     let term = Arc::clone(&terminal);
@@ -69,12 +71,19 @@ pub fn pty_agent() -> Result<(), std::io::Error> {
 
     let term = Arc::clone(&terminal);
     let user_reader = thread::spawn(move || {
-        input::read_user_input(tx, term);
+        input::read_user_input(event_writter, term);
     });
+
+    let term = Arc::clone(&terminal);
+    let events_reader = thread::spawn(move|| {
+        read_events(tx, events_reader , term);
+    });
+
 
     user_reader.join().unwrap();
     pty_writer.join().unwrap();
     pty_reader.join().unwrap();
+    events_reader.join().unwrap();
 
     disable_raw_mode()?;
     Ok(())
@@ -89,4 +98,31 @@ fn handle_input_stream(rx: std::sync::mpsc::Receiver<Vec<u8>>, mut pty_writer: B
             break;
         }
     }
+}
+fn read_events(tx: std::sync::mpsc::Sender<Vec<u8>> , events:std::sync::mpsc::Receiver<LastInputEvent> , terminal:Arc<Mutex<Terminal>>){
+
+        while let Ok(event) =  events.recv(){
+            event_handler(event, &tx, &terminal);
+        }
+    drop(events);
+}
+
+fn event_handler(event:LastInputEvent ,tx:& std::sync::mpsc::Sender<Vec<u8>> , term:&Arc<Mutex<Terminal>>){
+        
+        let mut terminal = term.lock().unwrap();
+
+        for action in terminal.cmd_line.cmd_line_reducer(event){
+            match action{
+                TerminalActions::SendPty(bytes) =>{
+                    tx.send(bytes).unwrap();
+                }
+                TerminalActions::Render(render_action)=>{
+                    render::render_handler(render_action);
+                }
+                TerminalActions::UpdateState=>{
+                    terminal.update_terminal_state_from_input();
+                }
+                _=>{}
+            }
+        }
 }

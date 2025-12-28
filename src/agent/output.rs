@@ -56,7 +56,7 @@ mod tests {
     #[test]
     fn cmdline_outputs_flush_and_prompt() {
         let mut term = Terminal::default();
-        term.set_state_to(TerminalState::CommandLine);
+        term._set_state_to(TerminalState::CommandLine);
 
         let actions = next_action_is(std::sync::Mutex::new(term).lock().unwrap());
 
@@ -66,7 +66,7 @@ mod tests {
     #[test]
     fn non_cmdline_outputs_flush_only() {
         let mut term = Terminal::default();
-        term.set_state_to(TerminalState::FullScreen);
+        term._set_state_to(TerminalState::FullScreen);
 
         let actions = next_action_is(std::sync::Mutex::new(term).lock().unwrap());
 
@@ -75,7 +75,7 @@ mod tests {
    #[test]
     fn pty_output_handler_writes_to_stdout() {
         let mut term = Terminal::default();
-        term.set_state_to(TerminalState::FullScreen);
+        term._set_state_to(TerminalState::FullScreen);
         let terminal = Arc::new(Mutex::new(term));
 
         let mut buffer = *b"hello";

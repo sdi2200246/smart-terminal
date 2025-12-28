@@ -1,30 +1,14 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers , Event , read};
 use std::sync::{Arc, Mutex};
 use std::io::{Error , ErrorKind};
-
-use super::render::{draw_backspace, draw_character};
-use super::terminal::{Terminal , LastInput , TerminalState};
+use super::terminal::{Terminal , LastInputEvent , TerminalState};
 
 #[derive(PartialEq , Debug)]
 pub enum InputAction {
     CmdService,
     SendToPty,
-    Ignore,
-    UpdateState
 }
 
-fn key_hander(code:KeyCode)-> Result<() , Error>{
-    match code {
-        KeyCode::Char(c) => {
-           draw_character(c);
-        }
-        KeyCode::Backspace => {
-           draw_backspace();
-        }
-        _ => {},
-    }
-    Ok(())
-}
 fn key_to_bytes(event: &KeyEvent) -> Option<Vec<u8>> {
     let KeyEvent { code, modifiers, .. } = event;
 
@@ -46,62 +30,47 @@ fn key_to_bytes(event: &KeyEvent) -> Option<Vec<u8>> {
     })
 }
 
-pub  fn next_action_is(mut term:std::sync::MutexGuard<'_, Terminal> , key:&KeyEvent) ->Vec<InputAction>{
-    let last_input = term.update_terminal_last_input(*key);
-
+pub  fn next_action_is(term:std::sync::MutexGuard<'_, Terminal>) ->Vec<InputAction>{
     match term.mode_is(){
         TerminalState::FullScreen => vec![InputAction::SendToPty],
 
-        TerminalState::CommandLine => { 
-            match last_input{
-                LastInput::Other =>  vec![InputAction::SendToPty , InputAction::CmdService],
+        TerminalState::CommandLine =>vec![InputAction:: CmdService], 
 
-                LastInput::Tab => vec![InputAction::CmdService],
-
-                LastInput::Enter => vec![InputAction::UpdateState , InputAction::SendToPty],
-
-                _ =>  vec![InputAction::Ignore]
-            }
-        }
         TerminalState::Passive => vec![InputAction::SendToPty],
     }
 }
 
-pub fn handle_user_input(pty_writter:&std::sync::mpsc::Sender<Vec<u8>> , terminal:&Arc<Mutex<Terminal>> , key:KeyEvent) -> Result<(),Error>{
+pub fn handle_user_input(events_writter:&std::sync::mpsc::Sender<LastInputEvent> , terminal:&Arc<Mutex<Terminal>> , key:KeyEvent) -> Result<(),Error>{
 
     if let Some(bytes) = key_to_bytes(&key) {
-        for a in next_action_is(terminal.lock().unwrap() , &key).iter(){
+        for a in next_action_is(terminal.lock().unwrap()).iter(){
             match a{
                 InputAction::SendToPty =>{
-                    if pty_writter.send(bytes.clone()).is_err(){
-                        return Err(Error::new(ErrorKind::Other, "Error sending bytes to PTY"));
+                    if events_writter.send(LastInputEvent::PtyInput(bytes.clone())).is_err(){
+                        return Err(Error::new(ErrorKind::Other, "Error sending event to event loop"));
                     }
                 }
                 InputAction::CmdService=>{
-                    key_hander(key.code).unwrap();
+                     if events_writter.send(LastInputEvent::UserKey(key)).is_err(){
+                        return Err(Error::new(ErrorKind::Other, "Error sending event to event loop"));
+                    }
                 }
-                InputAction::UpdateState =>{
-                    let mut term = terminal.lock().unwrap();
-                    term.update_terminal_state_from_input();
-                }
-
-                _=> {}
             }
         }
     }
     Ok(())
 }
 
-pub fn read_user_input(tx: std::sync::mpsc::Sender<Vec<u8>> , terminal:Arc<Mutex<Terminal>>) {
+pub fn read_user_input(events_writter: std::sync::mpsc::Sender<LastInputEvent> , terminal:Arc<Mutex<Terminal>>) {
     loop {
         if let Event::Key(key) = read().unwrap() {
-            match handle_user_input(&tx , &terminal, key){
+            match handle_user_input(&events_writter , &terminal, key){
                 Err(_) => break,
                 _=>{}
             }
         }
     }
-    drop(tx);
+    drop(events_writter);
 }
 
 #[cfg(test)]
@@ -109,42 +78,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn tab_test() {
+    fn cmdline_state_test() {
         let mut term = Terminal::default();
-        term.set_state_to(TerminalState::CommandLine);
+        term._set_state_to(TerminalState::CommandLine);
 
-        let key = KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE);
-        let actions = next_action_is(std::sync::Mutex::new(term).lock().unwrap(), &key);
+        let actions = next_action_is(std::sync::Mutex::new(term).lock().unwrap());
 
         assert_eq!(actions, vec![InputAction::CmdService]);
     }
 
     #[test]
-    fn enter_test() {
+    fn  fullscreen_state_test() {
         let mut term = Terminal::default();
-        term.set_state_to(TerminalState::CommandLine);
+        term._set_state_to(TerminalState::FullScreen);
 
-        let key = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
-        let actions = next_action_is(std::sync::Mutex::new(term).lock().unwrap(), &key);
-
-        assert!(actions.contains(&InputAction::UpdateState));
-        assert!(actions.contains(&InputAction::SendToPty));
-    }
-
-    #[test]
-    fn  normal_char_test() {
-        let mut term = Terminal::default();
-        term.set_state_to(TerminalState::CommandLine);
-
-        let key = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE);
         let actions = next_action_is(
-            std::sync::Mutex::new(term).lock().unwrap(),
-            &key
-        );
+            std::sync::Mutex::new(term).lock().unwrap());
 
         assert!(actions.contains(&InputAction::SendToPty));
-        assert!(actions.contains(&InputAction::CmdService));
-        assert!(!actions.contains(&InputAction::UpdateState));
     }
 
     #[test]
@@ -171,8 +122,5 @@ fn key_to_bytes_basic_mappings_test() {
     let k = KeyEvent::new(KeyCode::Up, KeyModifiers::NONE);
     assert_eq!(key_to_bytes(&k), Some(b"\x1b[A".to_vec()));
 }
-
-
-
 
 }

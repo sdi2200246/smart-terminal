@@ -8,6 +8,17 @@ use std::io::{stdout, Write};
 use std::env;
 use hostname;
 
+#[derive(PartialEq , Debug)]
+pub enum RenderActions{
+    Tab,
+    Ghost,
+    Backspace,
+    CtrlR,
+    Char(char),
+    Promt,
+}
+
+
 pub fn draw_prompt() {
     let cwd = env::current_dir().unwrap().display().to_string();
     let user = env::var("USER").unwrap_or("user".into());
@@ -36,4 +47,16 @@ pub fn draw_backspace(){
     let mut out = stdout();
     queue!(out, Print("\x08 \x08")).unwrap();
     out.flush().unwrap();
+}
+
+
+pub fn render_handler(action:RenderActions){
+    match action{
+        RenderActions::Backspace => draw_backspace(),
+
+        RenderActions::Char(c) => draw_character(c),
+
+        _=>{}
+    }
+
 }
