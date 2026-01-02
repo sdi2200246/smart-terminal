@@ -111,7 +111,7 @@ fn event_handler(event:LastInputEvent ,tx:& std::sync::mpsc::Sender<Vec<u8>> , t
         
         let mut terminal = term.lock().unwrap();
 
-        for action in terminal.cmd_line.cmd_line_reducer(event){
+        for action in terminal.event_reducer(event){
             match action{
                 TerminalActions::SendPty(bytes) =>{
                     tx.send(bytes).unwrap();

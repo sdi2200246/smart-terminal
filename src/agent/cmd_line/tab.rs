@@ -1,3 +1,6 @@
+use std::{process::Command};
+use std::io;
+
 use super::{TabState , TabMode};
 
 impl TabState{
@@ -8,7 +11,7 @@ impl TabState{
         self.current_option = 0;
     }
 
-    pub fn get_tab_candidate(&mut self , prefix:String)->&str{
+    pub fn get_tab_candidate(&mut self)->&str{
         match self.mode{
             TabMode::Cleared =>{
                 self.mode = TabMode::Cycling;
@@ -22,6 +25,22 @@ impl TabState{
             _=> ""  //impliment logic behinfd this.
         }
     }
+    pub fn run_tab(&self, buffer: &str , cwd:&String) -> io::Result<Vec<String>> {
+        let output = Command::new("bash")
+            .arg("/home/jason/Github_Repos/smart-terminal/scripts/autocomplete.sh")
+            .arg(buffer)
+            .current_dir(cwd)
+            .output()?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+
+        let suggestions = stdout
+            .lines()
+            .map(|s| s.to_string())
+            .collect();
+        Ok(suggestions)
+    }
+
 }
 
 impl Default for TabState{

@@ -1,27 +1,19 @@
 use indoc::indoc;
+use crate::context::traits::Context;
 
-pub struct Promt{
+pub struct Promt<T:Context>{
     inst:String,
     promt:String,
-    context:String,
+    context:T,
     //options:ENUM SOME OPTIONS.
 }
+impl<T: Context> Promt<T> {
 
-impl Promt{
-
-    pub fn new(inst:String , promt:String)->Promt{
-        return Promt{
-            inst,
-            promt,
-            context:"".to_string(),
-        }
-    }
-     pub fn with_context(mut self, ctx: String) -> Promt {
-        self.context = ctx;
-        self
+    pub fn new(inst: String, promt: String, context: T) -> Self {
+        Promt { inst, promt, context }
     }
 
-   pub fn to_smartlog_prompt(&self) -> String {
+   pub fn to_smartlog_prompt(&self , format:String) -> String {
         format!(
             indoc! {"
             ### SYSTEM ###
@@ -34,41 +26,32 @@ impl Promt{
             {}
 
             ### FORMAT ###
-            Return strictly only a JSON sructure with ONLY !ONE! object on the first detection you make to fill my systems struct with:
-            - message: string
-            - kind: FATAL_ERR | LOGICAL_ERR | OPT_PROPOSITION | RUNTIME_ERR | NONE
-            -line: i64
-
-            If the code contains no real issues, return exactly this JSON:
-
-            -message: No issues detected ,
-            -kind:NONE, 
-            -line: -1,
-
-            DONT ADD ANY OTHER TEXT!
-            Reporting an issue that does not clearly exist in the code is considered a FAILURE!!."
-            },
+            {}
+            "},
             self.inst,
             self.promt,
-            self.context,
+            self.context.to_context_string(),
+            format,
         )
     }    
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
+    use super::Promt;
+    use crate::chat::NextCmd;
+    use crate::context::state::DirsState;
+    use crate::context::traits::LLMforamt;
     #[test]
     fn test_to_smartlog_prompt() {
         let suspicious_code = r#"for (int i = 0 ; i < 10 ; i++){}"#;
 
         let p = Promt::new(
                 "You are a Rust".to_string(),
-                "Analyze".to_string()
-            ).with_context(suspicious_code.to_string());
+                "Analyze".to_string(),
+                suspicious_code.to_string());
         
-        let output = p.to_smartlog_prompt();
+        let output = p.to_smartlog_prompt("jason".to_string());
         assert!(output.contains("### SYSTEM ###"));
         assert!(output.contains("You are a Rust"));
 
@@ -79,8 +62,52 @@ mod tests {
         assert!(output.contains("for (int i = 0 ; i < 10 ; i++){}"));
 
         assert!(output.contains("### FORMAT ###"));     
-
-
     }
+
+
+    fn fake_state() -> DirsState {
+        use std::path::PathBuf;
+        let cwd = PathBuf::from("/home/jason/Github_Repos/smart-terminal");
+
+        let files = vec![
+            "Cargo.toml".to_string(),
+            "Cargo.lock".to_string(),
+            "src/main.rs".to_string(),
+            "src/chat/mod.rs".to_string(),
+            "src/context/state.rs".to_string(),
+            "README.md".to_string(),
+        ];
+
+        let cmd_history = vec![
+            "cd src".to_string(),
+            "ls".to_string(),
+            "git status".to_string(),
+            "cargo test".to_string(),
+            "cargo run".to_string(),
+        ];
+
+        DirsState::new(cwd, files, cmd_history , "car".to_string())
+    }
+
+    #[test]
+    fn test_to_smartlog_prompt2(){
+        let state = fake_state();
+        let p = Promt::new(
+                "You are a Rust".to_string(),
+                "Analyze".to_string(),
+                state);
+        
+        let output = p.to_smartlog_prompt(NextCmd::to_json_format());
+        println!("{}" , output);
+        assert!(output.contains("### SYSTEM ###"));
+        assert!(output.contains("You are a Rust"));
+
+        assert!(output.contains("### TASK ###"));
+        assert!(output.contains("Analyze"));
+
+        assert!(output.contains("### CONTEXT ###"));
+        assert!(output.contains("### FORMAT ###"));     
+    }
+
 }
 

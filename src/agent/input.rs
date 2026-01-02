@@ -32,11 +32,9 @@ fn key_to_bytes(event: &KeyEvent) -> Option<Vec<u8>> {
 
 pub  fn next_action_is(term:std::sync::MutexGuard<'_, Terminal>) ->Vec<InputAction>{
     match term.mode_is(){
-        TerminalState::FullScreen => vec![InputAction::SendToPty],
-
         TerminalState::CommandLine =>vec![InputAction:: CmdService], 
-
-        TerminalState::Passive => vec![InputAction::SendToPty],
+        
+        _ => vec![InputAction::SendToPty]
     }
 }
 

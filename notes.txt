@@ -1,0 +1,4 @@
+Tomorrow:
+1.Fix interactive processes . 
+2.Fix cd .
+3.After this 2 integrade the AI suggestions system.

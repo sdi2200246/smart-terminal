@@ -1,4 +1,7 @@
 use serde::{Deserialize, Serialize};
+use super::{NextCmd, Promt};
+use crate::context::state::DirsState;
+use crate::context::traits::{LLMforamt};
 
 #[derive(Serialize)]
 struct ChatRequest {
@@ -26,7 +29,6 @@ struct Choice {
 struct AssistantMessage {
     content: String,
 }
-
 
 pub async fn chat(prompt: String) -> Result<String, Box<dyn std::error::Error>> {
 
@@ -59,7 +61,16 @@ pub async fn chat(prompt: String) -> Result<String, Box<dyn std::error::Error>> 
 }
 
 
-
+pub async fn predict_next_cmd(dir_state:DirsState)-> Result<NextCmd, Box<dyn std::error::Error>>{
+    let p = Promt::new(
+                "You are a next terminal commnad predictor".to_string(),
+                "Analyze the following inofrmation and follow the format to predict the next terminal commnad of the user.".to_string(),
+                dir_state);
+        
+    let response_str = chat(p.to_smartlog_prompt(NextCmd::to_json_format())).await?;
+    let prediction: NextCmd = serde_json::from_str(&response_str)?;
+    Ok(prediction)
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -71,6 +82,42 @@ mod tests {
         };
         assert_eq!(resp.choices[0].message.content, "hello");
     }
+     fn fake_state() -> DirsState {
+        use std::path::PathBuf;
+        let cwd = PathBuf::from("/home/jason/Github_Repos/smart-terminal");
+
+        let files = vec![
+            "Cargo.toml".to_string(),
+            "Cargo.lock".to_string(),
+            "src/main.rs".to_string(),
+            "src/chat/mod.rs".to_string(),
+            "src/context/state.rs".to_string(),
+            "README.md".to_string(),
+        ];
+
+        let cmd_history = vec![
+            "cd src".to_string(),
+            "ls".to_string(),
+            "git status".to_string(),
+            "cargo test".to_string(),
+            "cargo run".to_string(),
+            "git branch".to_string(),
+            "docker -help".to_string(),
+            "docker top".to_string(),
+        ];
+
+        DirsState::new(cwd, files, cmd_history , "docker -f".to_string())
+
+    }
+    #[tokio::test]
+    async fn test_to_smartlog_prompt2(){
+        let state = fake_state();
+        let next = predict_next_cmd(state).await.unwrap();
+        println!("{:?}" , next);
+
+    }
+
 }
+
 
 
