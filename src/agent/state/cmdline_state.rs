@@ -1,6 +1,5 @@
 use crossterm::event::{KeyCode,KeyModifiers , KeyEvent};
-use super::terminal::
-    {TermState 
+use super::terminal::{TermState 
     ,TerminalAction 
     ,InputEvent
     ,ContextUpdate 
@@ -8,30 +7,28 @@ use super::terminal::
 use super::terminal_state::TerminalState;
 use super::cmd_line::CmdLineState;
 
-struct CmdState;
+pub struct CmdState;
 
 impl TerminalState for CmdState{
 
     fn handle_input(&mut self , event: InputEvent, ctx:&Context, cmdline: &mut CmdLineState,)->Vec<TerminalAction>{
         match event{
             InputEvent::User(key) => cmd_actions(key, cmdline, ctx),
+
             _=>{vec![]}
         }
-        
+    
     }
-    fn handle_output(&mut self, bytes:&[u8],cmdline: &mut CmdLineState,)->Vec<TerminalAction>{
+    fn handle_output(&mut self, bytes:&[u8])->Vec<TerminalAction>{
         let mut actions:Vec<TerminalAction> = Vec::new();
         let output = String::from_utf8_lossy(&bytes);
-
         actions.push(TerminalAction::Flush(bytes.to_vec()));
         output_interpreter(&output , &mut actions);
         actions.push(TerminalAction::Render);
-
         return actions;
     }
 
 }
-
 
 fn cmd_actions(key:KeyEvent , cmdline:&mut CmdLineState , ctx:&Context) -> Vec<TerminalAction>{
     if key.modifiers.contains(KeyModifiers::CONTROL) {
@@ -49,10 +46,11 @@ fn cmd_actions(key:KeyEvent , cmdline:&mut CmdLineState , ctx:&Context) -> Vec<T
             return vec![TerminalAction::Render];
         }
         KeyCode::Enter=>{
-            cmdline.tab_state.clear_state();
-            let mut bytes = cmdline.buffer.take_user_bytes();
-            bytes.push(b'\n');
-            return vec![TerminalAction::SendPty(bytes) ,TerminalAction::SwitchState(TermState::Pipe)];
+            let mut bytes = cmdline.buffer.get_user_buffer().as_bytes().to_vec();
+            bytes.push(b'\r');
+
+            cmdline.buffer.push("\r\n");
+            return vec![TerminalAction::Render ,TerminalAction::SendPty(bytes) ,TerminalAction::SwitchState(TermState::Pipe)];
         }
 
         KeyCode::Char(c) => {
@@ -148,10 +146,8 @@ mod cmdstate_tests {
     #[test]
     fn cmdstate_handle_output_flushes_and_renders() {
         let mut state = CmdState;
-        let mut cmdline = CmdLineState::default();
-
         let bytes = b"hello";
-        let actions = state.handle_output(bytes, &mut cmdline);
+        let actions = state.handle_output(bytes);
 
         assert!(actions.iter().any(|a| matches!(
             a, TerminalAction::Flush(b) if b == bytes

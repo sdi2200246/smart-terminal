@@ -1,158 +1,142 @@
-use std::sync::{Arc, Mutex};
+use std::io::{Write , stdout};
 use std::{env};
-use crossterm::event::{KeyCode,KeyModifiers , KeyEvent};
+use crossterm::event::{KeyEvent};
 use super::cmd_line::CmdLineState;
-use super::render::RenderActions;
+use super::state::terminal_state::TerminalState;
+use super::state::pipe_state::PipeState;
+use super::state::cmdline_state::CmdState;
 
 #[derive(PartialEq , Debug)]
-pub enum  TerminalActions{
-    Render(RenderActions),
+pub enum TermState{
+    Pipe,
+    Cmdline,
+}
+#[derive(PartialEq , Debug)]
+pub enum TerminalAction{
     SendPty(Vec<u8>),
-    UpdateState,
-    Ignone,
+    SwitchState(TermState),
+    UpdateContext(ContextUpdate),
+    Flush(Vec<u8>), 
+    Render,
+    NOop,
 }
 
-#[derive(PartialEq)]
-pub enum LastInputEvent{
-    UserKey(KeyEvent),
-    AgentSuggestion(String),
-    PtyInput(Vec<u8>),
-    None
+pub enum InputEvent{
+    User(KeyEvent),
+   Agent(Vec<u8>),
 }
-#[derive(PartialEq)]
-pub enum TerminalState{
-    CommandLine,
-    FullScreen, 
-    Passive,
+pub enum Event{
+    Input(InputEvent),
+    Output(Vec<u8>),
+}
+
+#[derive(PartialEq , Debug)]
+pub struct ContextUpdate {
+    pub cwd: Option<String>,
+    pub history:Option<Vec<String>>,
+    pub files:Option<Vec<String>>,
+}
+pub struct Context{
+    pub cwd:String,
+    pub history:Vec<String>,
+    pub files:Vec<String>,
+}
+
+impl Context {
+    pub fn apply(&mut self, update: ContextUpdate) {
+        if let Some(cwd) = update.cwd {
+            self.cwd = cwd;
+        }
+
+        if let Some(files) = update.files {
+            self.files = files;
+        }
+
+        if let Some(history) = update.history {
+            self.history = history;
+        }
+    }
+}
+impl Default for Context{
+
+    fn default()->Self{
+        Self{
+            cwd:env::current_dir()
+                .expect("failed to get cwd")
+                .display()
+                .to_string(),
+            history:Vec::new(),
+            files:Vec::new()
+        }
+    }
 }
 pub struct Terminal {
-    state:TerminalState,
+    pub state:Box<dyn TerminalState>,
     pub cmd_line:CmdLineState,
-    pub cwd:String,
+    pub context:Context,
 }
 
-impl Terminal {
+impl Terminal{
 
-
-    pub fn extract_cwd(output: &str) -> Option<String> {
-        output
-            .lines()
-            .find_map(|line| line.strip_prefix("__AGENT_DONE__:"))
-            .map(|cwd| cwd.to_string())
-    }
-
-    pub fn update_terminal_state(&mut self , output:&str){
-        if     output.contains("\x1b[?1049h")
-            || output.contains("\x1b[?47h")
-            || output.contains("\x1b[?1047h")
-        {
-            self.state = TerminalState::FullScreen;
-            return;
-        }
-
-        if     output.contains("\x1b[?1049l")
-            || output.contains("\x1b[?47l")
-            || output.contains("\x1b[?1047l")
-        {
-            self.state = TerminalState::CommandLine;
-            return;
-        }
-
-        if output.contains("__AGENT_DONE__") {
-            self.state = TerminalState::CommandLine;
-            if let Some(cwd) = Self::extract_cwd(output) {
-                self.cwd = cwd;
+    pub fn switch_state_to(&mut self ,state:TermState){
+        match state {
+            TermState::Cmdline => {
+                self.state = Box::new(CmdState);
             }
-            return;
-        }
-
-    }
-
-    pub fn update_terminal_state_from_input(&mut self){
-        self.state = TerminalState::Passive
-    }
-    
-    pub fn _set_state_to(&mut self , state:TerminalState){
-        self.state = state;
-    }
-
-    pub fn mode_is(&self)->TerminalState{
-            match self.state{
-                TerminalState::CommandLine => TerminalState::CommandLine,
-                TerminalState::FullScreen => TerminalState::FullScreen,
-                TerminalState::Passive=>TerminalState::Passive,
+            TermState::Pipe =>{
+                self.cmd_line.buffer.clear_buffer();
+                self.cmd_line.tab_state.clear_state();
+                self.state = Box::new(PipeState);
             }
-    }
-
-    fn input_event_reducer(&mut self  , event:LastInputEvent)->Vec<TerminalActions>{
-        match event {   
-            LastInputEvent::UserKey(key)=>{
-
-                if key.modifiers.contains(KeyModifiers::CONTROL) {
-                    if let KeyCode::Char(c) = key.code {
-                        self.cmd_line.tab_state.clear_state();
-                        self.cmd_line.buffer.clear_buffer();
-                        let ctrl_byte = (c as u8) & 0x1F;
-                        return vec![TerminalActions::SendPty(vec![ctrl_byte])];
-                    }
-                }
-                match key.code {
-                    KeyCode::Backspace =>{
-                        self.cmd_line.tab_state.clear_state();
-                        self.cmd_line.buffer.pop();
-                        return vec![TerminalActions::Render(RenderActions::Backspace)];
-                    }
-                    KeyCode::Enter=>{
-                        self.cmd_line.tab_state.clear_state();
-                        let mut bytes = self.cmd_line.buffer.take_user_bytes();
-                        bytes.push(b'\n');
-                        return vec![TerminalActions::SendPty(bytes) ,TerminalActions::UpdateState];
-                    }
-
-                    KeyCode::Char(c) => {
-                        self.cmd_line.buffer.push(&c.to_string());
-                        return vec![TerminalActions::Render(RenderActions::Char(c))];
-                    }
-
-                    KeyCode::Tab =>{
-                        let suggestions = self.cmd_line.tab_state.run_tab(self.cmd_line.buffer.get_user_buffer() , &self.cwd);
-                        match suggestions{
-                            Ok(vec) => {
-                                if vec.len() == 1 {
-                                    self.cmd_line.buffer.push(&vec[0]);
-                                    return vec![TerminalActions::Render(RenderActions::Tab(self.cmd_line.buffer.get_user_buffer().to_string()))];
-                                }
-                                return vec![TerminalActions::Ignone];
-                            }
-
-                            _=>{ return vec![TerminalActions::Ignone];}
-                        }
-                    }
-                    _=>{return vec![TerminalActions::Ignone];}
-                }
-            }
-            LastInputEvent::PtyInput(bytes)=>{ return vec![TerminalActions::SendPty(bytes)];}
-
-            _=>{vec![TerminalActions::Ignone]}
-            
         }
-
+    }
+    pub fn update_context(&mut self , new_ctx:ContextUpdate){
+        self.context.apply(new_ctx);
     }
 
-    pub fn event_reducer(&mut self , event:LastInputEvent)->Vec<TerminalActions>{
-        return  self.input_event_reducer(event);
+    pub fn flush(&self, output: Vec<u8>) {
+        let mut out = stdout().lock();
+        
+        out.write_all(&output).unwrap();
+        out.flush().unwrap();
     }
+
+    pub fn send_pty(&self , pty:&std::sync::mpsc::Sender<Vec<u8>> , input:Vec<u8>){
+        pty.send(input).unwrap();
+    }
+
+    pub fn get_ctx(&self)->&Context{
+        &self.context
+    }
+    pub fn get_cmdline(&mut self)->&mut  CmdLineState{
+        &mut self.cmd_line
+    }
+
+
+
 }
 
 impl Default for Terminal {
     fn default() -> Self {
         Self {
-            state:TerminalState::CommandLine,
+            state:Box::new(CmdState),
             cmd_line:CmdLineState::default(),
-            cwd : env::current_dir()
-            .expect("failed to get cwd")
-            .display()
-            .to_string()
+            context:Context::default()
+        }
+    }
+}
+pub struct TerminalView{
+    pub user_buffer:String,
+    pub suggestion_buffer:String,
+    pub cwd:String,
+}
+
+impl From<(&Context, &CmdLineState)> for TerminalView {
+    fn from((ctx, cmd): (&Context, &CmdLineState)) -> Self {
+        TerminalView{
+            user_buffer:cmd.buffer.user_buffer.clone(),
+            suggestion_buffer:cmd.buffer.suggestion_buffer.clone(),           
+            cwd:ctx.cwd.clone()
         }
     }
 }

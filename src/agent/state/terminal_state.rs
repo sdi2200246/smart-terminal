@@ -1,7 +1,7 @@
 use super::cmd_line::CmdLineState;
 use super::terminal::{Context , InputEvent , TerminalAction};
 
-pub trait TerminalState{
+pub trait TerminalState:Send{
    fn handle_input(
         &mut self,
         event: InputEvent,
@@ -12,6 +12,5 @@ pub trait TerminalState{
     fn handle_output(
         &mut self,
         bytes: &[u8],
-        cmdline: &mut CmdLineState,
     ) -> Vec<TerminalAction>;
 }

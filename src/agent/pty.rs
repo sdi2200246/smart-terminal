@@ -1,14 +1,14 @@
 use crossterm::terminal::{enable_raw_mode, disable_raw_mode};
 use portable_pty::{CommandBuilder, NativePtySystem, PtySize, PtySystem};
-use std::io::{Read, Write ,};
+use std::io::{Read, Write };
 use std::sync::mpsc::channel;
-use std::sync::{Arc, Mutex};
 use std::thread;
 
+use crate::agent::terminal::TerminalView;
 use super::input;
 use super::output;
-use super::terminal::{Terminal , LastInputEvent , TerminalActions};
-use super::render;
+use super::terminal::{Event, Terminal, TerminalAction};
+use super::render::render_terminal;
 
 fn spawn_shell() -> Result<(Box<dyn Read + Send>, Box<dyn Write + Send>), std::io::Error> {
     let pty_system = NativePtySystem::default();
@@ -50,33 +50,31 @@ fn init_shell(tx: &std::sync::mpsc::Sender<Vec<u8>>) {
 
 
 pub fn pty_agent() -> Result<(), std::io::Error> {
-    let terminal = Arc::new(Mutex::new(Terminal::default()));
 
     enable_raw_mode()?;
 
     let (reader, writer) = spawn_shell()?;
 
     let (tx, rx) = channel::<Vec<u8>>();
-    let (event_writter , events_reader) = channel::<LastInputEvent>();
+    let (event_writter , events_reader) = channel::<Event>();
     init_shell(&tx);
+    let terminal = Terminal::default();
 
-    let term = Arc::clone(&terminal);
+    let events = event_writter.clone();
     let pty_reader = thread::spawn(move || {
-        output::read_pty_output(reader, term , Box::new(std::io::stdout()));
+        output::read_pty_output(reader, events);
     });
 
     let pty_writer = thread::spawn(move || {
         handle_input_stream(rx, writer);
     });
 
-    let term = Arc::clone(&terminal);
     let user_reader = thread::spawn(move || {
-        input::read_user_input(event_writter, term);
+        input::read_user_input(event_writter);
     });
 
-    let term = Arc::clone(&terminal);
     let events_reader = thread::spawn(move|| {
-        read_events(tx, events_reader , term);
+        read_events(tx, events_reader , terminal);
     });
 
 
@@ -99,30 +97,39 @@ fn handle_input_stream(rx: std::sync::mpsc::Receiver<Vec<u8>>, mut pty_writer: B
         }
     }
 }
-fn read_events(tx: std::sync::mpsc::Sender<Vec<u8>> , events:std::sync::mpsc::Receiver<LastInputEvent> , terminal:Arc<Mutex<Terminal>>){
+fn read_events(tx: std::sync::mpsc::Sender<Vec<u8>> , events:std::sync::mpsc::Receiver<Event> , mut terminal:Terminal){
 
-        while let Ok(event) =  events.recv(){
-            event_handler(event, &tx, &terminal);
-        }
+    while let Ok(event) =  events.recv(){
+        event_handler(event, &tx , &mut terminal);
+    }
     drop(events);
 }
 
-fn event_handler(event:LastInputEvent ,tx:& std::sync::mpsc::Sender<Vec<u8>> , term:&Arc<Mutex<Terminal>>){
-        
-        let mut terminal = term.lock().unwrap();
+fn event_handler(event:Event ,tx:& std::sync::mpsc::Sender<Vec<u8>> , terminal:&mut Terminal){
 
-        for action in terminal.event_reducer(event){
-            match action{
-                TerminalActions::SendPty(bytes) =>{
-                    tx.send(bytes).unwrap();
-                }
-                TerminalActions::Render(render_action)=>{
-                    render::render_handler(render_action);
-                }
-                TerminalActions::UpdateState=>{
-                    terminal.update_terminal_state_from_input();
-                }
-                _=>{}
-            }
+    let actions:Vec<TerminalAction>;
+
+    match event{
+        Event::Input(ievent)=>{
+            let ctx = &terminal.context;
+            let cmdline = &mut terminal.cmd_line;
+            let state = &mut terminal.state;
+
+            actions = state.handle_input(ievent, ctx, cmdline);
         }
+        Event::Output(bytes) =>{
+            actions = terminal.state.handle_output(&bytes);
+
+        }
+    }
+    for action in actions{
+         match action{
+            TerminalAction::Flush(output) => terminal.flush(output),
+            TerminalAction::Render => render_terminal(TerminalView::from((&terminal.context , &terminal.cmd_line))),
+            TerminalAction::SwitchState(state) =>terminal.switch_state_to(state),
+            TerminalAction::UpdateContext(new_ctx) =>terminal.update_context(new_ctx),
+            TerminalAction::SendPty(input)=>terminal.send_pty(tx, input),
+            _=>{}
+        }
+    }
 }

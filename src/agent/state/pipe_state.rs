@@ -1,25 +1,19 @@
 use crossterm::event::{KeyCode,KeyModifiers , KeyEvent};
-use super::terminal::
-    {TermState 
-    ,TerminalAction 
-    ,InputEvent
-    ,ContextUpdate 
-    ,Context};
+use super::terminal::{TermState ,TerminalAction ,InputEvent,ContextUpdate,Context};
 use super::terminal_state::TerminalState;
 use super::cmd_line::CmdLineState;
-
-struct PipeState;
+pub struct PipeState;
 
 impl TerminalState for PipeState{
 
-    fn handle_input(&mut self, event: InputEvent ,_ctx:&Context, cmdline: &mut CmdLineState,)->Vec<TerminalAction>{
+    fn handle_input(&mut self, event: InputEvent ,_ctx:&Context, _cmdline: &mut CmdLineState,)->Vec<TerminalAction>{
         match event{
             InputEvent::User(key) => vec![TerminalAction::SendPty(key_to_bytes(key).unwrap())],
 
             _=> vec![TerminalAction::NOop]
         }   
     }
-    fn handle_output(&mut self, bytes:&[u8] ,cmdline: &mut CmdLineState,)->Vec<TerminalAction>{
+    fn handle_output(&mut self, bytes:&[u8])->Vec<TerminalAction>{
         let mut actions:Vec<TerminalAction> = Vec::new();
         let output = String::from_utf8_lossy(&bytes);
 
@@ -80,17 +74,13 @@ fn output_interpreter(output:&str , actions:&mut Vec<TerminalAction>){
 
         #[cfg(test)]
 mod pipe_state_tests {
-    use std::default;
-
     use super::*;
 
     #[test]
     fn handle_output_always_flushes_bytes() {
         let mut state = PipeState;
-        let mut cmdline = CmdLineState::default();
-
         let bytes = b"hello world";
-        let actions = state.handle_output(bytes,&mut cmdline);
+        let actions = state.handle_output(bytes);
 
         assert!(
             actions.iter().any(|a| matches!(
@@ -104,10 +94,9 @@ mod pipe_state_tests {
     #[test]
     fn handle_output_detects_agent_done() {
         let mut state = PipeState;
-        let mut cmdline = CmdLineState::default();
 
         let bytes = b"__AGENT_DONE__:/home/test\n";
-        let actions = state.handle_output(bytes ,&mut cmdline);
+        let actions = state.handle_output(bytes);
 
         assert!(
             actions.iter().any(|a| matches!(
@@ -125,7 +114,7 @@ mod pipe_state_tests {
             "Expected SwitchState(Cmdline)"
         );
     }
-
+    
     #[test]
     fn agent_done_produces_correct_context_update() {
         let mut actions = Vec::new();

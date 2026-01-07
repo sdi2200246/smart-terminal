@@ -1,6 +1,6 @@
 use std::{process::Command};
 use std::io;
-
+use std::path::PathBuf;
 use super::{TabState , TabMode};
 
 impl TabState{
@@ -26,8 +26,12 @@ impl TabState{
         }
     }
     pub fn run_tab(&self, buffer: &str , cwd:&String) -> io::Result<Vec<String>> {
+        let script_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("scripts")
+            .join("autocomplete.sh");
+
         let output = Command::new("bash")
-            .arg("/home/jason/Github_Repos/smart-terminal/scripts/autocomplete.sh")
+            .arg(&script_path)
             .arg(buffer)
             .current_dir(cwd)
             .output()?;
