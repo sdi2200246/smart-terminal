@@ -1,6 +1,6 @@
 use std::io::{Write , stdout};
 use std::{env};
-use crossterm::event::{KeyEvent};
+use crossterm:: {event::{KeyEvent}};
 use super::cmd_line::CmdLineState;
 use super::state::terminal_state::TerminalState;
 use super::state::pipe_state::PipeState;
@@ -84,8 +84,7 @@ impl Terminal{
                 self.state = Box::new(CmdState);
             }
             TermState::Pipe =>{
-                self.cmd_line.buffer.clear_buffer();
-                self.cmd_line.tab_state.clear_state();
+                self.cmd_line.clear();
                 self.state = Box::new(PipeState);
             }
         }
@@ -95,7 +94,7 @@ impl Terminal{
     }
 
     pub fn flush(&self, output: Vec<u8>) {
-        let mut out = stdout().lock();
+        let mut out = stdout();
         
         out.write_all(&output).unwrap();
         out.flush().unwrap();
@@ -112,8 +111,6 @@ impl Terminal{
         &mut self.cmd_line
     }
 
-
-
 }
 
 impl Default for Terminal {
@@ -129,6 +126,7 @@ pub struct TerminalView{
     pub user_buffer:String,
     pub suggestion_buffer:String,
     pub cwd:String,
+    pub cursor:usize,
 }
 
 impl From<(&Context, &CmdLineState)> for TerminalView {
@@ -136,7 +134,8 @@ impl From<(&Context, &CmdLineState)> for TerminalView {
         TerminalView{
             user_buffer:cmd.buffer.user_buffer.clone(),
             suggestion_buffer:cmd.buffer.suggestion_buffer.clone(),           
-            cwd:ctx.cwd.clone()
+            cwd:ctx.cwd.clone(),
+            cursor:cmd.buffer.cursor,
         }
     }
 }

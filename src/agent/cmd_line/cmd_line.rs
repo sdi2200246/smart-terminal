@@ -12,7 +12,8 @@ pub struct TabState{
 }
 pub struct Buffer{
     pub user_buffer:String,
-    pub suggestion_buffer:String
+    pub suggestion_buffer:String,
+    pub cursor:usize,
 }
 
 pub struct CmdLineState{
@@ -20,12 +21,18 @@ pub struct CmdLineState{
     pub tab_state:TabState,
 }
 
-impl Default for CmdLineState{
+impl  CmdLineState {
+    pub fn clear(&mut self ){
+        self.buffer.clear_buffer();
+        self.tab_state.clear_state();
+    }
+}
 
+impl Default for CmdLineState{
     fn default()->Self{
         Self{
             buffer:Buffer::default(),
-            tab_state:TabState::default(),   
+            tab_state:TabState::default(), 
         }
     }
 }

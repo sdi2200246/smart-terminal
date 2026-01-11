@@ -46,10 +46,8 @@ fn cmd_actions(key:KeyEvent , cmdline:&mut CmdLineState , ctx:&Context) -> Vec<T
             return vec![TerminalAction::Render];
         }
         KeyCode::Enter=>{
-            let mut bytes = cmdline.buffer.get_user_buffer().as_bytes().to_vec();
-            bytes.push(b'\r');
-
             cmdline.buffer.push("\r\n");
+            let bytes = cmdline.buffer.to_bytes();
             return vec![TerminalAction::Render ,TerminalAction::SendPty(bytes) ,TerminalAction::SwitchState(TermState::Pipe)];
         }
 
@@ -71,6 +69,14 @@ fn cmd_actions(key:KeyEvent , cmdline:&mut CmdLineState , ctx:&Context) -> Vec<T
 
                 _=>{ return vec![TerminalAction::NOop];}
             }
+        }
+        KeyCode::Left => {
+            cmdline.buffer.cursor_left();
+            return vec![TerminalAction::Render];
+        }
+        KeyCode::Right => {
+            cmdline.buffer.cursor_right();
+            return vec![TerminalAction::Render];
         }
         _=>{return vec![TerminalAction::NOop];}
     }
