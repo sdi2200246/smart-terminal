@@ -17,7 +17,6 @@ impl TerminalState for CmdState{
 
             _=>{vec![]}
         }
-    
     }
     fn handle_output(&mut self, bytes:&[u8])->Vec<TerminalAction>{
         let mut actions:Vec<TerminalAction> = Vec::new();
@@ -34,6 +33,7 @@ fn cmd_actions(key:KeyEvent , cmdline:&mut CmdLineState , ctx:&Context) -> Vec<T
     if key.modifiers.contains(KeyModifiers::CONTROL) {
         if let KeyCode::Char(c) = key.code {
                 cmdline.tab_state.clear_state();
+                cmdline.history_state.clear_state();
                 cmdline.buffer.clear_buffer();
                 let ctrl_byte = (c as u8) & 0x1F;
                 return vec![TerminalAction::SendPty(vec![ctrl_byte])];
@@ -46,9 +46,15 @@ fn cmd_actions(key:KeyEvent , cmdline:&mut CmdLineState , ctx:&Context) -> Vec<T
             return vec![TerminalAction::Render];
         }
         KeyCode::Enter=>{
-            cmdline.buffer.push("\r\n");
+            let context_update = ContextUpdate{
+                cwd:None,
+                cmd:Some(cmdline.buffer.user_buffer.clone()),
+                files:None
+            };
+            cmdline.history_state.add_cmd(cmdline.buffer.user_buffer.clone());
             let bytes = cmdline.buffer.to_bytes();
-            return vec![TerminalAction::Render ,TerminalAction::SendPty(bytes) ,TerminalAction::SwitchState(TermState::Pipe)];
+            cmdline.buffer.push("\r\n");
+            return vec![TerminalAction::Render ,TerminalAction::SendPty(bytes) ,TerminalAction::SwitchState(TermState::Pipe) , TerminalAction::UpdateContext(context_update)];
         }
 
         KeyCode::Char(c) => {
@@ -57,6 +63,7 @@ fn cmd_actions(key:KeyEvent , cmdline:&mut CmdLineState , ctx:&Context) -> Vec<T
         }
 
         KeyCode::Tab =>{
+            cmdline.history_state.clear_state();
             let suggestions = cmdline.tab_state.run_tab(cmdline.buffer.get_user_buffer() , &(&ctx.cwd));
             match suggestions{
                 Ok(vec) => {
@@ -78,7 +85,29 @@ fn cmd_actions(key:KeyEvent , cmdline:&mut CmdLineState , ctx:&Context) -> Vec<T
             cmdline.buffer.cursor_right();
             return vec![TerminalAction::Render];
         }
+
+        KeyCode::Down => {
+            cmdline.tab_state.clear_state();
+            if let Some(cmd) = cmdline.history_state.get_prev_cmd(){
+                cmdline.buffer.clear_buffer();
+                cmdline.buffer.push(&cmd);
+                return vec![TerminalAction::Render]; 
+            } 
+            else {return  vec![TerminalAction::NOop];}
+        }
+        KeyCode::Up=> {
+            if let Some(cmd) = cmdline.history_state.get_next_cmd(){
+                cmdline.buffer.clear_buffer();
+                cmdline.buffer.push(&cmd);
+                return vec![TerminalAction::Render]; 
+            } 
+            else {return  vec![TerminalAction::NOop];}
+        }
+
         _=>{return vec![TerminalAction::NOop];}
+
+      
+
     }
 }
 
@@ -99,7 +128,7 @@ fn output_interpreter(output:&str , actions:&mut Vec<TerminalAction>){
         if let Some(cwd) = extract_cwd(output) {
             let new_context = ContextUpdate{
                 cwd:Some(cwd),
-                history:None,
+                cmd:None,
                 files:None,
             };
             actions.push(TerminalAction::UpdateContext(new_context));
@@ -137,7 +166,7 @@ mod cmdstate_tests {
         }).expect("Expected UpdateContext");
 
         assert_eq!(update.cwd.as_deref(), Some("/home/user"));
-        assert!(update.history.is_none());
+        assert!(update.cmd.is_none());
         assert!(update.files.is_none());
     }
 
@@ -226,6 +255,36 @@ mod cmd_actions_tests {
         )));
         assert_eq!(cmdline.buffer.get_user_buffer(), "");
     }
+    #[test]
+    fn enter_executes_command_updates_context_and_switches_to_pipe() {
+        let mut cmdline = CmdLineState::default();
+        cmdline.buffer.push("ls -la");
+
+        let actions = cmd_actions(
+            KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+            &mut cmdline,
+            &ctx(),
+        );
+        assert!(actions.iter().any(|a| matches!(
+            a,
+            TerminalAction::SendPty(bytes) if bytes == b"ls -la\r"
+        )));
+        let ctx_update = actions.iter().find_map(|a| {
+            if let TerminalAction::UpdateContext(u) = a {
+                Some(u)
+            } else {
+                None
+            }
+        }).expect("Expected ContextUpdate action");
+
+        assert_eq!(ctx_update.cmd.as_deref(), Some("ls -la"));
+        assert!(actions.iter().any(|a| matches!(
+            a,
+            TerminalAction::SwitchState(TermState::Pipe)
+        )));
+        assert!(actions.contains(&TerminalAction::Render));
+    }
+
 
     #[test]
     fn ctrl_char_sends_control_byte_and_clears_buffer() {

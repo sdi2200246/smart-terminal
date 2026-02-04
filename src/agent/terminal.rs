@@ -20,10 +20,9 @@ pub enum TerminalAction{
     Render,
     NOop,
 }
-
 pub enum InputEvent{
     User(KeyEvent),
-   Agent(Vec<u8>),
+    Agent(Vec<u8>),
 }
 pub enum Event{
     Input(InputEvent),
@@ -33,7 +32,7 @@ pub enum Event{
 #[derive(PartialEq , Debug)]
 pub struct ContextUpdate {
     pub cwd: Option<String>,
-    pub history:Option<Vec<String>>,
+    pub cmd:Option<String>,
     pub files:Option<Vec<String>>,
 }
 pub struct Context{
@@ -43,17 +42,16 @@ pub struct Context{
 }
 
 impl Context {
-    pub fn apply(&mut self, update: ContextUpdate) {
+    pub fn apply(&mut self, update:ContextUpdate) {
         if let Some(cwd) = update.cwd {
             self.cwd = cwd;
         }
-
         if let Some(files) = update.files {
             self.files = files;
         }
 
-        if let Some(history) = update.history {
-            self.history = history;
+        if let Some(cmd) = update.cmd {
+            self.history.push(cmd);
         }
     }
 }
@@ -75,7 +73,6 @@ pub struct Terminal {
     pub cmd_line:CmdLineState,
     pub context:Context,
 }
-
 impl Terminal{
 
     pub fn switch_state_to(&mut self ,state:TermState){
