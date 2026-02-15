@@ -1,0 +1,67 @@
+use std::process::Command;
+use serde_json::Value;
+
+use super::error::ToolError;
+use crate::protocol::tool::{Tool, ToolFunction};
+
+use super::capability::Capability;
+
+
+pub fn list_processes(_args:Value) -> Result<Value, ToolError> {
+    let output = Command::new("top")
+        .args([
+            "-l", "1",
+            "-stats", "pid,command",
+        ])
+        .output()
+        .map_err(|_| ToolError::Execution)?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    Ok(Value::String(stdout))
+}
+
+pub struct ProcessList;
+
+impl Capability for ProcessList {
+    fn name(&self) -> &'static str {
+        "running_processes"
+    }
+
+    fn to_protocol(&self) -> Tool{
+        Tool::factory(
+        ToolFunction {
+            name: self.name().into(),
+            description: Some(
+                "Returns running processes with names and pids".into()
+            ),
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {}
+            }),
+            arguments: None,
+        }
+    )
+    }
+    fn execute(&self, args: Value) -> Result<Value , ToolError> {
+        list_processes(args)
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use std::{thread, time::Duration};
+
+    #[test]
+    fn test_list_processes_runs_and_prints() {
+        let result = list_processes(json!({}))
+            .expect("list_processes should run");
+
+        println!("=== list_processes output ===");
+        println!("{}", result);
+
+        thread::sleep(Duration::from_secs(1));
+    }
+}
