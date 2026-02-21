@@ -1,6 +1,6 @@
 use std::io::{Write , stdout};
-use std::{env};
-use crossterm:: {event::{KeyEvent}};
+use std::env;
+use crossterm::event::KeyEvent;
 use super::cmd_line::CmdLineState;
 use super::state::terminal_state::TerminalState;
 use super::state::pipe_state::PipeState;
@@ -22,6 +22,7 @@ pub enum TerminalAction{
 }
 pub enum InputEvent{
     User(KeyEvent),
+    Raw(Vec<u8>),
     Agent(Vec<u8>),
 }
 pub enum Event{
