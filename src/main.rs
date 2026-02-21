@@ -1,7 +1,4 @@
-mod chat;
-mod context;
-mod resolve;
-mod agent;
+mod emulator;
 fn main() {
     let args: Vec<String> = std::env::args().collect();
 
@@ -13,23 +10,9 @@ fn main() {
 
     match flag.as_str() {
 
-        "-chat" => {
-            let prompt = args[2..].join(" ");
-            let response = tokio::runtime::Runtime::new().unwrap().block_on(chat::chat(prompt));
-             match response {
-                Ok(answer) => println!("{}", answer),
-                Err(e) => eprintln!("Error: {}", e),
-             }
-        }
-
-        "-resolve"=>{
-            resolve::detect();
-        }
-
         "-agent"=>{
-            agent::pty::pty_agent();
+            emulator::pty::pty_agent().unwrap();
         }
-
         _=> {
             eprintln!("Unknown option: {}", flag);
         }   
