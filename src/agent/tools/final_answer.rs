@@ -31,7 +31,7 @@ impl Capability for FinalAnswer {
             )
     }
 
-    fn execute(&self, _args: Value) -> Result<Value,  ToolError> {
+    fn execute(&self, _args: Value) -> Result<String,  ToolError> {
         Err(ToolError::Execution)
     }
     fn arg_schema(&self) -> Option<&Value> {

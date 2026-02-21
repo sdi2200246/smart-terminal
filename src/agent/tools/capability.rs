@@ -8,7 +8,7 @@ use super::error::ToolError;
 pub trait Capability:Send + Sync{
     fn name(&self) -> &'static str;
     fn to_protocol(&self) -> Tool;
-    fn execute(&self, args: Value) -> Result<Value, ToolError>;
+    fn execute(&self, args: Value) -> Result<String, ToolError>;
     fn arg_schema(&self) -> Option<&Value> {
         None
     }

@@ -2,5 +2,4 @@
 pub enum ToolError{
     Execution,
     Arguments,
-    
 }

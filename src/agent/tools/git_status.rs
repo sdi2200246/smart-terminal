@@ -4,15 +4,15 @@ use super::capability::Capability;
 use super::error::ToolError;
 use crate::protocol::tool::{Tool, ToolFunction};
 
-pub fn git_status(_args: Value) -> Result<Value, ToolError> {
+pub fn git_status(_args: Value) -> Result<String, ToolError> {
     let output = Command::new("git")
-        .arg("status")
+        .arg("status").arg("--porcelain")
         .output()
         .map_err(|_| ToolError::Execution)?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
 
-    Ok(Value::String(stdout))
+    Ok(stdout)
 }
 
 pub struct GitStatus;
@@ -38,7 +38,7 @@ impl Capability for GitStatus {
         )
     }
 
-    fn execute(&self, args: Value) -> Result<Value, ToolError> {
+    fn execute(&self, args: Value) -> Result<String, ToolError> {
         git_status(args)
     }
 
@@ -55,6 +55,6 @@ mod tests {
         let result = git_status(json!({}))
             .expect("git status should run");
 
-        println!("{result}");
+        println!("{}",result);
     }
 }

@@ -7,7 +7,7 @@ use crate::protocol::tool::{Tool, ToolFunction};
 use super::capability::Capability;
 
 
-pub fn list_processes(_args:Value) -> Result<Value, ToolError> {
+pub fn list_processes(_args:Value) -> Result<String, ToolError> {
     let output = Command::new("top")
         .args([
             "-l", "1",
@@ -17,7 +17,7 @@ pub fn list_processes(_args:Value) -> Result<Value, ToolError> {
         .map_err(|_| ToolError::Execution)?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(Value::String(stdout))
+    Ok(stdout)
 }
 
 pub struct ProcessList;
@@ -42,7 +42,7 @@ impl Capability for ProcessList {
         }
     )
     }
-    fn execute(&self, args: Value) -> Result<Value , ToolError> {
+    fn execute(&self, args: Value) -> Result<String , ToolError> {
         list_processes(args)
     }
 }

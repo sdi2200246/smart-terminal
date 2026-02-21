@@ -4,7 +4,7 @@ use super::capability::Capability;
 use super::error::ToolError;
 use crate::protocol::tool::{Tool, ToolFunction};
 
-pub fn git_diff_staged(_args: Value) -> Result<Value, ToolError> {
+pub fn git_diff_staged(_args: Value) -> Result<String, ToolError> {
     let output = Command::new("git")
         .arg("diff")
         .arg("--staged")
@@ -13,7 +13,7 @@ pub fn git_diff_staged(_args: Value) -> Result<Value, ToolError> {
 
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
 
-    Ok(Value::String(stdout))
+    Ok(stdout)
 }
 
 pub struct GitDiffStaged;
@@ -39,7 +39,7 @@ impl Capability for GitDiffStaged {
         )
     }
 
-    fn execute(&self, args: Value) -> Result<Value, ToolError> {
+    fn execute(&self, args: Value) -> Result<String, ToolError> {
         git_diff_staged(args)
     }
 }
