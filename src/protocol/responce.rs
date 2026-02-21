@@ -1,10 +1,6 @@
 use serde::{Deserialize};
 use super::message::Message;
-
-#[derive(Deserialize , Debug)]
-pub enum ProtocolError{
-    ToolCall
-}
+use super::error::ProtocolError;
 
 #[derive(Deserialize , Debug)]
 pub struct ChatResponse {
@@ -13,14 +9,18 @@ pub struct ChatResponse {
 impl ChatResponse{ 
 
     pub fn tool_call_name(&self) -> Result<&str, ProtocolError> {
-        let choice = self.choices.get(0).ok_or(ProtocolError::ToolCall)?;
+        let choice = self.choices.get(0).ok_or(ProtocolError::Empty)?;
 
         let tool = choice.message.tool_calls.get(0)
-            .ok_or(ProtocolError::ToolCall)?;
+            .ok_or(ProtocolError::NoTool)?;
         Ok(&tool.name)
     }
     pub fn tool_call_id(&self)->&str{
         return  &self.choices[0].message.tool_calls[0].id;
+    }
+
+    pub fn message(self)->Message{
+        return self.choices[0].message.clone();
     }
 }
 

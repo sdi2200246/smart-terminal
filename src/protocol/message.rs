@@ -19,9 +19,10 @@ pub struct Message {
      #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
 
-}
+}   
 
 impl  Message {
+
     pub fn user(content:Option<String>)->Message{
         Message {
             role:"user".into(),
@@ -54,8 +55,6 @@ impl  Message {
             name:None
         }
     }
-
-
     pub fn tool_responce(content: Option<String> , tool_call_id:String , tool_name:String)->Message{
         Message { 
             role:"tool".into(),

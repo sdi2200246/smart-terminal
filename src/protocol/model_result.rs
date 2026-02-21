@@ -1,7 +1,6 @@
 use serde_json::Value;
 use super::responce::ChatResponse;
-use super::mcp::service::McpError;
-
+use super::error::ProtocolError;
 
 #[derive(Debug)]
 pub enum ModelOutcome {
@@ -13,14 +12,14 @@ pub enum ModelOutcome {
 }
 
 impl TryFrom<&ChatResponse> for ModelOutcome {
-    type Error = McpError;
+    type Error = ProtocolError;
 
     fn try_from(response: &ChatResponse) -> Result<Self, Self::Error> {
 
         let choice = response
             .choices
             .get(0)
-            .ok_or(McpError::Protocol)?;
+            .ok_or(ProtocolError::Empty)?;
 
         let message = &choice.message;
 
@@ -31,6 +30,6 @@ impl TryFrom<&ChatResponse> for ModelOutcome {
                 arguments: tool_call.function.arguments(),
             });
         }
-        Err(McpError::Protocol)
+        Err(ProtocolError::NoTool)
     }
 }
