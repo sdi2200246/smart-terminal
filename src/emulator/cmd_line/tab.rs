@@ -1,8 +1,19 @@
 use std::{process::Command};
 use std::io;
 use std::path::PathBuf;
-use super::{TabState , TabMode};
 
+pub enum TabMode{
+    Cleared,
+    Cycling,
+    Firstmatch,
+    AiCompletion
+}
+pub struct TabState{
+    pub mode:TabMode,
+    pub candidates:Vec<String>,
+    pub current_option:usize,
+    //to do mode.
+}
 impl TabState{
 
     pub fn clear_state(&mut self){

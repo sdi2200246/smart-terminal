@@ -1,4 +1,9 @@
-use super::Buffer;
+pub struct Buffer{
+    pub user_buffer:String,
+    pub suggestion_buffer:String,
+    pub cursor:usize,
+}
+
 
 impl Buffer{
     pub fn set_suggestion(&mut self, s: String) {

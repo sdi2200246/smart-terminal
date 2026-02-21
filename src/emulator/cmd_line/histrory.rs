@@ -1,5 +1,8 @@
-use super::cmd_line::HistoryState;
 
+pub struct HistoryState{
+    pub cmds:Vec<String>,
+    pub index:usize
+}
 
 impl HistoryState{
 
@@ -7,7 +10,7 @@ impl HistoryState{
         self.cmds.push(cmd);
         self.index = self.cmds.len()-1;
     }
-
+    
     pub fn get_next_cmd(&mut self)->Option<String>{
         if self.cmds.len() == 0{
             return None;
