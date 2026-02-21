@@ -1,48 +1,40 @@
-use crossterm::event::{KeyCode,KeyModifiers , KeyEvent};
-use super::terminal::{TermState ,TerminalAction ,InputEvent,ContextUpdate,Context};
+use crate::emulator::state::terminal_state::UseCase;
+use super::terminal::{TermState ,TerminalAction,ContextUpdate,Context};
 use super::terminal_state::TerminalState;
 use super::cmd_line::CmdLineState;
+use std::fs::OpenOptions;
+use std::io::Write;
 pub struct PipeState;
 
 impl TerminalState for PipeState{
 
-    fn handle_input(&mut self, event: InputEvent ,_ctx:&Context, _cmdline: &mut CmdLineState,)->Vec<TerminalAction>{
+    fn handle_input(&mut self, event:UseCase ,_ctx:&Context, _cmdline: &mut CmdLineState,)->Vec<TerminalAction>{
         match event{
-            InputEvent::User(key) => vec![TerminalAction::SendPty(key_to_bytes(key).unwrap())],
-
+            UseCase::Passthrough(bytes) => vec![TerminalAction::SendPty(bytes)],
             _=> vec![TerminalAction::NOop]
         }   
     }
     fn handle_output(&mut self, bytes:&[u8])->Vec<TerminalAction>{
         let mut actions:Vec<TerminalAction> = Vec::new();
+
+        // if let Ok(mut file) = OpenOptions::new()
+        //     .create(true)
+        //     .append(true)
+        //     .open("pty_dump.bin")
+        // {
+        //     let _ = file.write_all(bytes);
+        //     let _ = file.flush();
+        // }
+
         let output = String::from_utf8_lossy(&bytes);
 
         actions.push(TerminalAction::Flush(bytes.to_vec()));
         output_interpreter(&output , &mut actions);
         return actions;
     }
-
-}
-
-fn key_to_bytes(event: KeyEvent) -> Option<Vec<u8>> {
-    let KeyEvent { code, modifiers, .. } = event;
-
-    Some(match (code, modifiers) {
-        (KeyCode::Char(c), m) if m.contains(KeyModifiers::CONTROL) => {
-            vec![(c as u8) & 0x1F]
-        }
-        (KeyCode::Char(c), _) => vec![c as u8],
-        (KeyCode::Enter, _) => vec![b'\r'],
-        (KeyCode::Backspace, _) => vec![0x7F],
-        (KeyCode::Tab, _) => vec![b'\t'],
-        (KeyCode::Esc, _) => vec![0x1B],
-        (KeyCode::Up, _) => b"\x1b[A".to_vec(),
-        (KeyCode::Down, _) => b"\x1b[B".to_vec(),
-        (KeyCode::Left, _) => b"\x1b[D".to_vec(),
-        (KeyCode::Right, _) => b"\x1b[C".to_vec(),
-
-        _ => return None,
-    })
+    fn state(&mut self)->TermState {
+        TermState::Pipe
+    }
 }
 
 fn extract_cwd(output: &str) -> Option<String> {
@@ -53,26 +45,26 @@ fn extract_cwd(output: &str) -> Option<String> {
     }
 
 fn output_interpreter(output:&str , actions:&mut Vec<TerminalAction>){
-            if output.contains("\x1b[?1049l") || output.contains("\x1b[?47l") || output.contains("\x1b[?1047l"){
-                actions.push(TerminalAction::SwitchState(TermState::Cmdline));
-            }
+    if output.contains("\x1b[?1049l") || output.contains("\x1b[?47l") || output.contains("\x1b[?1047l"){
+        actions.push(TerminalAction::SwitchState(TermState::Cmdline));
+    }
 
-            if output.contains("__AGENT_DONE__") {
-                if let Some(cwd) = extract_cwd(output) {
-                    let new_context = ContextUpdate{
-                        cwd:Some(cwd),
-                        cmd:None,
-                        files:None,
-                    };
-                    actions.push(TerminalAction::UpdateContext(new_context));
-                }
-                actions.push(TerminalAction::SwitchState(TermState::Cmdline));
-                actions.push(TerminalAction::Render);
-            }
+    if output.contains("__AGENT_DONE__") {
+        if let Some(cwd) = extract_cwd(output) {
+            let new_context = ContextUpdate{
+                cwd:Some(cwd),
+                cmd:None,
+                files:None,
+            };
+            actions.push(TerminalAction::UpdateContext(new_context));
         }
+        actions.push(TerminalAction::SwitchState(TermState::Cmdline));
+        actions.push(TerminalAction::Render);
+    }
+}
 
 
-        #[cfg(test)]
+#[cfg(test)]
 mod pipe_state_tests {
     use super::*;
 
@@ -158,29 +150,4 @@ mod pipe_state_tests {
             );
         }
     }
-      #[test]
-    fn key_to_bytes_basic_mappings_test() {
-        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-
-        // normal char
-        let k = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE);
-        assert_eq!(key_to_bytes(k), Some(vec![b'a']));
-
-        // ctrl char (Ctrl+C)
-        let k = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
-        assert_eq!(key_to_bytes(k), Some(vec![3]));
-
-        // enter
-        let k = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
-        assert_eq!(key_to_bytes(k), Some(vec![b'\r']));
-
-        // backspace
-        let k = KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE);
-        assert_eq!(key_to_bytes(k), Some(vec![0x7F]));
-
-        // arrow key
-        let k = KeyEvent::new(KeyCode::Up, KeyModifiers::NONE);
-        assert_eq!(key_to_bytes(k), Some(b"\x1b[A".to_vec()));
-    }
-
 }
