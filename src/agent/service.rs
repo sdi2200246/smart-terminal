@@ -3,12 +3,12 @@ use serde_json::Value;
 use std::collections::HashMap;
 use tokio::sync::mpsc::{self, Receiver , Sender};
 
-use crate::protocol::message::Message;
+use crate::protocol::message::{Message};
 use crate::protocol::tool::Tool;
 use crate::protocol::model_result::ModelOutcome;
 use crate::protocol::request::ChatRequest;
 
-use crate::groq::client::GroqClient;
+use crate::groq::client::{GroqClient, LlmError};
 
 use super::tools::capability::{Capability ,available_tools};
 use super::tools::final_answer::FinalAnswer;
@@ -104,7 +104,7 @@ impl AgentService{
         }
     }
 
-    fn execute_tool(&self,name: &str,arguments: Value,) -> Result<Value, AgentError> {
+    fn execute_tool(&self,name: &str,arguments: Value,) -> Result<String, AgentError> {
 
         let capability = self
             .tools_registry
@@ -118,13 +118,22 @@ impl AgentService{
         let mut session = self.session(req)?;
 
         while session.steps()!= 0{
+            let res = match client.llm_request(ChatRequest::from(&session)).await {
+                    Ok(r) => r,
+                    Err(e) => {
+                        match e {
+                            LlmError::BadStatus(_, message) => {
+                                session.error(message);
+                                session.decrease_steps();
+                                continue;
+                            }
+                            _ => return Err(AgentError::ClientError),
+                        }
+                    }
+                };
 
-            let res = client
-            .llm_request(ChatRequest::from(&session)).await
-            .map_err(|_|{AgentError::ClientError})?;
 
-            let outcome = ModelOutcome::try_from(&res).map_err(|_| AgentError::Protocol)?;
-            println!("{:?}", outcome);
+            let outcome = ModelOutcome::try_from(&res).map_err(|_|{AgentError::Protocol})?;
 
             match outcome {
                 ModelOutcome::Tool { name, arguments, id } => {
@@ -134,7 +143,8 @@ impl AgentService{
 
                     }
                     let tool_result = self.execute_tool(&name, arguments)?;
-                    session.tool_result(Message::tool_responce(Some(tool_result.to_string()), id, name));
+                    session.model_res(res.message());
+                    session.tool_result(Message::tool_responce(Some(tool_result), id, name));
                 }
             }
             session.decrease_steps();

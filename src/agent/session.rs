@@ -1,4 +1,5 @@
 use serde_json::Value;
+
 use super::protocol::message::Message;
 use super::protocol::tool::{Tool};
 
@@ -19,6 +20,16 @@ impl AgentSession {
         self.messages.push(message);
         self
     }
+    pub fn model_res(&mut self , message:Message) ->&mut Self{
+        self.messages.push(message);
+        self
+    }
+    pub fn error(&mut self, er:String) -> &mut Self{
+        let message = Message::system(Some(er));
+        self.messages.push(message);
+        self
+    } 
+
     pub fn decrease_steps(&mut self){
             self.steps -= 1;
     }
