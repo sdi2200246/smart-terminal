@@ -1,8 +1,7 @@
 use std::process::Command;
 use serde_json::Value;
-use super::capability::Capability;
+use super::capability::{Capability ,ToolFunction};
 use super::error::ToolError;
-use crate::protocol::tool::{Tool, ToolFunction};
 
 pub fn git_diff_staged(_args: Value) -> Result<String, ToolError> {
     let output = Command::new("git")
@@ -23,20 +22,15 @@ impl Capability for GitDiffStaged {
         "git_diff_staged"
     }
 
-    fn to_protocol(&self) -> Tool {
-        Tool::factory(
-            ToolFunction {
-                name: self.name().into(),
-                description: Some(
-                    "Returns the staged changes (git diff --staged) of the current repository".into()
-                ),
-                parameters: serde_json::json!({
-                    "type": "object",
-                    "properties": {}
-                }),
-                arguments: None,
-            }
-        )
+    fn to_protocol(&self) -> ToolFunction {
+        ToolFunction {
+            name: self.name().into(),
+            description:"Returns the staged changes (git diff --staged) of the current repository".into(),
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {}
+            }),
+        }
     }
 
     fn execute(&self, args: Value) -> Result<String, ToolError> {

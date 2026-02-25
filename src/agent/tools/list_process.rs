@@ -1,10 +1,7 @@
 use std::process::Command;
 use serde_json::Value;
-
 use super::error::ToolError;
-use crate::protocol::tool::{Tool, ToolFunction};
-
-use super::capability::Capability;
+use super::capability::{Capability , ToolFunction};
 
 
 pub fn list_processes(_args:Value) -> Result<String, ToolError> {
@@ -27,20 +24,15 @@ impl Capability for ProcessList {
         "running_processes"
     }
 
-    fn to_protocol(&self) -> Tool{
-        Tool::factory(
+    fn to_protocol(&self) -> ToolFunction{
         ToolFunction {
             name: self.name().into(),
-            description: Some(
-                "Returns running processes with names and pids".into()
-            ),
+            description:"Returns running processes with names and pids".into(),
             parameters: serde_json::json!({
                 "type": "object",
                 "properties": {}
             }),
-            arguments: None,
         }
-    )
     }
     fn execute(&self, args: Value) -> Result<String , ToolError> {
         list_processes(args)

@@ -1,6 +1,5 @@
 use serde_json::Value;
-use super::capability::Capability;
-use crate::{ protocol::tool::{Tool, ToolFunction}};
+use super::capability::{Capability , ToolFunction};
 use super::error::ToolError;
 pub struct FinalAnswer {
     pub properties: Value,
@@ -11,13 +10,10 @@ impl Capability for FinalAnswer {
         "final_answer"
     }
 
-    fn to_protocol(&self) -> Tool{
-        Tool::factory(
+    fn to_protocol(&self) -> ToolFunction{
         ToolFunction {
                     name: self.name().into(),
-                    description: Some(
-                        "You MUST use this tool for your final answer.".into()
-                    ),
+                    description:"You MUST use this tool for your final answer.".into(),
                     parameters: serde_json::json!({
                         "type": "object",
                         "properties": self.properties,
@@ -25,10 +21,8 @@ impl Capability for FinalAnswer {
                             .as_object()
                             .map(|o| o.keys().cloned().collect::<Vec<_>>())
                             .unwrap_or_default()
-                    }),
-                    arguments: None,
+                    })
                 }
-            )
     }
 
     fn execute(&self, _args: Value) -> Result<String,  ToolError> {

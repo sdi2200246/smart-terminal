@@ -1,8 +1,7 @@
 use std::process::Command;
 use serde_json::Value;
-use super::capability::Capability;
+use super::capability::{Capability,ToolFunction};
 use super::error::ToolError;
-use crate::protocol::tool::{Tool, ToolFunction};
 
 pub fn git_status(_args: Value) -> Result<String, ToolError> {
     let output = Command::new("git")
@@ -22,20 +21,15 @@ impl Capability for GitStatus {
         "git_status"
     }
 
-    fn to_protocol(&self) -> Tool{
-        Tool::factory(
+    fn to_protocol(&self) -> ToolFunction{
         ToolFunction {
                 name: self.name().into(),
-                description: Some(
-                    "Returns the current status of the current github repo".into()
-                ),
+                description: "Returns the current status of the current github repo".into(),
                 parameters: serde_json::json!({
                     "type": "object",
                     "properties": {}
-                }),
-                arguments: None,
+                })
             }
-        )
     }
 
     fn execute(&self, args: Value) -> Result<String, ToolError> {
