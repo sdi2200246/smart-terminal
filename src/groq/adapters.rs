@@ -1,4 +1,4 @@
-use crate::agent::session::{AgentSession, ConversationEvent};
+use crate::contracts::session::{AgentSession, ConversationEvent};
 use super::protocol:: message::Message;
 use super::protocol::tool::{self,Tool};
 use super::protocol::request::GroqRequest;
@@ -7,9 +7,9 @@ impl From<&ConversationEvent> for Message{
     fn from(event:&ConversationEvent)->Message{
         match event{
             ConversationEvent::System(message)=> Message::system(Some(message.clone())),
-            ConversationEvent::User(message)=> Message::user(Some(message.clone())),
+            ConversationEvent::User(message                                     )=> Message::user(Some(message.clone())),
             ConversationEvent::ToolResult { name, result, id } => Message::tool_responce(Some(result.clone()), id.clone(), name.clone()),
-            ConversationEvent::ToolCall { name, arguments, id } =>Message::tool_call(name.clone(), id.clone(), arguments.clone()),
+            ConversationEvent::ToolCall { name, arguments, id } => Message::tool_call(name.clone(), id.clone(), arguments.clone()),
         }
     }
 }
@@ -17,20 +17,22 @@ impl From<&ConversationEvent> for Message{
 impl From<&AgentSession> for GroqRequest {
     fn from(session: &AgentSession) -> Self{
         let messages = session.events.iter()
-        .map(|e|Message::from(e))
-        .collect();
+            .map(|e| Message::from(e))
+            .collect();
 
-        let tools = session.available_tools.iter().map(|t|{
-            Tool{
-                r#type:"function".into(),
-                function:tool::ToolFunction{
-                        name:t.name.clone(),
-                        description:Some(t.description.clone()),
-                        parameters:t.parameters.clone(),
-                        arguments:None,
-                    }
-            }
-        }).collect();
+        let tools = session.available_tools.iter()
+            .map(|t|{
+                Tool{
+                    r#type:"function".into(),
+                    function:tool::ToolFunction{
+                            name:t.name.clone(),
+                            description:Some(t.description.clone()),
+                            parameters:t.parameters.clone(),
+                            arguments:None,
+                        }
+                }
+            })
+            .collect();
         
         GroqRequest{
             model:"openai/gpt-oss-120b".into(),
@@ -42,12 +44,11 @@ impl From<&AgentSession> for GroqRequest {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::{json};
-    use crate::agent::tools::capability::ToolFunction;
+    use crate::contracts::capability::ToolFunction;
 
     // ---------- SYSTEM ----------
     #[test]

@@ -1,3 +1,4 @@
 pub mod client;
-use super::protocol;
-
+pub mod protocol;
+pub mod adapters;
+pub mod error;
