@@ -40,6 +40,10 @@ impl GroqClient{
             return GroqError::TokenLimit{ source: anyhow::anyhow!("{} {}", status, body),};
         }
 
+        if status == StatusCode::BAD_REQUEST && body.contains("tool_use_failed") {
+            return GroqError::InvalidToolCall { source: anyhow::anyhow!("{} {}", status, body) };
+        }
+
         GroqError::Protocol {
             source: anyhow::anyhow!("{} {}", status, body),
         }
