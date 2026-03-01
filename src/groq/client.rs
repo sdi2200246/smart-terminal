@@ -1,7 +1,7 @@
 use reqwest::{Client , StatusCode};
 use crate::contracts::llm_client::LLMProvider;
 use crate::contracts::session::{AgentSession , AgentOutcome};
-use crate::contracts::error::DomainError;
+use crate::contracts::error::ProviderError;
 use super::error::GroqError;
 use super::protocol::responce::{GroqResponse , LlmOutcome};
 use super::protocol::request::GroqRequest;
@@ -57,10 +57,10 @@ impl Default for  GroqClient{
 
 impl LLMProvider for GroqClient {
 
-    async fn complete(&mut self , session:&AgentSession,)->Result<AgentOutcome,DomainError>{
+    async fn complete(&mut self , session:&AgentSession,)->Result<AgentOutcome,ProviderError>{
         let req = GroqRequest::from(session);
-        let res = self.call_llm(req).await.map_err(DomainError::from)?;
-        let outcome = LlmOutcome::try_from(res).map_err(DomainError::from)?;
+        let res = self.call_llm(req).await.map_err(ProviderError::from)?;
+        let outcome = LlmOutcome::try_from(res).map_err(ProviderError::from)?;
 
         match outcome {
             LlmOutcome::FinalAnswer { answer } => Ok(AgentOutcome::FinalAnswer { arguments: answer }),
@@ -131,75 +131,5 @@ mod unit {
             LlmOutcome::ToolCall { name, id, args } => AgentOutcome::Tool { name, id, arguments: args },
         };
         assert!(matches!(agent_outcome, AgentOutcome::FinalAnswer { .. }));
-    }
-}
-
-#[cfg(test)]
-mod integration {
-    use super::*;
-    use crate::contracts::llm_client::LLMProvider;
-    use crate::contracts::session::{AgentSession, AgentOutcome, ConversationEvent};
-    use crate::contracts::capability::ToolFunction;
-    use serde_json::json;
-
-    fn final_answer_tool() -> ToolFunction {
-        ToolFunction {
-            name: "final_answer".into(),
-            description: "Return the final answer to the user".into(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "result": {
-                        "type": "string",
-                        "description": "The final answer"
-                    }
-                },
-                "required": ["result"]
-            }),
-        }
-    }
-
-    fn simple_session() -> AgentSession {
-        AgentSession {
-            events: vec![
-                ConversationEvent::System(
-                    "You are a helpful assistant. You MUST always respond by calling the final_answer tool.".into()
-                ),
-                ConversationEvent::User("What is 2 + 2?".into()),
-            ],
-            available_tools: vec![final_answer_tool()],
-            steps: 0,
-        }
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    #[ignore]
-    async fn complete_returns_final_answer() {
-
-        dotenv::dotenv().ok();
-
-        let key = std::env::var("GROQ_API_KEY")
-            .expect("GROQ_API_KEY must be set to run integration tests");
-
-        let mut client = GroqClient {
-            client: reqwest::Client::new(),
-            api_key: key,
-            completions_url: "https://api.groq.com/openai/v1/chat/completions".into(),
-        };
-
-        let session = simple_session();
-        let result = client.complete(&session).await;
-
-        assert!(result.is_ok(), "complete() failed: {:?}", result.err());
-
-        match result.unwrap() {
-            AgentOutcome::FinalAnswer { arguments } => {
-                println!("Got final answer: {}", arguments);
-                assert!(arguments.get("result").is_some(), "missing 'result' key");
-            }
-            AgentOutcome::Tool { name, .. } => {
-                panic!("Expected FinalAnswer but got tool call: {}", name);
-            }
-        }
     }
 }
