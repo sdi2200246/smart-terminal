@@ -1,5 +1,5 @@
 use thiserror::Error;
-use crate::contracts::error::DomainError;
+use crate::contracts::error::ProviderError;
 
 #[derive(Debug, Error)]
 pub enum GroqError {
@@ -35,13 +35,13 @@ pub enum GroqError {
 }
 
 
-impl From<GroqError> for DomainError {
+impl From<GroqError> for ProviderError {
     fn from(e: GroqError) -> Self {
         match e {
-            GroqError::TokenLimit { source }        => DomainError::TokenLimit { source },
-            GroqError::InvalidToolCall { source }   => DomainError::InvalidToolCal { source },
-            GroqError::MalformedResponse { source } => DomainError::MalformedResponse { source },
-            other                               => DomainError::Protocol { source: other.into() },
+            GroqError::TokenLimit { source }        => ProviderError::TokenLimit { source },
+            GroqError::InvalidToolCall { source }   => ProviderError::InvalidToolCal { source },
+            GroqError::MalformedResponse { source } => ProviderError::MalformedResponse { source },
+            other                               => ProviderError::Protocol { source: other.into() },
         }
     }
 }
