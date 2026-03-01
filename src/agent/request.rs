@@ -1,30 +1,10 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use schemars::JsonSchema;
 use tokio::{sync::mpsc::Sender};
-
+use crate::contracts::capability::ToolNames;
 use crate::agent::responce::AgentResponse;
 
-use super::protocol::message::Message;
 
-#[derive(Serialize , Deserialize , PartialEq, Eq , JsonSchema , Debug , Clone)]
-pub enum ToolNames{
-    GitStatus,
-    ProcessList,
-    FinalAnswer,
-    GitDiffStaged
-}
-
-impl AsRef<str> for ToolNames {
-    fn as_ref(&self) -> &str {
-        match self {
-            ToolNames::GitStatus => "git_status",
-            ToolNames::GitDiffStaged =>"git_diff_staged",
-            ToolNames::ProcessList => "running_processes",
-            ToolNames::FinalAnswer => "final_answer",
-        }
-    }
-}
 #[derive(Clone)]
 pub struct AgentRequest {
     pub tools:Vec<ToolNames>,
@@ -39,19 +19,6 @@ impl AgentRequest {
     }
     pub fn builder(pipe:Sender<AgentResponse>)-> AgentRequest{
         AgentRequest {tools:vec![], messages:vec![], contract:Value::Null , pipe}
-    }
-    pub fn message(mut self, message: Message) -> Self {
-        self.messages.push(message);
-        self
-    }
-    pub fn messages(mut self , messages:Vec<Message>) -> Self{
-        self.messages = messages;
-        self
-
-    }
-    pub fn tool(mut self, tool: ToolNames) -> Self {
-        self.tools.push(tool);
-        self
     }
     pub fn tools(mut self, tools: Vec<ToolNames>) -> Self {
         self.tools = tools;
@@ -70,9 +37,46 @@ impl AgentRequest {
     }
 
     pub fn with_system_promt(mut self , promt:String)->  Self{
-        let sys_message = Message::system(Some(promt));
+        let sys_message = Message::system(promt);
         self.messages.push(sys_message);
         self
     }
 
+}
+#[derive(Serialize, Deserialize, Debug, Clone , PartialEq)]
+pub struct Message {
+    pub role: String,
+    pub content:String,
+}   
+
+impl  Message {
+    pub fn is_user(&self)->bool{
+        self.role == "user"
+    }
+    pub fn user(content:String)->Message{
+        Message {
+            role:"user".into(),
+            content,
+        }
+    }
+
+    pub fn is_system(&self)->bool{
+        self.role == "system"
+    }
+
+    pub fn system(content:String)->Message{
+        Message {
+            role:"system".into(),
+            content,
+        }
+    }
+    pub fn context<T:Serialize>(ctx:&T)->Message{
+        let json = serde_json::to_string_pretty(ctx).unwrap();
+        let content = format!("Context:\n{}", json);
+
+        Message {
+            role:"system".into(),
+            content:content,
+        }
+    }
 }
