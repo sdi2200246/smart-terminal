@@ -116,8 +116,7 @@ mod tests {
     use serde_json::json;
     use std::future::Future;
     use tokio::sync::mpsc;
-    use crate::agent::request::{AgentRequest, Message};
-    use crate::contracts::capability::ToolNames;
+    use crate::agent::request::{AgentRequest, Message , ToolNames};
     use crate::contracts::error::ProviderError;
     use crate::contracts::session::AgentOutcome;
 

@@ -1,8 +1,16 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::{sync::mpsc::Sender};
-use crate::contracts::capability::ToolNames;
 use crate::agent::responce::AgentResponse;
+use schemars::JsonSchema;
+
+#[derive(Serialize , Deserialize , PartialEq, Eq , JsonSchema , Debug , Clone)]
+pub enum ToolNames{
+    GitStatus,
+    ProcessList,
+    FinalAnswer,
+    GitDiffStaged
+}
 
 
 #[derive(Clone)]

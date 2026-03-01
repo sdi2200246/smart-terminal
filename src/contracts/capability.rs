@@ -1,19 +1,13 @@
 use serde_json::{Value};
 use serde::{Serialize , Deserialize};
-use schemars::JsonSchema;
+use crate::agent::request::ToolNames;
 use crate::tools::git_status::GitStatus;
 use crate::tools::git_diff::GitDiffStaged;
 use crate::tools::list_process::ProcessList;
 use crate::tools::error::ToolError;
 
 
-#[derive(Serialize , Deserialize , PartialEq, Eq , JsonSchema , Debug , Clone)]
-pub enum ToolNames{
-    GitStatus,
-    ProcessList,
-    FinalAnswer,
-    GitDiffStaged
-}
+
 impl AsRef<str> for ToolNames {
     fn as_ref(&self) -> &str {
         match self {
