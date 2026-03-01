@@ -7,7 +7,7 @@ pub fn git_status(_args: Value) -> Result<String, ToolError> {
     let output = Command::new("git")
         .arg("status").arg("--porcelain")
         .output()
-        .map_err(|_| ToolError::Execution)?;
+        .map_err(|e| ToolError::ToolExecution {source:(e.into())})?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
 

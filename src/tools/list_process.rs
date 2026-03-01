@@ -11,7 +11,7 @@ pub fn list_processes(_args:Value) -> Result<String, ToolError> {
             "-stats", "pid,command",
         ])
         .output()
-        .map_err(|_| ToolError::Execution)?;
+        .map_err(|e| ToolError::ToolExecution { source: (e.into())})?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     Ok(stdout)

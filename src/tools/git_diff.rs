@@ -8,7 +8,7 @@ pub fn git_diff_staged(_args: Value) -> Result<String, ToolError> {
         .arg("diff")
         .arg("--staged")
         .output()
-        .map_err(|_| ToolError::Execution)?;
+        .map_err(|e| ToolError::ToolExecution { source: (e.into())})?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
 
