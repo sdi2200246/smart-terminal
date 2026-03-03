@@ -12,7 +12,6 @@ pub enum ToolNames{
     GitDiffStaged
 }
 
-
 #[derive(Clone)]
 pub struct AgentRequest {
     pub tools:Vec<ToolNames>,
