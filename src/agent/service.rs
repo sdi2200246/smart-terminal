@@ -13,6 +13,7 @@ use super::responce::AgentResponse;
 const DEFAULT_STEPS: usize = 10;
 
 pub struct AgentService<P: LLMProvider> {
+    id:String,
     rx: Receiver<AgentRequest>,
     tools: HashMap<&'static str, Box<dyn Capability>>,
     provider: P,
@@ -20,41 +21,50 @@ pub struct AgentService<P: LLMProvider> {
 
 impl<P: LLMProvider> AgentService<P> {
 
-    pub fn new(rx: Receiver<AgentRequest>, provider: P) -> Self {
+    pub fn new(rx: Receiver<AgentRequest>, provider: P , id:String) -> Self {
         let mut tools: HashMap<&'static str, Box<dyn Capability>> = HashMap::new();
         for tool in available_tools() {
             tools.insert(tool.name(), tool);
         }
-        AgentService { rx, tools, provider }
+        AgentService {id, rx, tools, provider }
     }
 
-    pub fn spawn(provider: P) -> Sender<AgentRequest>
+    pub fn spawn(id : String , provider: P) -> Sender<AgentRequest>
     where
         P: Send + 'static,
     {
         let (tx, rx) = mpsc::channel(8);
         tokio::spawn(async move {
-            AgentService::new(rx, provider).run().await;
+            AgentService::new( rx, provider , id).run().await;
         });
         tx
     }
 
+    #[tracing::instrument(skip(self), fields(agent_id = %self.id))]
     async fn run(mut self) {
         while let Some(req) = self.rx.recv().await {
             let pipe = req.pipe.clone();
             let response = match self.process(req).await {
-                Ok(value) => AgentResponse::Success(value),
-                Err(e) => AgentResponse::Error(e),
+                Ok(value) => {
+                    tracing::info!("agent request completed successfully");
+                    AgentResponse::Success(value)
+                },
+                Err(e) => {
+                    tracing::error!(error = ?e,"agent request failed");
+                    AgentResponse::Error(e)
+                }
             };
             let _ = pipe.send(response).await;
         }
     }
 
+    #[tracing::instrument(skip(self, req), fields(agent_id = %self.id))]
     async fn process(&mut self, req: AgentRequest) -> Result<Value, AgentError> {
         let mut session = self.build_session(&req);
 
         loop {
             if session.steps_exhausted() {
+                tracing::warn!("agent exhausted all steps");
                 return Err(AgentError::StepsExhausted);
             }
 
@@ -62,6 +72,7 @@ impl<P: LLMProvider> AgentService<P> {
 
             match agent_outcome {
                 Err(ProviderError::InvalidToolCal{ source }) => {
+                    tracing::warn!(%source, "invalid tool call, recovering and continuing");
                     session.add_error(source.to_string());
                     continue;
                 }
@@ -71,8 +82,9 @@ impl<P: LLMProvider> AgentService<P> {
                     self.validate_contract(&arguments, &req.contract)?;
                     return Ok(arguments);
                 }
-                
+
                 Ok(AgentOutcome::Tool { name, id, arguments }) => {
+                    tracing::info!(tool = %name, "executing tool");
                     let result = self.tools[name.as_str()]
                         .execute(arguments.clone())
                         .map_err(|e| AgentError::Internal(e.into()))?;
@@ -141,7 +153,7 @@ mod tests {
 
     fn make_service() -> AgentService<MockProvider> {
         let (_, rx) = mpsc::channel(1);
-        AgentService::new(rx, MockProvider)
+        AgentService::new(rx, MockProvider , "jason".into())
     }
 
     fn make_request(messages: Vec<Message>, tools: Vec<ToolNames>, contract: Value) -> AgentRequest {
