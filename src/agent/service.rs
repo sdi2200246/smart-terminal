@@ -3,6 +3,7 @@ use tokio::sync::mpsc::{self, Receiver, Sender};
 use serde_json::Value;
 
 use crate::contracts::capability::{Capability, available_tools , FinalAnswer , ToolFunction};
+use crate::contracts::error::ProviderError;
 use crate::contracts::llm_client::LLMProvider;
 use crate::contracts::session::{AgentOutcome, AgentSession, ConversationEvent};
 use super::error::AgentError;
@@ -57,20 +58,30 @@ impl<P: LLMProvider> AgentService<P> {
                 return Err(AgentError::StepsExhausted);
             }
 
-            match self.provider.complete(&session).await? {
-                AgentOutcome::FinalAnswer { arguments } => {
+            let agent_outcome = self.provider.complete(&session).await;
+
+            match agent_outcome {
+                Err(ProviderError::InvalidToolCal{ source }) => {
+                    session.add_error(source.to_string());
+                    continue;
+                }
+                Err(e) => return Err(e.into()),
+
+                Ok(AgentOutcome::FinalAnswer { arguments }) => {
                     self.validate_contract(&arguments, &req.contract)?;
                     return Ok(arguments);
                 }
-               AgentOutcome::Tool { name, id, arguments } => {
+                
+                Ok(AgentOutcome::Tool { name, id, arguments }) => {
                     let result = self.tools[name.as_str()]
                         .execute(arguments.clone())
-                        .map_err(|e|AgentError::Internal(e.into()))?;
+                        .map_err(|e| AgentError::Internal(e.into()))?;
 
                     session.add_tool_call(name.clone(), arguments, id.clone());
                     session.add_tool_result(name, result, id);
                 }
             }
+
         }
     }
 

@@ -59,7 +59,7 @@ impl AgentSession {
         self.events.is_empty()
     }
 
-    fn error_event(&mut self, er: String) {
+    pub fn add_error(&mut self, er: String) {
         self.events.push(ConversationEvent::System(er));
     }
 
@@ -202,7 +202,7 @@ mod tests {
     #[test]
     fn test_error_event_pushes_system_message() {
         let mut session = make_session(5);
-        session.error_event("something went wrong".to_string());
+        session.add_error("something went wrong".to_string());
         assert!(matches!(&session.events()[0], ConversationEvent::System(msg) if msg == "something went wrong"));
     }
 }
