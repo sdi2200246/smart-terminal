@@ -8,13 +8,13 @@ use crate::tools::error::ToolError;
 
 
 
-impl AsRef<str> for ToolNames {
-    fn as_ref(&self) -> &str {
+impl ToolNames {
+    pub fn to_capability(&self) -> Box<dyn Capability>{
         match self {
-            ToolNames::GitStatus => "git_status",
-            ToolNames::GitDiffStaged =>"git_diff_staged",
-            ToolNames::ProcessList => "running_processes",
-            ToolNames::FinalAnswer => "final_answer",
+            ToolNames::GitStatus =>   Box::new(GitStatus),
+            ToolNames::GitDiffStaged => Box::new(GitDiffStaged),
+            ToolNames::ProcessList =>  Box::new(ProcessList),
+            ToolNames::FinalAnswer => Box::new(FinalAnswer{properties:Value::Null}),
         }
     }
 }
@@ -23,7 +23,7 @@ impl AsRef<str> for ToolNames {
 pub struct ToolFunction {
     pub name: String,
     pub description:String,
-    pub parameters: serde_json::Value,
+    pub parameters:Value,
 }
 
 pub trait Capability:Send + Sync{

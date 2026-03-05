@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use serde_json::Value;
 
-use crate::contracts::capability::{Capability, available_tools , FinalAnswer , ToolFunction};
+use crate::contracts::capability::{Capability , FinalAnswer , ToolFunction};
 use crate::contracts::error::ProviderError;
 use crate::contracts::llm_client::LLMProvider;
 use crate::contracts::session::{AgentOutcome, AgentSession, ConversationEvent};
@@ -22,10 +22,8 @@ pub struct AgentService<P: LLMProvider> {
 impl<P: LLMProvider> AgentService<P> {
 
     pub fn new(rx: Receiver<AgentRequest>, provider: P , id:String) -> Self {
-        let mut tools: HashMap<&'static str, Box<dyn Capability>> = HashMap::new();
-        for tool in available_tools() {
-            tools.insert(tool.name(), tool);
-        }
+        let tools: HashMap<&'static str, Box<dyn Capability>> = HashMap::new();
+
         AgentService {id, rx, tools, provider }
     }
 
@@ -97,22 +95,18 @@ impl<P: LLMProvider> AgentService<P> {
         }
     }
 
-    fn build_session(&self, req: &AgentRequest) -> AgentSession {
-        let mut tools:Vec<ToolFunction>  = req.tools
-            .iter()
-            .filter_map(|name| self.tools.get(name.as_ref()))
-            .map(|t| t.metadata())
-            .collect();
-
+    fn build_session(&mut self, req: &AgentRequest) -> AgentSession {
+        
+        let mut tools:Vec<ToolFunction> = req.tools.iter().map(|t|{
+            let capability = t.to_capability();
+            let metadata = capability.metadata();
+            self.tools.insert(capability.name(), capability);
+            metadata
+        }).collect();
         
         tools.push(FinalAnswer{properties:req.contract.clone()}.metadata());
-
-
         let mut session = AgentSession::new(tools, DEFAULT_STEPS);
-
-        for message in &req.messages {
-            session.events.push(ConversationEvent::from(message.clone()));
-        }
+        session.events = req.messages.iter().map(|m| ConversationEvent::from(m.clone())).collect();
 
         session
     }
@@ -165,7 +159,7 @@ mod tests {
 
     #[test]
     fn test_session_system_and_user_messages_mapped() {
-        let service = make_service();
+        let mut service = make_service();
         let req = make_request(
             vec![
                 Message::system("you are helpful".into()),
@@ -184,7 +178,7 @@ mod tests {
 
     #[test]
     fn test_session_always_has_final_answer_tool() {
-        let service = make_service();
+        let mut service = make_service();
         let req = make_request(vec![], vec![], Value::Null);
 
         let session = service.build_session(&req);
@@ -194,7 +188,7 @@ mod tests {
 
     #[test]
     fn test_session_final_answer_has_correct_type() {
-        let service = make_service();
+        let mut service = make_service();
         let contract = json!({
             "answer": { "type": "string" }
         });
@@ -208,7 +202,7 @@ mod tests {
 
     #[test]
     fn test_session_final_answer_properties_match_contract() {
-        let service = make_service();
+        let mut service = make_service();
         let contract = json!({
             "answer": { "type": "string" }
         });
@@ -222,7 +216,7 @@ mod tests {
 
     #[test]
     fn test_session_final_answer_required_matches_contract_keys() {
-        let service = make_service();
+        let mut service = make_service();
         let contract = json!({
             "answer": { "type": "string" },
             "confidence": { "type": "number" }
@@ -240,7 +234,7 @@ mod tests {
 
     #[test]
     fn test_session_only_includes_requested_tools_plus_final_answer() {
-        let service = make_service();
+        let mut service = make_service();
         let req = make_request(vec![], vec![ToolNames::GitStatus], Value::Null);
 
         let session = service.build_session(&req);
@@ -252,7 +246,7 @@ mod tests {
 
     #[test]
     fn test_session_no_tools_still_has_final_answer() {
-        let service = make_service();
+        let mut service = make_service();
         let req = make_request(vec![], vec![], Value::Null);
 
         let session = service.build_session(&req);
@@ -263,7 +257,7 @@ mod tests {
 
     #[test]
     fn test_session_has_correct_step_limit() {
-        let service = make_service();
+        let mut service = make_service();
         let req = make_request(vec![], vec![], Value::Null);
 
         let session = service.build_session(&req);
@@ -273,7 +267,7 @@ mod tests {
 
     #[test]
     fn test_session_empty_when_no_messages() {
-        let service = make_service();
+        let mut service = make_service();
         let req = make_request(vec![], vec![], Value::Null);
 
         let session = service.build_session(&req);
