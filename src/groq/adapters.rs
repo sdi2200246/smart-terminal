@@ -38,7 +38,7 @@ impl From<&AgentSession> for GroqRequest {
             model:"openai/gpt-oss-120b".into(),
             messages,
             tools,
-            tool_choice:"required".into(),
+            tool_choice:"auto".into(),
             temperature:0.5
         }
     }

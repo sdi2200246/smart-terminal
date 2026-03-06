@@ -38,7 +38,6 @@ impl Capability for GitStatus {
 
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -3,6 +3,7 @@ use serde::{Serialize , Deserialize};
 use crate::agent::request::ToolNames;
 use crate::tools::git_status::GitStatus;
 use crate::tools::git_diff::GitDiffStaged;
+use crate::tools::git_log::GitLog;
 use crate::tools::list_process::ProcessList;
 use crate::tools::error::ToolError;
 
@@ -15,6 +16,7 @@ impl ToolNames {
             ToolNames::GitDiffStaged => Box::new(GitDiffStaged),
             ToolNames::ProcessList =>  Box::new(ProcessList),
             ToolNames::FinalAnswer => Box::new(FinalAnswer{properties:Value::Null}),
+            ToolNames::GitLog =>  Box::new(GitLog), 
         }
     }
 }

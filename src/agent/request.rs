@@ -9,7 +9,8 @@ pub enum ToolNames{
     GitStatus,
     ProcessList,
     FinalAnswer,
-    GitDiffStaged
+    GitDiffStaged,
+    GitLog,
 }
 
 #[derive(Clone)]

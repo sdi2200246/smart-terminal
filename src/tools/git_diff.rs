@@ -6,7 +6,7 @@ use super::error::ToolError;
 pub fn git_diff_staged(_args: Value) -> Result<String, ToolError> {
     let output = Command::new("git")
         .arg("diff")
-        .arg("--staged")
+        .arg("--staged").arg("--stat").arg("-p")
         .output()
         .map_err(|e| ToolError::ToolExecution { source: (e.into())})?;
 
