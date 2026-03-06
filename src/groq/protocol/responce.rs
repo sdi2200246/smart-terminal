@@ -180,7 +180,7 @@ mod tests {
         });
 
         let resp = parse(raw);
-        let result = LlmOutcome::try_from(resp);
+        let _result = LlmOutcome::try_from(resp);
     }
 
     #[test]
@@ -199,6 +199,6 @@ mod tests {
         });
 
         let resp = parse(raw);
-        let result = LlmOutcome::try_from(resp);
+        let _result = LlmOutcome::try_from(resp);
     }
 }

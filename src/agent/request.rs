@@ -49,6 +49,12 @@ impl AgentRequest {
         self.messages.push(sys_message);
         self
     }
+     pub fn with_user_promt(mut self , promt:String)->  Self{
+        let sys_message = Message::user(promt);
+        self.messages.push(sys_message);
+        self
+    }
+
 
 }
 #[derive(Serialize, Deserialize, Debug, Clone , PartialEq)]
@@ -67,7 +73,7 @@ impl  Message {
             content,
         }
     }
-
+    
     pub fn is_system(&self)->bool{
         self.role == "system"
     }

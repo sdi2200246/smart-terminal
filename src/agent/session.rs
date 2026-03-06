@@ -1,5 +1,4 @@
 use serde_json::Value;
-
 use crate::contracts::session::{AgentOutcome, AgentSession, ConversationEvent};
 use crate::contracts::capability::ToolFunction;
 use super::request::Message;
@@ -63,7 +62,7 @@ impl AgentSession {
         self.events.push(ConversationEvent::System(er));
     }
 
-    fn tool_call_event(&mut self, tool_call: AgentOutcome) {
+    fn _tool_call_event(&mut self, tool_call: AgentOutcome) {
         match tool_call {
             AgentOutcome::Tool { name, id, arguments } => {
                 self.events.push(ConversationEvent::ToolCall { name, arguments, id });
