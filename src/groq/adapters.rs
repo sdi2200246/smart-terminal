@@ -1,4 +1,4 @@
-use crate::contracts::session::{AgentSession, ConversationEvent};
+use crate::interfaces::session::{AgentSession, ConversationEvent};
 use super::protocol:: message::Message;
 use super::protocol::tool::{self,Tool};
 use super::protocol::request::GroqRequest;
@@ -48,7 +48,7 @@ impl From<&AgentSession> for GroqRequest {
 mod tests {
     use super::*;
     use serde_json::{json};
-    use crate::contracts::capability::ToolFunction;
+    use crate::interfaces::capability::ToolFunction;
 
     // ---------- SYSTEM ----------
     #[test]

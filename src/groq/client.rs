@@ -1,7 +1,7 @@
 use reqwest::{Client , StatusCode};
-use crate::contracts::llm_client::LLMProvider;
-use crate::contracts::session::{AgentSession , AgentOutcome};
-use crate::contracts::error::ProviderError;
+use crate::interfaces::llm_client::LLMProvider;
+use crate::interfaces::session::{AgentSession , AgentOutcome};
+use crate::interfaces::error::ProviderError;
 use super::error::GroqError;
 use super::protocol::responce::{GroqResponse , LlmOutcome};
 use super::protocol::request::GroqRequest;
@@ -77,7 +77,7 @@ impl LLMProvider for GroqClient {
 #[cfg(test)]
 mod unit {
     use crate::groq::protocol::responce::{GroqResponse, LlmOutcome};
-    use crate::contracts::session::AgentOutcome;
+    use crate::interfaces::session::AgentOutcome;
     use serde_json::json;
 
     
