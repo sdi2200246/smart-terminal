@@ -82,7 +82,7 @@ impl<P: LLMProvider> AgentService<P> {
                 }
 
                 Ok(AgentOutcome::Tool { name, id, arguments }) => {
-                    tracing::info!(tool = %name, "executing tool");
+                    tracing::info!(tool = %name, args = %arguments, "executing tool" ,);
                     let result = self.tools[name.as_str()]
                         .execute(arguments.clone())
                         .map_err(|e| AgentError::Internal(e.into()))?;
