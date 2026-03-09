@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod integration {
     use smart_terminal::groq::client::GroqClient;
-    use smart_terminal::contracts::llm_client::LLMProvider;
-    use smart_terminal::contracts::session::{AgentSession, AgentOutcome, ConversationEvent};
-    use smart_terminal::contracts::capability::ToolFunction;
+    use smart_terminal::interfaces::llm_client::LLMProvider;
+    use smart_terminal::interfaces::session::{AgentSession, AgentOutcome, ConversationEvent};
+    use smart_terminal::interfaces::capability::ToolFunction;
     use serde_json::json;
 
     fn final_answer_tool() -> ToolFunction {
