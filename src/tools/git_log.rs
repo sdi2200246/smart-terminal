@@ -1,6 +1,6 @@
 use std::process::Command;
 use serde_json::Value;
-use crate::contracts::capability::{Capability, ToolFunction};
+use crate::interfaces::capability::{Capability, ToolFunction};
 use super::error::ToolError;
 
 pub fn git_log(_args: Value) -> Result<String, ToolError> {

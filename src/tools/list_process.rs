@@ -1,7 +1,7 @@
 use std::process::Command;
 use serde_json::Value;
 use super::error::ToolError;
-use crate::contracts::capability::{Capability , ToolFunction};
+use crate::interfaces::capability::{Capability , ToolFunction};
 
 
 pub fn list_processes(_args:Value) -> Result<String, ToolError> {
