@@ -1,6 +1,6 @@
 use serde_json::Value;
-use crate::contracts::session::{AgentOutcome, AgentSession, ConversationEvent};
-use crate::contracts::capability::ToolFunction;
+use crate::interfaces::session::{AgentOutcome, AgentSession, ConversationEvent};
+use crate::interfaces::capability::ToolFunction;
 use super::request::Message;
 
 impl AgentSession {

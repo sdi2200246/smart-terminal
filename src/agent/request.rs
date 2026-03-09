@@ -2,16 +2,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::{sync::mpsc::Sender};
 use crate::agent::responce::AgentResponse;
-use schemars::JsonSchema;
+ use crate::interfaces::capability::ToolNames;
 
-#[derive(Serialize , Deserialize , PartialEq, Eq , JsonSchema , Debug , Clone)]
-pub enum ToolNames{
-    GitStatus,
-    ProcessList,
-    FinalAnswer,
-    GitDiffStaged,
-    GitLog,
-}
 
 #[derive(Clone)]
 pub struct AgentRequest {
@@ -73,7 +65,7 @@ impl  Message {
             content,
         }
     }
-    
+
     pub fn is_system(&self)->bool{
         self.role == "system"
     }

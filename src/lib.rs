@@ -1,4 +1,4 @@
 pub mod groq;
-pub mod contracts;
+pub mod interfaces;
 pub mod agent;
 pub mod tools;

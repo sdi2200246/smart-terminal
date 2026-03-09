@@ -2,10 +2,10 @@ use std::collections::HashMap;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use serde_json::Value;
 
-use crate::contracts::capability::{Capability , FinalAnswer , ToolFunction};
-use crate::contracts::error::ProviderError;
-use crate::contracts::llm_client::LLMProvider;
-use crate::contracts::session::{AgentOutcome, AgentSession, ConversationEvent};
+use crate::interfaces::capability::{Capability , FinalAnswer , ToolFunction};
+use crate::interfaces::error::ProviderError;
+use crate::interfaces::llm_client::LLMProvider;
+use crate::interfaces::session::{AgentOutcome, AgentSession, ConversationEvent};
 use super::error::AgentError;
 use super::request::AgentRequest;
 use super::responce::AgentResponse;
@@ -133,9 +133,10 @@ mod tests {
     use serde_json::json;
     use std::future::Future;
     use tokio::sync::mpsc;
-    use crate::agent::request::{AgentRequest, Message , ToolNames};
-    use crate::contracts::error::ProviderError;
-    use crate::contracts::session::AgentOutcome;
+    use crate::agent::request::{AgentRequest, Message};
+    use crate::interfaces::capability::ToolNames;
+    use crate::interfaces::error::ProviderError;
+    use crate::interfaces::session::AgentOutcome;
 
     struct MockProvider;
 
