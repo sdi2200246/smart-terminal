@@ -8,7 +8,7 @@ use std::io::{self, Write};
 
 #[derive(JsonSchema , Deserialize , Debug)]
 pub struct ModelQuestion{
-    /// This is your question where you ask the user for extra context and information.
+    /// This is your question where you speak with the user to achieve alignment.
     pub question:String
 }
 impl ToolArgs for ModelQuestion {}
@@ -23,7 +23,9 @@ impl  Capability  for AskUser{
     fn metadata(&self) -> ToolFunction {
         ToolFunction {
             name: self.name().into(),
-            description:"Returns extra context from the user based on what you ask.".into(),
+            description:"Use this tool to achieve alignment with the user when their intent, \
+              preferences, or context are unclear. Ask one focused question at a time. \
+              Do not use this tool for information you can infer yourself.".into(),
             parameters: ModelQuestion::schema(),
         }
     }
