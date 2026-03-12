@@ -1,4 +1,4 @@
-use reqwest::{Client , StatusCode};
+use reqwest::{Client, StatusCode };
 use crate::interfaces::llm_client::LLMProvider;
 use crate::interfaces::session::{AgentSession , AgentOutcome};
 use crate::interfaces::error::ProviderError;
@@ -50,9 +50,18 @@ impl GroqClient{
     }  
 }
 impl Default for  GroqClient{
+    
     fn default()->GroqClient{
+
+        let client = Client::builder()
+            .pool_idle_timeout(std::time::Duration::from_secs(10))
+            .pool_max_idle_per_host(0) // avoid stale reused connections
+            .tcp_keepalive(std::time::Duration::from_secs(30))
+            .build()
+            .unwrap();
+
         GroqClient{
-            client:Client::new(),
+            client,
             api_key:std::env::var("GROQ_API_KEY").unwrap(),
             completions_url:"https://api.groq.com/openai/v1/chat/completions".into(),
         }
