@@ -54,7 +54,6 @@ pub trait ToolArgs : JsonSchema{
         serde_json::to_value(schema_for!(Self)).unwrap()
     }
 }
-
 pub struct FinalAnswer {
     pub properties: Value,
 }
@@ -66,17 +65,10 @@ impl Capability for FinalAnswer {
 
     fn metadata(&self) -> ToolFunction{
         ToolFunction {
-                    name: self.name().into(),
-                    description:"You MUST use this tool for your final answer.".into(),
-                    parameters: serde_json::json!({
-                        "type": "object",
-                        "properties": self.properties,
-                        "required": self.properties
-                            .as_object()
-                            .map(|o| o.keys().cloned().collect::<Vec<_>>())
-                            .unwrap_or_default()
-                    })
-                }
+            name: self.name().into(),
+            description:"You MUST use this tool for your final answer.".into(),
+            parameters:self.properties.clone(),
+        }
     }
 
     fn execute(&self, _args: Value) -> Result<String,  ToolError> {
