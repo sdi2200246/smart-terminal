@@ -17,7 +17,10 @@ pub enum Commands {
 }
 
 #[derive(Args)]
-pub struct NextCmdArgs;
+pub struct NextCmdArgs{
+    ///Terminal buffer or a promt describing the expected command
+    pub buffer: String,
+}
 
 #[derive(Args)]
 pub struct ExecArgs {
