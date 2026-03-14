@@ -3,12 +3,11 @@ use crate::agent::responce::AgentResponse;
 use crate::interfaces::capability::{ToolNames , ToolArgs};
 use crate::cmds::cli::ExecArgs;
 use schemars::JsonSchema;
-use serde::Serialize;
+use serde::{Serialize , Deserialize};
 use std::env;
 use tokio::sync::mpsc::Sender;
 
-struct Policy{}
-
+pub struct Policy{}
 
 impl Policy {
 
@@ -27,10 +26,10 @@ pub trait AgentPolicy {
     fn create_req(&self, args: ExecArgs,response_tx: Sender<AgentResponse>) -> AgentRequest;
 }
 
-#[derive(JsonSchema)]
-struct Script{
+#[derive(JsonSchema , Deserialize )]
+pub struct Script{
     ///Shell executable programm.
-    script:String
+    pub script:String
 }
 
 impl ToolArgs for Script {}
@@ -140,8 +139,7 @@ However, before producing any script you MUST ensure the user's intent is fully 
 ALIGNMENT RULES:
 Always prioritize alignment before action.
 
-If anything about the request is unclear, incomplete, or could have multiple interpretations,
-use the ask_user tool to ask a clarification question.
+You MUST always align with the user first using the ask_user tool.
 
 QUESTION STYLE:
 Questions must be:
