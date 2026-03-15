@@ -1,5 +1,5 @@
-use smart_terminal::cmds::{exec , next_cmd};
-use smart_terminal::cmds::cli::{Cli , Commands};
+use smart_terminal::cli::{exec , next_cmd};
+use smart_terminal::cli::cli::{Cli , Commands};
 use clap::Parser;
 
 pub struct Router;
