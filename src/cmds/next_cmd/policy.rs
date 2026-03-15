@@ -109,7 +109,7 @@ impl AgentPolicy for DefaultPolicy {
 
         let terminal_ctx = TerminalContext::gather();
         AgentRequest::builder(response_tx)
-            .tools(vec![ToolNames::GitLog , ToolNames::GitDiffStaged])
+            .tools(vec![ToolNames::GitStatus  ,ToolNames::GitLog , ToolNames::GitDiffStaged])
             .contract(Command::schema())
             .with_context(&terminal_ctx)
             .with_system_promt(DEFAULT_SYSTEM_POLICY.into())
@@ -117,21 +117,29 @@ impl AgentPolicy for DefaultPolicy {
     }
 }
 
-
 pub const DEFAULT_SYSTEM_POLICY: &str = "You are an expert shell command completion agent.
 
 You will receive a JSON context object describing the environment — OS, shell, cwd, and the user's input.
 The input is either a partial command or a natural language description of what the user wants to do.
 
 STRATEGY:
-Infer the user's intent and produce the single most correct and complete command for their environment.
-Use your tools to gather live context — branch names, remotes, staged files — to produce completions that are accurate, not just syntactically valid.
-Only call the tools that are relevant to the command being completed.
+Infer the user's intent from their input and the environment.
+When the input is ambiguous, use your tools to observe the current state of the environment and let it resolve the ambiguity — the environment almost always tells you what the user is about to do next.
+Only call tools that are relevant to the command being completed.
 
 COMPLETION:
 Always complete the command fully — never return a partial command or a placeholder.
-If the input is ambiguous, pick the most likely interpretation and complete it.
+Pick the most probable interpretation based on what you observe.
+A syntactically complete command is not enough — it must be semantically complete.
+ example :`git commit` without a `-m` is not a valid completion.
+Always use tools to fill in arguments, flags, and values that the user would have to type anyway.
 
 OUTPUT:
 You MUST submit your answer using the final_answer tool — this is the only valid output.
-Return a single runnable command.";
+Return a single runnable command. No explanation, no alternatives, no comments.";
+
+#[tokio::test]
+async fn test_gather_context() {
+    let ctx = TerminalContext::gather();
+    println!("{}", serde_json::to_string_pretty(&ctx).unwrap());
+}

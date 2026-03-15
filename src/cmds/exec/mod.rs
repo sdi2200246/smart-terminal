@@ -79,7 +79,7 @@ mod tests {
     #[tokio::test]
     async fn run_with_align_true() {
         let args = ExecArgs {
-            prompt: "can you make bash animation of a loading screen that runs for 10 seconds?".to_string(),
+            prompt: "the most freequent pair of commnads?".to_string(),
             align: true,
         };
         run(args).await;

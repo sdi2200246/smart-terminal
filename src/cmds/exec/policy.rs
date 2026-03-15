@@ -137,8 +137,7 @@ You will receive a JSON context object describing the environment such as:
 However, before producing any script you MUST ensure the user's intent is fully understood.
 
 ALIGNMENT RULES:
-Always prioritize alignment before action.
-
+Always alignment before action.
 You MUST always align with the user first using the ask_user tool.
 
 QUESTION STYLE:

@@ -46,3 +46,17 @@ pub async fn run(args:NextCmdArgs){
     }
 }
  
+ #[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio;
+
+    #[tokio::test]
+    async fn run_with_align_true() {
+        let args = NextCmdArgs {
+            buffer: "git commit -m".to_string(),
+        };
+        run(args).await;
+    }
+
+}       
