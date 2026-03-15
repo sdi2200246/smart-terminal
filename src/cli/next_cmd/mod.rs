@@ -2,7 +2,7 @@ mod policy;
 use policy::{Policy , Command};
 use crate::agent::service::AgentService;
 use crate::agent::responce::AgentResponse;
-use crate::cmds::cli::NextCmdArgs;
+use crate::cli::cli::NextCmdArgs;
 use crate::groq::client::GroqClient;
 
 use tokio::sync::mpsc;

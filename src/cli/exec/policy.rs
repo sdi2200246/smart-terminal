@@ -1,7 +1,7 @@
 use crate::agent::request::AgentRequest;
 use crate::agent::responce::AgentResponse;
 use crate::interfaces::capability::{ToolNames , ToolArgs};
-use crate::cmds::cli::ExecArgs;
+use crate::cli::cli::ExecArgs;
 use schemars::JsonSchema;
 use serde::{Serialize , Deserialize};
 use std::env;
