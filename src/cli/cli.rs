@@ -28,6 +28,6 @@ pub struct ExecArgs {
     pub prompt: String,
 
     /// Run autonomously without confirmation or align first
-    #[arg(long, default_value_t = true)]
+    #[arg(long, default_value_t = false)]
     pub align: bool,
 }
