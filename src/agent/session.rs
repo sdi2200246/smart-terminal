@@ -27,6 +27,11 @@ impl AgentSession {
             AgentOutcome::FinalAnswer { .. } => {}
         }
     }
+    pub fn add_reflection(&mut self, reflection: impl Into<String>) {
+        self.events.push(ConversationEvent::System(
+            format!("[REFLECTION] {}", reflection.into())
+        ));
+}
 
     pub fn add_tool_call(&mut self, name: impl Into<String>, arguments:Value, id: impl Into<String>) {
          self.events.push(ConversationEvent::ToolCall { name:name.into(), arguments,id:id.into() });

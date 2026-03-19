@@ -4,6 +4,7 @@ use crate::agent::service::AgentService;
 use crate::agent::responce::AgentResponse;
 use crate::cli::cli::NextCmdArgs;
 use crate::groq::client::GroqClient;
+use crate::agent::loops::react::ReactLoop;
 
 use tokio::sync::mpsc;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
@@ -24,7 +25,8 @@ pub async fn run(args:NextCmdArgs){
         .ok();
 
     let client = GroqClient::default();
-    let tx = AgentService::spawn("NextCMD_Agent".into() , client);
+    let agent_type = ReactLoop{};
+    let tx = AgentService::spawn("NextCMD_Agent".into() , client , agent_type);
     let (response_tx, mut response_rx) = mpsc::channel(1);
 
     let policy = Policy::select_policy();
