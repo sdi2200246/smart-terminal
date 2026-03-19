@@ -1,17 +1,14 @@
 mod policy;
 use policy::{Policy , Script};
+use serde_json::Value;
+use tokio::sync::mpsc;
 
 use super::cli::ExecArgs;
-
 use crate::agent::service::AgentService;
 use crate::agent::responce::AgentResponse;
 use crate::agent::loops::reflect::ReflexionLoop;
 use crate::groq::client::GroqClient;
 
-use serde_json::Value;
-use tokio::sync::mpsc;
-use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
 
 fn render_success(stdout: &str) {
     println!("\x1b[32m✓ Success\x1b[0m");
@@ -69,18 +66,6 @@ fn evaluate_script(response: &Value) -> Option<String> {
 }
 
 pub async fn run(args:ExecArgs){
-
-    let file_appender = tracing_appender::rolling::daily("./logs", "app.log");
-    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::fmt::layer()
-                .with_writer(non_blocking)
-                .with_ansi(false)
-        )
-        .with(tracing_subscriber::EnvFilter::new("warn,smart_terminal=debug"))
-        .try_init()
-        .ok();
 
     let client = GroqClient::default();
     let agent_type = ReflexionLoop::new(evaluate_script);

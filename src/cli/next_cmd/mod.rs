@@ -5,24 +5,10 @@ use crate::agent::responce::AgentResponse;
 use crate::cli::cli::NextCmdArgs;
 use crate::groq::client::GroqClient;
 use crate::agent::loops::react::ReactLoop;
-
 use tokio::sync::mpsc;
-use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
 
 pub async fn run(args:NextCmdArgs){
 
-    let file_appender = tracing_appender::rolling::daily("./logs", "app.log");
-    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::fmt::layer()
-                .with_writer(non_blocking)
-                .with_ansi(false)
-        )
-        .with(tracing_subscriber::EnvFilter::new("warn,smart_terminal=debug"))
-        .try_init()
-        .ok();
 
     let client = GroqClient::default();
     let agent_type = ReactLoop{};
