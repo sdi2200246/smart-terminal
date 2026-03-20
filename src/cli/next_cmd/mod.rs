@@ -1,26 +1,24 @@
 mod policy;
 use policy::{Policy , Command};
-use crate::agent::service::AgentService;
+use crate::interfaces::policy::AgentIntent;
 use crate::agent::responce::AgentResponse;
+use crate::agent::client::AgentClient;
 use crate::cli::cli::NextCmdArgs;
 use crate::groq::client::GroqClient;
 use crate::agent::loops::react::ReactLoop;
-use tokio::sync::mpsc;
 
 pub async fn run(args:NextCmdArgs){
 
+    let itend = AgentIntent::from(args);
+    let provider = GroqClient::default();
+    let agent_loop = ReactLoop;
 
-    let client = GroqClient::default();
-    let agent_type = ReactLoop{};
-    let tx = AgentService::spawn("NextCMD_Agent".into() , client , agent_type);
-    let (response_tx, mut response_rx) = mpsc::channel(1);
+    let mut agent = AgentClient::new("SHELL_AGENT", provider, agent_loop);
 
     let policy = Policy::select_policy();
-    let req = policy.create_req(args, response_tx);
+    let req = policy.create_req(itend, agent.response_sender());
+    let response = agent.execute_request(req).await;
 
-    tx.send(req).await.unwrap();
-
-    let response = response_rx.recv().await.unwrap();
 
     match response {
         AgentResponse::Success(value) => {
@@ -34,7 +32,7 @@ pub async fn run(args:NextCmdArgs){
     }
 }
  
- #[cfg(test)]
+#[cfg(test)]
 mod tests {
     use super::*;
     use tokio;
@@ -46,5 +44,4 @@ mod tests {
         };
         run(args).await;
     }
-
 }       

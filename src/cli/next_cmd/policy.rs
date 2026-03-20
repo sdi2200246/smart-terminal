@@ -1,7 +1,8 @@
 use crate::agent::request::AgentRequest;
 use crate::agent::responce::AgentResponse;
 use crate::interfaces::capability::{ToolNames , ToolArgs};
-use crate::cli::cli::NextCmdArgs;
+use crate::interfaces::policy::{AgentPolicy , AgentIntent};
+
 use schemars::JsonSchema;
 use serde::{Serialize , Deserialize};
 use std::env;
@@ -16,9 +17,6 @@ impl Policy {
     pub fn select_policy() -> Box<dyn AgentPolicy> {
         Box::new(DefaultPolicy)
     }
-}
-pub trait AgentPolicy {
-    fn create_req(&self, args: NextCmdArgs,response_tx: Sender<AgentResponse>) -> AgentRequest;
 }
 
 #[derive(JsonSchema , Deserialize )]
@@ -105,7 +103,7 @@ impl TerminalContext {
 struct DefaultPolicy;
 
 impl AgentPolicy for DefaultPolicy {
-    fn create_req(&self , args:NextCmdArgs , response_tx:Sender<AgentResponse>)->AgentRequest{
+    fn create_req(&self , itend:AgentIntent , response_tx:Sender<AgentResponse>)->AgentRequest{
 
         let terminal_ctx = TerminalContext::gather();
         AgentRequest::builder(response_tx)
@@ -113,7 +111,8 @@ impl AgentPolicy for DefaultPolicy {
             .contract(Command::schema())
             .with_context(&terminal_ctx)
             .with_system_promt(DEFAULT_SYSTEM_POLICY.into())
-            .with_user_promt(args.buffer)
+            .with_user_promt(itend.prompt
+            )
     }
 }
 
