@@ -1,30 +1,25 @@
 use crate::agent::request::AgentRequest;
 use crate::agent::responce::AgentResponse;
 use crate::interfaces::capability::{ToolNames , ToolArgs};
-use crate::cli::cli::ExecArgs;
+use crate::interfaces::policy::{AgentPolicy , AgentIntent , AgentMode};
+use tokio::sync::mpsc::Sender;
+
 use schemars::JsonSchema;
 use serde::{Serialize , Deserialize};
 use std::env;
-use tokio::sync::mpsc::Sender;
 
 pub struct Policy{}
 
 impl Policy {
+    pub fn select_policy(itend: &AgentIntent) -> Box<dyn AgentPolicy> {
+        match itend.mode {
+            AgentMode::Align => Box::new(AlignPolicy),
+            _=> Box::new(AutoPolicy)
 
-    pub fn select_policy(args: &ExecArgs) -> Box<dyn AgentPolicy> {
-        let policy: Box<dyn AgentPolicy> = if args.align {
-            Box::new(AlignPolicy)
-        } else {
-            Box::new(AutoPolicy)
-        };
-
-        policy
+        }
     }
 }
 
-pub trait AgentPolicy {
-    fn create_req(&self, args: ExecArgs,response_tx: Sender<AgentResponse>) -> AgentRequest;
-}
 
 #[derive(JsonSchema , Deserialize )]
 pub struct Script{
@@ -35,9 +30,45 @@ pub struct Script{
 impl ToolArgs for Script {}
 
 #[derive(Serialize, Debug)]
+pub struct ToolVersions {
+    bash: String,
+    awk: String,
+    sed: String,
+    grep: String,
+    find: String,
+}
+
+impl ToolVersions {
+    pub fn gather() -> Self {
+        Self {
+            bash: get_version("bash", "--version"),
+            awk: get_version("awk", "--version"),
+            sed: get_version("sed", "--version"),
+            grep: get_version("grep", "--version"),
+            find: get_version("find", "--version"),
+        }
+    }
+}
+
+fn get_version(cmd: &str, flag: &str) -> String {
+    std::process::Command::new(cmd)
+        .arg(flag)
+        .output()
+        .ok()
+        .and_then(|o| {
+            let stdout = String::from_utf8(o.stdout).ok().unwrap_or_default();
+            let stderr = String::from_utf8(o.stderr).ok().unwrap_or_default();
+            let out = if !stdout.is_empty() { stdout } else { stderr };
+            out.lines().next().map(|l| l.to_string())
+        })
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
+
+#[derive(Serialize, Debug)]
 pub struct TerminalContext {
-    /// The shell currently used by the terminal (e.g. bash, zsh, fish).
-    shell: String,
+    ///All supported tools from the shlle you are going to use in the system.
+    shell_tools:ToolVersions,
 
     /// The operating system the agent is running on (linux, macos, windows).
     os: &'static str,
@@ -48,11 +79,7 @@ pub struct TerminalContext {
 
 impl TerminalContext {
     pub fn gather() -> Self {
-
-        let shell = env::var("SHELL")
-            .ok()
-            .and_then(|s| s.split('/').last().map(|s| s.to_string()))
-            .unwrap_or_else(|| "unknown".to_string());
+        let shell_tools= ToolVersions::gather();
 
         let os = std::env::consts::OS;
 
@@ -62,7 +89,7 @@ impl TerminalContext {
             .unwrap_or_else(|| "unknown".to_string());
 
         Self {
-            shell,
+            shell_tools,
             os,
             cwd,
         }
@@ -72,7 +99,7 @@ impl TerminalContext {
 struct AutoPolicy;
 
 impl AgentPolicy for AutoPolicy {
-    fn create_req(&self , args:ExecArgs , response_tx:Sender<AgentResponse>)->AgentRequest{
+    fn create_req(&self , itend:AgentIntent , response_tx:Sender<AgentResponse>)->AgentRequest{
 
         let terminal_ctx = TerminalContext::gather();
         AgentRequest::builder(response_tx)
@@ -80,7 +107,7 @@ impl AgentPolicy for AutoPolicy {
             .contract(Script::schema())
             .with_context(&terminal_ctx)
             .with_system_promt(AUTO_SYSTEM_POLICY.into())
-            .with_user_promt(args.prompt)
+            .with_user_promt(itend.prompt)
     }
 }
 
@@ -88,7 +115,7 @@ struct AlignPolicy;
 
 impl AgentPolicy for AlignPolicy{
 
-    fn create_req(&self , args:ExecArgs , response_tx:Sender<AgentResponse>)->AgentRequest{
+    fn create_req(&self , itend:AgentIntent , response_tx:Sender<AgentResponse>)->AgentRequest{
 
         let terminal_ctx = TerminalContext::gather();
         AgentRequest::builder(response_tx)
@@ -96,7 +123,7 @@ impl AgentPolicy for AlignPolicy{
             .contract(Script::schema())
             .with_context(&terminal_ctx)
             .with_system_promt(ALIGN_SYSTEM_POLICY.into())
-            .with_user_promt(args.prompt)
+            .with_user_promt(itend.prompt)
     }
 }
 
@@ -131,7 +158,7 @@ Your primary responsibility is to align with the user's intent before generating
 
 You will receive a JSON context object describing the environment such as:
 - operating system
-- shell
+- the supported bash tools that you must use.
 - current working directory
 
 However, before producing any script you MUST ensure the user's intent is fully understood.
@@ -167,7 +194,11 @@ Only generate a script once you are confident about the user's intent.
 
 OUTPUT RULES:
 When you are fully aligned with the user's goal, submit the final script using the final_answer tool.
-
 The script must be executable as-is.
-
 Do not include explanations or comments in the script — code only.";
+
+#[tokio::test]
+async fn test_gather_context() {
+    let ctx = TerminalContext::gather();
+    println!("{}", serde_json::to_string_pretty(&ctx).unwrap());
+}
