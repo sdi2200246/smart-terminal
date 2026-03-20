@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand, Args};
+use super::adapters::Mode;
 
 #[derive(Parser)]
 #[command(name = "agent")]
@@ -27,7 +28,6 @@ pub struct ExecArgs {
     /// The prompt describing what you want to execute
     pub prompt: String,
 
-    /// Run autonomously without confirmation or align first
-    #[arg(long, default_value_t = false)]
-    pub align: bool,
+   #[arg(long, value_enum, default_value = "auto")]
+    pub mode: Mode,
 }
