@@ -1,8 +1,6 @@
 use crate::agent::request::AgentRequest;
-use crate::agent::responce::AgentResponse;
 use crate::interfaces::capability::{ToolNames , ToolArgs};
 use crate::interfaces::policy::{AgentPolicy , AgentIntent , AgentMode};
-use tokio::sync::mpsc::Sender;
 
 use schemars::JsonSchema;
 use serde::{Serialize , Deserialize};
@@ -98,10 +96,10 @@ impl TerminalContext {
 struct AutoPolicy;
 
 impl AgentPolicy for AutoPolicy {
-    fn create_req(&self , itend:AgentIntent , response_tx:Sender<AgentResponse>)->AgentRequest{
+    fn create_req(&self , itend:AgentIntent)->AgentRequest{
 
         let terminal_ctx = TerminalContext::gather();
-        AgentRequest::builder(response_tx)
+        AgentRequest::builder()
             .tools(vec![ToolNames::ReadDir ,ToolNames::GitLog , ToolNames::GitDiffStaged])
             .contract(Script::schema())
             .with_context(&terminal_ctx)
@@ -114,10 +112,10 @@ struct AlignPolicy;
 
 impl AgentPolicy for AlignPolicy{
 
-    fn create_req(&self , itend:AgentIntent , response_tx:Sender<AgentResponse>)->AgentRequest{
+    fn create_req(&self , itend:AgentIntent)->AgentRequest{
 
         let terminal_ctx = TerminalContext::gather();
-        AgentRequest::builder(response_tx)
+        AgentRequest::builder()
             .tools(vec![ToolNames::AskUser, ToolNames::ReadDir])
             .contract(Script::schema())
             .with_context(&terminal_ctx)
@@ -125,8 +123,6 @@ impl AgentPolicy for AlignPolicy{
             .with_user_promt(itend.prompt)
     }
 }
-
-
 
 pub const AUTO_SYSTEM_POLICY: &str = "You are an expert shell execution agent embedded in a developer's shell.
 
