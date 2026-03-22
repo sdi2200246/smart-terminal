@@ -89,7 +89,7 @@ pub async fn run(args:ExecArgs){
     let mut agent = AgentClient::new("SHELL_AGENT", provider, agent_loop);
 
     let policy = Policy::select_policy(&itend);
-    let req = policy.create_req(itend, agent.response_sender());
+    let req = policy.create_req(itend);
     let response = agent.execute_request(req).await;
 
 
