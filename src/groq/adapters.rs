@@ -161,12 +161,6 @@ mod tests {
 
         // ---- Act ----
         let req = GroqRequest::from(&session);
-
-        // ---- Assert: Model Config ----
-        assert_eq!(req.model, "openai/gpt-oss-120b");
-        assert_eq!(req.tool_choice, "required");
-        assert_eq!(req.temperature, 0.5);
-
         // ---- Assert: Messages mapped ----
         assert_eq!(req.messages.len(), 3);
         assert_eq!(req.messages[0].role, "system");

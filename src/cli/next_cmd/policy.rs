@@ -1,12 +1,10 @@
 use crate::agent::request::AgentRequest;
-use crate::agent::responce::AgentResponse;
 use crate::interfaces::capability::{ToolNames , ToolArgs};
 use crate::interfaces::policy::{AgentPolicy , AgentIntent};
 
 use schemars::JsonSchema;
 use serde::{Serialize , Deserialize};
 use std::env;
-use tokio::sync::mpsc::Sender;
 use std::fs;
 use std::path::PathBuf;
 
@@ -103,10 +101,10 @@ impl TerminalContext {
 struct DefaultPolicy;
 
 impl AgentPolicy for DefaultPolicy {
-    fn create_req(&self , itend:AgentIntent , response_tx:Sender<AgentResponse>)->AgentRequest{
+    fn create_req(&self , itend:AgentIntent)->AgentRequest{
 
         let terminal_ctx = TerminalContext::gather();
-        AgentRequest::builder(response_tx)
+        AgentRequest::builder()
             .tools(vec![ToolNames::GitLog , ToolNames::GitDiffStaged , ToolNames::ReadDir])
             .contract(Command::schema())
             .with_context(&terminal_ctx)

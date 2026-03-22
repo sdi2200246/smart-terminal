@@ -1,7 +1,5 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tokio::{sync::mpsc::Sender};
-use crate::agent::responce::AgentResponse;
  use crate::interfaces::capability::ToolNames;
 
 
@@ -10,15 +8,14 @@ pub struct AgentRequest {
     pub tools:Vec<ToolNames>,
     pub messages:Vec<Message>,
     pub contract:Value,
-    pub pipe:Sender<AgentResponse>
 }
 
 impl AgentRequest {
-    pub fn new(tools: Vec<ToolNames>,messages: Vec<Message>,contract: Value,pipe:Sender<AgentResponse>) ->AgentRequest{
-        AgentRequest {tools, messages, contract,pipe}
+    pub fn new(tools: Vec<ToolNames>,messages: Vec<Message>,contract: Value) ->AgentRequest{
+        AgentRequest {tools, messages, contract}
     }
-    pub fn builder(pipe:Sender<AgentResponse>)-> AgentRequest{
-        AgentRequest {tools:vec![], messages:vec![], contract:Value::Null , pipe}
+    pub fn builder()-> AgentRequest{
+        AgentRequest {tools:vec![], messages:vec![], contract:Value::Null}
     }
     pub fn tools(mut self, tools: Vec<ToolNames>) -> Self {
         self.tools = tools;
