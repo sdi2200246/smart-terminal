@@ -1,7 +1,7 @@
 use clap::ValueEnum;
 use super::cli::ExecArgs;
 use super::cli::NextCmdArgs;
-use crate::interfaces::policy::{AgentIntent , AgentMode};
+use crate::agent::request::{AgentIntent , AgentMode};
 
 #[derive(ValueEnum, Clone, Debug)]
 pub enum Mode {

@@ -5,10 +5,10 @@ use serde_json::Value;
 use super::cli::ExecArgs;
 use crate::agent::responce::AgentResponse;
 use crate::agent::loops::react::ReactLoop;
+use crate::agent::request::AgentIntent;
 use crate::agent::loops::reflect::ReflexionLoop;
 use crate::agent::client::AgentClient;
 use crate::groq::client::GroqClient;
-use crate::interfaces::policy::AgentIntent;
 
 
 fn render_success(stdout: &str) {

@@ -1,6 +1,6 @@
 mod policy;
 use policy::{Policy , Command};
-use crate::interfaces::policy::AgentIntent;
+use crate::agent::request::AgentIntent;
 use crate::agent::responce::AgentResponse;
 use crate::agent::client::AgentClient;
 use crate::cli::cli::NextCmdArgs;

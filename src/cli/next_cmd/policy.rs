@@ -1,6 +1,5 @@
-use crate::agent::request::AgentRequest;
+use crate::agent::request::{AgentRequest , AgentPolicy , AgentIntent};
 use crate::interfaces::capability::{ToolNames , ToolArgs};
-use crate::interfaces::policy::{AgentPolicy , AgentIntent};
 
 use schemars::JsonSchema;
 use serde::{Serialize , Deserialize};
