@@ -95,7 +95,6 @@ impl TerminalContext {
         }
     }
 }
-
 struct AutoPolicy;
 
 impl AgentPolicy for AutoPolicy {
@@ -103,7 +102,7 @@ impl AgentPolicy for AutoPolicy {
 
         let terminal_ctx = TerminalContext::gather();
         AgentRequest::builder(response_tx)
-            .tools(vec![ToolNames::GitLog , ToolNames::GitDiffStaged])
+            .tools(vec![ToolNames::ReadDir ,ToolNames::GitLog , ToolNames::GitDiffStaged])
             .contract(Script::schema())
             .with_context(&terminal_ctx)
             .with_system_promt(AUTO_SYSTEM_POLICY.into())
@@ -119,7 +118,7 @@ impl AgentPolicy for AlignPolicy{
 
         let terminal_ctx = TerminalContext::gather();
         AgentRequest::builder(response_tx)
-            .tools(vec![ToolNames::AskUser, ToolNames::GitLog , ToolNames::GitDiffStaged])
+            .tools(vec![ToolNames::AskUser, ToolNames::ReadDir])
             .contract(Script::schema())
             .with_context(&terminal_ctx)
             .with_system_promt(ALIGN_SYSTEM_POLICY.into())
