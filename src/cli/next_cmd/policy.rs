@@ -107,7 +107,7 @@ impl AgentPolicy for DefaultPolicy {
 
         let terminal_ctx = TerminalContext::gather();
         AgentRequest::builder(response_tx)
-            .tools(vec![ToolNames::GitStatus  ,ToolNames::GitLog , ToolNames::GitDiffStaged])
+            .tools(vec![ToolNames::GitLog , ToolNames::GitDiffStaged , ToolNames::ReadDir])
             .contract(Command::schema())
             .with_context(&terminal_ctx)
             .with_system_promt(DEFAULT_SYSTEM_POLICY.into())
@@ -130,7 +130,7 @@ COMPLETION:
 Always complete the command fully — never return a partial command or a placeholder.
 Pick the most probable interpretation based on what you observe.
 A syntactically complete command is not enough — it must be semantically complete.
- example :`git commit` without a `-m` is not a valid completion.
+example :`git commit` without a `-m` is not a valid completion.
 Always use tools to fill in arguments, flags, and values that the user would have to type anyway.
 
 OUTPUT:

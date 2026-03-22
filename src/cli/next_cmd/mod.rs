@@ -13,7 +13,7 @@ pub async fn run(args:NextCmdArgs){
     let provider = GroqClient::default();
     let agent_loop = ReactLoop;
 
-    let mut agent = AgentClient::new("SHELL_AGENT", provider, agent_loop);
+    let mut agent = AgentClient::new("NEXT_CMD_AGENT", provider, agent_loop);
 
     let policy = Policy::select_policy();
     let req = policy.create_req(itend, agent.response_sender());
