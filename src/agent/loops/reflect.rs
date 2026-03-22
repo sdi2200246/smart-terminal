@@ -321,7 +321,6 @@ mod integration_tests {
     use crate::agent::request::AgentRequest;
     use schemars::JsonSchema;
     use serde::Deserialize;
-    use tokio::sync::mpsc;
 
     use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
@@ -405,8 +404,7 @@ mod integration_tests {
         let mut provider = GroqClient::default();
         let mut loop_ = ReflexionLoop::new(evaluate_script);
 
-        let (tx, _) = mpsc::channel(1);
-        let req = AgentRequest::builder(tx)
+        let req = AgentRequest::builder()
             .tools(vec![ToolNames::GitStatus, ToolNames::GitLog, ToolNames::GitDiffStaged])
             .contract(Script::schema())
             .with_system_promt(TEST_POLICY.into())
