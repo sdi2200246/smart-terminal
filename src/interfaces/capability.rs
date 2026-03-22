@@ -6,6 +6,7 @@ use crate::tools::git_diff::GitDiffStaged;
 use crate::tools::git_log::GitLog;
 use crate::tools::list_process::ProcessList;
 use crate::tools::ask_user::AskUser;
+use crate::tools::read_dir::ReadDir;
 use crate::tools::error::ToolError;
 
 
@@ -17,8 +18,8 @@ pub enum ToolNames{
     GitDiffStaged,
     GitLog,
     AskUser,
+    ReadDir,
 }
-
 
 impl ToolNames {
     pub fn to_capability(&self) -> Box<dyn Capability>{
@@ -28,7 +29,8 @@ impl ToolNames {
             ToolNames::ProcessList =>  Box::new(ProcessList),
             ToolNames::FinalAnswer => Box::new(FinalAnswer{properties:Value::Null}),
             ToolNames::GitLog =>  Box::new(GitLog), 
-            ToolNames::AskUser => Box::new(AskUser)
+            ToolNames::AskUser => Box::new(AskUser),
+            ToolNames::ReadDir => Box::new(ReadDir),
         }
     }
 }
