@@ -4,7 +4,6 @@ use serde::{Serialize , Deserialize};
 use crate::tools::git_status::GitStatus;
 use crate::tools::git_diff::GitDiffStaged;
 use crate::tools::git_log::GitLog;
-use crate::tools::list_process::ProcessList;
 use crate::tools::ask_user::AskUser;
 use crate::tools::read_dir::ReadDir;
 use crate::tools::error::ToolError;
@@ -13,7 +12,6 @@ use crate::tools::error::ToolError;
 #[derive(Serialize , Deserialize , PartialEq, Eq , JsonSchema , Debug , Clone)]
 pub enum ToolNames{
     GitStatus,
-    ProcessList,
     FinalAnswer,
     GitDiffStaged,
     GitLog,
@@ -26,7 +24,6 @@ impl ToolNames {
         match self {
             ToolNames::GitStatus =>   Box::new(GitStatus),
             ToolNames::GitDiffStaged => Box::new(GitDiffStaged),
-            ToolNames::ProcessList =>  Box::new(ProcessList),
             ToolNames::FinalAnswer => Box::new(FinalAnswer{properties:Value::Null}),
             ToolNames::GitLog =>  Box::new(GitLog), 
             ToolNames::AskUser => Box::new(AskUser),
