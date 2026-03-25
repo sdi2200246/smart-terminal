@@ -26,12 +26,11 @@ pub async fn run(args:NextCmdArgs){
 
             println!("{}" , &suggestion.cmd);
             println!("{}" , &suggestion.man);
-
+            println!("{:?}" , &suggestion.scale);
         }
         _=>{}
     }
 }
- 
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -40,7 +39,7 @@ mod tests {
     #[tokio::test]
     async fn run_with_align_true() {
         let args = NextCmdArgs {
-            buffer: "gcc age".to_string(),
+            buffer: "rm -r logs".to_string(),
         };
         run(args).await;
     }

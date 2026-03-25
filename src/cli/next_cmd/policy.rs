@@ -13,13 +13,25 @@ impl Policy {
         Box::new(DefaultPolicy)
     }
 }
+#[derive(JsonSchema , Deserialize , Debug )]
+pub enum Reversibility {
+    Full,        // 0-2
+    Mostly,      // 3-4
+    Partial,     // 5-6
+    Hard,        // 7-8
+    Irreversible // 9-10
+}
+
 
 #[derive(JsonSchema , Deserialize )]
 pub struct NextCommand{
     ///Shell executable command.
     pub cmd:String,
     ///Very compressed description of the shell command
-    pub man:String
+    pub man:String,
+    /// How reversible the command is given the current environment. 
+    /// (ex. A tracked file deletion is recoverable via git, an untracked one is gone forever) Use the available context to inform the classification.
+    pub scale:Reversibility
 }
 
 
@@ -136,42 +148,28 @@ impl AgentPolicy for DefaultPolicy {
     }
 }
 
-pub const DEFAULT_SYSTEM_POLICY: &str = r#"You are a shell command completion engine. Your sole output is a single, immediately runnable shell command.
-## CONTEXT
-You receive a `context` object with the following fields:
+pub const DEFAULT_SYSTEM_POLICY: &str = "You are a shell command completion engine. Output a single, immediately runnable shell command.
 
-- `shell`: the active shell (e.g. zsh, bash) — determines syntax rules
-- `shell_tools`: exact versions of available tools (awk, sed, grep, find, etc.) — use these versions to ensure flag compatibility
-- `os`: the operating system — macOS and Linux differ on flags (e.g. `sed -i ''` vs `sed -i`, `ls -G` vs `ls --color`)
-- `cwd`: the directory commands will run in — use it to resolve relative paths and infer project type
-- `history`: the last 5 commands the user ran — use this to infer intent, reuse established paths, and understand workflow
+CONTEXT
+You receive a context object: shell and os (determine syntax and flag compatibility), cwd (resolve paths, infer project type), history (last commands — infer intent and workflow).
 
-## USER BUFFER
-The user buffer is the user's raw input — either a partial command or a natural language description.
+BUFFER POLICY
+Non-empty: complete or translate into a full command. Do not change the user's approach, extend it.
+Empty: derive intent from history. Predict the most logical next command.
 
-- If the buffer is **non-empty**: complete or translate it into a full command. Do not change the user's approach — extend it.
-- If the buffer is **empty**: derive intent entirely from `history`. The user wants to continue their current workflow. Look at what they just did and predict the most logical next command.
+TOOLS — git commands only
+GitLog: use when completing git commit (match message style), git revert, or any command referencing past commits.
+GitDiffStaged: use when completing git commit (write accurate -m from staged content) or anything acting on staged content.
+Never call either tool for non-git commands.
 
-## TOOLS
-You have access to two tools. Only call them for `git` commands.
+RULES
+- No placeholders — every token must be real and resolved.
+- Syntactically valid for the shell and os in context.
+- Semantically complete — must run without prompting for further input.
+- OS-aware flags — check context.os before emitting flags that differ across systems.
 
-- `GitLog`: returns recent commit history — use when completing `git commit` (to match message style/format), `git revert`, `git diff HEAD~N`, or any command that references past commits
-- `GitDiffStaged`: returns currently staged changes — use when completing `git commit` (to write an accurate `-m` message based on what is actually staged), `git stash`, or anything that acts on staged content
-
-Do not call either tool for non-git commands.
-
-## COMPLETION RULES
-1. **No placeholders** — never output `<file>`, `[message]`, `YOUR_BRANCH`, or any stand-in. Every token must be real and resolved.
-2. **Syntactically valid** for the shell and OS in `context`. Quotes must be balanced. Pipes must have both sides.
-3. **Semantically complete** — the command must run to completion without prompting for further input:
-   - `git commit` ✗ → `git commit -m "feat: add retry logic to fetch"` ✓
-   - `find .` ✗ → `find . -name "*.rs" -type f` ✓
-4. **OS-aware flags** — always check `context.os` before emitting flags that differ across systems.
-
-## OUTPUT
-Submit using `final_answer` with:
-- `cmd`: the complete, runnable command
-- `man`: one short phrase describing what the command does (not why you chose it)"#;
+OUTPUT
+Call final_answer with cmd, man, and reversibility.";
 
 #[cfg(test)]
 mod tests{
