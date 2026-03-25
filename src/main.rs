@@ -1,7 +1,6 @@
 use smart_terminal::cli::{exec , next_cmd};
 use smart_terminal::cli::cli::{Cli , Commands};
 use clap::Parser;
-
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
@@ -18,7 +17,13 @@ impl Router {
 #[tokio::main]
 async fn main() {
 
-    let file_appender = tracing_appender::rolling::daily("./logs", "app.log");
+    let log_dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("logs");
+
+    let file_appender = tracing_appender::rolling::daily(log_dir, "app.log");
     let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
     tracing_subscriber::registry()
         .with(
@@ -29,6 +34,7 @@ async fn main() {
         .with(tracing_subscriber::EnvFilter::new("warn,smart_terminal=debug"))
         .try_init()
         .ok();
+
 
     let cli = Cli::parse();
     Router::dispatch(cli).await;
