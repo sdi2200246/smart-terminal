@@ -1,5 +1,5 @@
 mod policy;
-use policy::{Policy , Command};
+use policy::{Policy , NextCommand};
 use crate::agent::request::AgentIntent;
 use crate::agent::responce::AgentResponse;
 use crate::agent::client::AgentClient;
@@ -22,7 +22,7 @@ pub async fn run(args:NextCmdArgs){
 
     match response {
         AgentResponse::Success(value) => {
-            let suggestion: Command = serde_json::from_value(value).unwrap();
+            let suggestion: NextCommand = serde_json::from_value(value).unwrap();
 
             println!("{}" , &suggestion.cmd);
             println!("{}" , &suggestion.man);
@@ -40,7 +40,7 @@ mod tests {
     #[tokio::test]
     async fn run_with_align_true() {
         let args = NextCmdArgs {
-            buffer: "git commit -m".to_string(),
+            buffer: "gcc age".to_string(),
         };
         run(args).await;
     }
