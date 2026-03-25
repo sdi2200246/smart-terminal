@@ -1,9 +1,11 @@
 use serde_json::Value;
 use serde::Deserialize;
 use schemars::{JsonSchema};
-use crate::interfaces::capability::{Capability, ToolArgs, ToolFunction};
+use crate::utils::FlatSchema;
+use crate::interfaces::capability::{Capability, ToolFunction};
 use super::error::ToolError;
 use std::io::{self, Write};
+
 
 
 #[derive(JsonSchema , Deserialize , Debug)]
@@ -11,7 +13,7 @@ pub struct ModelQuestion{
     /// This is your question where you speak with the user to achieve alignment.
     pub question:String
 }
-impl ToolArgs for ModelQuestion {}
+impl FlatSchema for ModelQuestion {}
 
 pub struct AskUser;
 

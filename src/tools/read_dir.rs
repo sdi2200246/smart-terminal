@@ -1,7 +1,8 @@
 use serde_json::Value;
 use serde::Deserialize;
 use schemars::JsonSchema;
-use crate::interfaces::capability::{Capability, ToolArgs, ToolFunction};
+use crate::interfaces::capability::{Capability, ToolFunction};
+use crate::utils::FlatSchema;
 use super::error::ToolError;
 
 #[derive(JsonSchema, Deserialize, Debug)]
@@ -11,7 +12,7 @@ struct ReadDirArgs {
     /// Whether to read recursively. Defaults to false.
     pub recursive: bool,
 }
-impl ToolArgs for ReadDirArgs {}
+impl FlatSchema for ReadDirArgs {}
 
 pub struct ReadDir;
 
