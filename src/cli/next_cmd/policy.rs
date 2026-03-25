@@ -1,7 +1,7 @@
 use crate::agent::request::{AgentRequest , AgentPolicy , AgentIntent};
 use crate::interfaces::capability::{ToolNames , ToolArgs};
 
-use schemars::JsonSchema;
+use schemars::{JsonSchema};
 use serde::{Serialize , Deserialize};
 use std::env;
 
@@ -190,5 +190,10 @@ mod tests{
     async fn test_gather_context() {
         let ctx = TerminalContext::gather();
         println!("{}", serde_json::to_string_pretty(&ctx).unwrap());
+    }
+
+    #[test]
+    fn print_command_schema() {
+        println!("{}", serde_json::to_string_pretty(&NextCommand::schema()).unwrap());
     }
 }
