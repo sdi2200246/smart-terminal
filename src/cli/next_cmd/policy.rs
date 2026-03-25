@@ -4,8 +4,6 @@ use crate::interfaces::capability::{ToolNames , ToolArgs};
 use schemars::JsonSchema;
 use serde::{Serialize , Deserialize};
 use std::env;
-use std::fs;
-use std::path::PathBuf;
 
 pub struct Policy{}
 
@@ -17,19 +15,61 @@ impl Policy {
 }
 
 #[derive(JsonSchema , Deserialize )]
-pub struct Command{
+pub struct NextCommand{
     ///Shell executable command.
     pub cmd:String,
     ///Very compressed description of the shell command
     pub man:String
 }
 
-impl ToolArgs for Command {}
+
+#[derive(Serialize, Debug)]
+pub struct ToolVersions {
+    zsh: String,
+    bash: String,
+    awk: String,
+    sed: String,
+    grep: String,
+    find: String,
+}
+
+impl ToolVersions {
+    pub fn gather() -> Self {
+        Self {
+            zsh:  get_version("zsh" , "--version"),
+            bash: get_version("bash", "--version"),
+            awk: get_version("awk", "--version"),
+            sed: get_version("sed", "--version"),
+            grep: get_version("grep", "--version"),
+            find: get_version("find", "--version"),
+        }
+    }
+}
+fn get_version(cmd: &str, flag: &str) -> String {
+    std::process::Command::new(cmd)
+        .arg(flag)
+        .output()
+        .ok()
+        .and_then(|o| {
+            let stdout = String::from_utf8(o.stdout).ok().unwrap_or_default();
+            let stderr = String::from_utf8(o.stderr).ok().unwrap_or_default();
+            let out = if !stdout.is_empty() { stdout } else { stderr };
+            out.lines().next().map(|l| l.to_string())
+        })
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
+
+
+impl ToolArgs for NextCommand {}
 
 #[derive(Serialize, Debug)]
 pub struct TerminalContext {
-    /// The shell currently used by the terminal (e.g. bash, zsh, fish).
+    /// The shell currently used by the terminal.
     shell: String,
+
+    ///All supported tools and version you must use for you predictions.
+    shell_tools:ToolVersions,
 
     /// The operating system the agent is running on (linux, macos, windows).
     os: &'static str,
@@ -43,6 +83,7 @@ pub struct TerminalContext {
 
 impl TerminalContext {
     pub fn gather() -> Self {
+         let shell_tools= ToolVersions::gather();
 
         let shell = env::var("SHELL")
             .ok()
@@ -56,45 +97,28 @@ impl TerminalContext {
             .and_then(|p| p.to_str().map(|s| s.to_string()))
             .unwrap_or_else(|| "unknown".to_string());
 
-        let history = Self::load_shell_history(&shell, 20);
+        let mut history = Self::gather_history();
+        if history.len() > 5 {
+            history.drain(0..history.len() - 5);
+        }
 
         Self {
             shell,
+            shell_tools,
             os,
             cwd,
             history
         }
     }
-     fn load_shell_history(shell: &str, limit: usize) -> Vec<String> {
-        let home = env::var("HOME").unwrap_or_default();
-
-        let history_path = match shell {
-            "bash" => PathBuf::from(format!("{home}/.bash_history")),
-            "zsh" => PathBuf::from(format!("{home}/.zsh_history")),
-            _ => return Vec::new(),
-        };
-
-        let content = fs::read_to_string(history_path).unwrap_or_default();
-
-        let mut lines: Vec<String> = content
-            .lines()
-            .map(|l| {
-                // zsh history has timestamps like ": 1670000000:0;git status"
-                if shell == "zsh" {
-                    l.split(';').last().unwrap_or(l).to_string()
-                } else {
-                    l.to_string()
-                }
-            })
-            .collect();
-
-        if lines.len() > limit {
-            lines = lines.split_off(lines.len() - limit);
-        }
-
-        lines
+   fn gather_history() -> Vec<String> {
+    // Check the environment variable pushed by the shell script
+    std::env::var("AI_CONTEXT_HISTORY")
+        .unwrap_or_default()
+        .lines()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect()
     }
-
 }
 
 struct DefaultPolicy;
@@ -104,38 +128,69 @@ impl AgentPolicy for DefaultPolicy {
 
         let terminal_ctx = TerminalContext::gather();
         AgentRequest::builder()
-            .tools(vec![ToolNames::GitLog , ToolNames::GitDiffStaged , ToolNames::ReadDir])
-            .contract(Command::schema())
-            .with_context(&terminal_ctx)
+            .tools(vec![ToolNames::GitLog , ToolNames::GitDiffStaged])
+            .contract(NextCommand::schema())
             .with_system_promt(DEFAULT_SYSTEM_POLICY.into())
-            .with_user_promt(itend.prompt
-            )
+            .with_user_promt(itend.prompt)
+            .with_context(&terminal_ctx)
     }
 }
 
-pub const DEFAULT_SYSTEM_POLICY: &str = "You are an expert shell command completion agent.
+pub const DEFAULT_SYSTEM_POLICY: &str = r#"You are a shell command completion engine. Your sole output is a single, immediately runnable shell command.
+## CONTEXT
+You receive a `context` object with the following fields:
 
-You will receive a JSON context object describing the environment — OS, shell, cwd, and the user's input.
-The input is either a partial command or a natural language description of what the user wants to do.
+- `shell`: the active shell (e.g. zsh, bash) — determines syntax rules
+- `shell_tools`: exact versions of available tools (awk, sed, grep, find, etc.) — use these versions to ensure flag compatibility
+- `os`: the operating system — macOS and Linux differ on flags (e.g. `sed -i ''` vs `sed -i`, `ls -G` vs `ls --color`)
+- `cwd`: the directory commands will run in — use it to resolve relative paths and infer project type
+- `history`: the last 5 commands the user ran — use this to infer intent, reuse established paths, and understand workflow
 
-STRATEGY:
-Infer the user's intent from their input and the environment.
-When the input is ambiguous, use your tools to observe the current state of the environment and let it resolve the ambiguity — the environment almost always tells you what the user is about to do next.
-Only call tools that are relevant to the command being completed.
+## USER BUFFER
+The user buffer is the user's raw input — either a partial command or a natural language description.
 
-COMPLETION:
-Always complete the command fully — never return a partial command or a placeholder.
-Pick the most probable interpretation based on what you observe.
-A syntactically complete command is not enough — it must be semantically complete.
-example :`git commit` without a `-m` is not a valid completion.
-Always use tools to fill in arguments, flags, and values that the user would have to type anyway.
+- If the buffer is **non-empty**: complete or translate it into a full command. Do not change the user's approach — extend it.
+- If the buffer is **empty**: derive intent entirely from `history`. The user wants to continue their current workflow. Look at what they just did and predict the most logical next command.
 
-OUTPUT:
-You MUST submit your answer using the final_answer tool — this is the only valid output.
-Return a single runnable command. No explanation, no alternatives, no comments.";
+## TOOLS
+You have access to two tools. Only call them for `git` commands.
 
-#[tokio::test]
-async fn test_gather_context() {
-    let ctx = TerminalContext::gather();
-    println!("{}", serde_json::to_string_pretty(&ctx).unwrap());
+- `GitLog`: returns recent commit history — use when completing `git commit` (to match message style/format), `git revert`, `git diff HEAD~N`, or any command that references past commits
+- `GitDiffStaged`: returns currently staged changes — use when completing `git commit` (to write an accurate `-m` message based on what is actually staged), `git stash`, or anything that acts on staged content
+
+Do not call either tool for non-git commands.
+
+## COMPLETION RULES
+1. **No placeholders** — never output `<file>`, `[message]`, `YOUR_BRANCH`, or any stand-in. Every token must be real and resolved.
+2. **Syntactically valid** for the shell and OS in `context`. Quotes must be balanced. Pipes must have both sides.
+3. **Semantically complete** — the command must run to completion without prompting for further input:
+   - `git commit` ✗ → `git commit -m "feat: add retry logic to fetch"` ✓
+   - `find .` ✗ → `find . -name "*.rs" -type f` ✓
+4. **OS-aware flags** — always check `context.os` before emitting flags that differ across systems.
+
+## OUTPUT
+Submit using `final_answer` with:
+- `cmd`: the complete, runnable command
+- `man`: one short phrase describing what the command does (not why you chose it)"#;
+
+#[cfg(test)]
+mod tests{
+    use super::*;
+    #[test]
+    fn test_gather_context_from_env() {
+        // Manually push the "fake" history into the test process
+      unsafe {
+        std::env::set_var("AI_CONTEXT_HISTORY", "ls\ncd src\ncargo build");
+    }
+        
+        let history = TerminalContext::gather_history();
+        
+        assert_eq!(history.len(), 3);
+        assert_eq!(history[0], "ls");
+    }
+    #[tokio::test]
+    async fn test_gather_context() {
+        let ctx = TerminalContext::gather();
+        println!("{}", serde_json::to_string_pretty(&ctx).unwrap());
+    }
 }
