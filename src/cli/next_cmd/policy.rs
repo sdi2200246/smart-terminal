@@ -1,5 +1,6 @@
 use crate::agent::request::{AgentRequest , AgentPolicy , AgentIntent};
-use crate::interfaces::capability::{ToolNames , ToolArgs};
+use crate::interfaces::capability::{ToolNames};
+use crate::utils::FlatSchema;
 
 use schemars::{JsonSchema};
 use serde::{Serialize , Deserialize};
@@ -73,7 +74,7 @@ fn get_version(cmd: &str, flag: &str) -> String {
 
 
 
-impl ToolArgs for NextCommand {}
+impl FlatSchema for NextCommand {}
 
 #[derive(Serialize, Debug)]
 pub struct TerminalContext {

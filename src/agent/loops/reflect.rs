@@ -1,10 +1,11 @@
 use crate::agent::loops::traits::AgentLoop;
 use crate::agent::request::AgentRequest;
 use crate::agent::error::AgentError;
+use crate::utils::FlatSchema;
 use crate::interfaces::error::ProviderError;
 use crate::interfaces::session::{AgentOutcome, ConversationEvent};
 use crate::interfaces::llm_client::LLMProvider;
-use crate::interfaces::capability::{Capability, FinalAnswer, ToolArgs};
+use crate::interfaces::capability::{Capability, FinalAnswer};
 use crate::interfaces::session::AgentSession;
 use serde_json::Value;
 use schemars::JsonSchema;
@@ -15,7 +16,7 @@ struct Reflect {
     /// Your corrective plan starting after "Plan:"
     pub reflection: String,
 }
-impl ToolArgs for Reflect {}
+impl FlatSchema for Reflect {}
 
 pub struct ReflexionLoop {
     evaluator: fn(&Value) -> Option<String>,
@@ -351,7 +352,7 @@ mod integration_tests {
         /// Complete executable shell script including shebang
         pub script: String,
     }
-    impl ToolArgs for Script {}
+    impl FlatSchema for Script {}
 
     fn evaluate_script(response: &Value) -> Option<String> {
         let script: Script = serde_json::from_value(response.clone()).ok()?;

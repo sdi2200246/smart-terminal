@@ -1,6 +1,6 @@
 use crate::agent::request::{AgentRequest,AgentPolicy , AgentIntent , AgentMode};
-use crate::interfaces::capability::{ToolNames , ToolArgs};
-
+use crate::interfaces::capability::{ToolNames};
+use crate::utils::FlatSchema;
 use schemars::JsonSchema;
 use serde::{Serialize , Deserialize};
 use std::env;
@@ -24,7 +24,7 @@ pub struct Script{
     pub script:String
 }
 
-impl ToolArgs for Script {}
+impl FlatSchema for Script {}
 
 #[derive(Serialize, Debug)]
 pub struct ToolVersions {
