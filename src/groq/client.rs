@@ -12,6 +12,30 @@ pub struct GroqClient{
     pub completions_url:String,
 }
 impl GroqClient{
+
+    pub fn pooled() -> Self {
+        Self::build(2)
+    }
+
+    pub fn no_pool() -> Self {
+        Self::build(0)
+    }
+
+    fn build(max_idle: usize) -> Self {
+        let client = Client::builder()
+            .pool_idle_timeout(std::time::Duration::from_secs(10))
+            .pool_max_idle_per_host(max_idle)
+            .tcp_keepalive(std::time::Duration::from_secs(30))
+            .build()
+            .unwrap();
+
+        GroqClient {
+            client,
+            api_key: std::env::var("GROQ_API_KEY").unwrap(),
+            completions_url: "https://api.groq.com/openai/v1/chat/completions".into(),
+        }
+    }
+
     pub async fn call_llm(&mut self,req: GroqRequest) -> Result<GroqResponse, GroqError> {
 
         let res = self.client
@@ -55,7 +79,7 @@ impl Default for  GroqClient{
 
         let client = Client::builder()
             .pool_idle_timeout(std::time::Duration::from_secs(10))
-            .pool_max_idle_per_host(0) // avoid stale reused connections
+            .pool_max_idle_per_host(0) 
             .tcp_keepalive(std::time::Duration::from_secs(30))
             .build()
             .unwrap();
@@ -81,7 +105,6 @@ impl LLMProvider for GroqClient {
         }
     }   
 }
-
 
 #[cfg(test)]
 mod unit {

@@ -39,7 +39,7 @@ impl From<&AgentSession> for GroqRequest {
             messages,
             tools,
             tool_choice:"auto".into(),
-            temperature:0.5
+            temperature:0.1
         }
     }
 }
