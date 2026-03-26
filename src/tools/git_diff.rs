@@ -12,6 +12,10 @@ pub fn git_diff_staged(_args: Value) -> Result<String, ToolError> {
 
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
 
+    if stdout.is_empty() {
+        return Ok("no staged changes".to_string());
+    }
+
     Ok(stdout)
 }
 
