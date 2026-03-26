@@ -90,6 +90,9 @@ pub struct TerminalContext {
     /// The current working directory from which commands will be executed.
     cwd: String,
 
+    /// Top-level entries in the current working directory.
+    cwd_contents:Vec<String>,
+
      /// Recent terminal commands executed by the user (most recent last).
     history: Vec<String>,
 }
@@ -114,12 +117,32 @@ impl TerminalContext {
         if history.len() > 5 {
             history.drain(0..history.len() - 5);
         }
+        let cwd_contents = std::fs::read_dir(&cwd)
+            .ok()
+            .map(|entries| {
+                let mut names: Vec<String> = entries
+                    .filter_map(|e| e.ok())
+                    .map(|e| {
+                        let name = e.file_name().to_string_lossy().to_string();
+                        // append / to directories so the model can tell them apart
+                        if e.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                            format!("{name}/")
+                        } else {
+                            name
+                        }
+                    })
+                    .collect();
+                names.sort();
+                names
+            })
+            .unwrap_or_default();
 
         Self {
             shell,
             shell_tools,
             os,
             cwd,
+            cwd_contents,
             history
         }
     }
@@ -155,7 +178,7 @@ CONTEXT
 You receive a context object: shell and os (determine syntax and flag compatibility), cwd (resolve paths, infer project type), history (last commands — infer intent and workflow).
 
 BUFFER POLICY
-Non-empty: complete or translate into a full command. Do not change the user's approach, extend it.
+Non-empty: complete or translate into a full command. Do not change the user's approach, extend it combined with history.
 Empty: derive intent from history. Predict the most logical next command.
 
 TOOLS — git commands only
