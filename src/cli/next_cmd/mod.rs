@@ -10,7 +10,7 @@ use crate::agent::loops::react::ReactLoop;
 pub async fn run(args:NextCmdArgs){
 
     let itend = AgentIntent::from(args);
-    let provider = GroqClient::default();
+    let provider = GroqClient::pooled();
     let agent_loop = ReactLoop;
 
     let mut agent = AgentClient::new("NEXT_CMD_AGENT", provider, agent_loop);
@@ -39,7 +39,7 @@ mod tests {
     #[tokio::test]
     async fn run_with_align_true() {
         let args = NextCmdArgs {
-            buffer: "rm -r logs".to_string(),
+            buffer: "git commit -m?".to_string(),
         };
         run(args).await;
     }
