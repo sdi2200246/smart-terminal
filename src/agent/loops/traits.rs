@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use crate::interfaces::llm_client::LLMProvider;
 use crate::interfaces::capability::{Capability , ToolFunction , FinalAnswer};
-use crate::interfaces::session::{AgentSession , ConversationEvent};
+use crate::interfaces::session::{AgentSession , ConversationEvent , Model};
 use crate::agent::error::AgentError;
 use crate::agent::request::AgentRequest;
 use serde_json::Value;
@@ -22,14 +22,14 @@ pub trait AgentLoop:Send{
         tools
     }
 
-    fn build_attempt_session(tools: &ToolRegistry, req: &AgentRequest) -> AgentSession {
+    fn build_attempt_session(tools: &ToolRegistry, req: &AgentRequest , model:Model) -> AgentSession {
         let mut tool_functions: Vec<ToolFunction> = tools.values()
             .map(|t| t.metadata())
             .collect();
 
         tool_functions.push(FinalAnswer { properties: req.contract.clone() }.metadata());
 
-        let mut session = AgentSession::new(tool_functions, DEFAULT_STEPS);
+        let mut session = AgentSession::new(tool_functions, DEFAULT_STEPS , model);
         session.events = req.messages.iter()
             .map(|m| ConversationEvent::from(m.clone()))
             .collect();
