@@ -1,14 +1,13 @@
 use crate::interfaces::capability::ToolFunction;
 use serde_json::Value;
 
-#[derive(Debug , PartialEq)]
+#[derive(Debug , PartialEq , Clone)]
 pub enum Model{
     GptOss120B,
     GptOss20B,
     Llma3p18B,
     Llma3p370B,
 }
-
 
 #[derive(Debug , PartialEq)]
 pub enum ConversationEvent {
