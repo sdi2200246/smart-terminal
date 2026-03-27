@@ -4,13 +4,19 @@ use crate::agent::request::AgentRequest;
 use crate::agent::error::AgentError;
 
 use crate::interfaces::error::ProviderError;
-use crate::interfaces::session::AgentOutcome;
+use crate::interfaces::session::{AgentOutcome , Model};
 use crate::interfaces::llm_client::LLMProvider;
 
 use serde_json::Value;
 
-pub struct ReactLoop;
-
+pub struct ReactLoop{
+    model:Model,
+}
+impl ReactLoop {
+    pub fn new(model:Model)->ReactLoop{
+        ReactLoop { model }
+    }
+}
 impl AgentLoop for ReactLoop {
 
     #[tracing::instrument(skip(self , req , provider), fields(loop_kind = "React"))]
@@ -20,7 +26,7 @@ impl AgentLoop for ReactLoop {
         provider: &mut impl LLMProvider,
     ) -> Result<Value, AgentError> {
         let tools = Self::build_tools_registry(&req);
-        let mut session = Self::build_attempt_session(&tools, &req);
+        let mut session = Self::build_attempt_session(&tools, &req , self.model.clone());
 
         loop {
             if session.steps_exhausted() {

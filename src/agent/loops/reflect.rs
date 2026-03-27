@@ -3,7 +3,7 @@ use crate::agent::request::AgentRequest;
 use crate::agent::error::AgentError;
 use crate::utils::FlatSchema;
 use crate::interfaces::error::ProviderError;
-use crate::interfaces::session::{AgentOutcome, ConversationEvent};
+use crate::interfaces::session::{AgentOutcome, ConversationEvent , Model};
 use crate::interfaces::llm_client::LLMProvider;
 use crate::interfaces::capability::{Capability, FinalAnswer};
 use crate::interfaces::session::AgentSession;
@@ -20,17 +20,19 @@ impl FlatSchema for Reflect {}
 
 pub struct ReflexionLoop {
     evaluator: fn(&Value) -> Option<String>,
+    exec_model:Model,
+    reflexion_model:Model,
     reflections: Vec<String>,
 }
 
 impl ReflexionLoop {
-    pub fn new(evaluator: fn(&Value) -> Option<String>) -> Self {
-        ReflexionLoop { evaluator, reflections: vec![] }
+    pub fn new(evaluator: fn(&Value)->Option<String> , exec_model:Model , reflexion_model:Model) -> Self {
+        ReflexionLoop { evaluator,exec_model, reflexion_model ,reflections: vec![] }
     }
 
     pub fn build_reflection_session(&self, failure_reason: &str, attempt_session: &AgentSession) -> AgentSession {
         let reflect_tool = FinalAnswer { properties: Reflect::schema() }.metadata();
-        let mut session = AgentSession::new(vec![reflect_tool], 3);
+        let mut session = AgentSession::new(vec![reflect_tool], 3 , self.reflexion_model.clone());
 
         let original_goal = attempt_session.events.iter().find_map(|e| {
             if let ConversationEvent::User(message) = e {
@@ -116,7 +118,7 @@ impl AgentLoop for ReflexionLoop {
     #[tracing::instrument(skip(self , req , provider), fields(loop_kind = "Reflection"))]
     async fn agent_loop(&mut self,req: AgentRequest,provider: &mut impl LLMProvider) -> Result<Value, AgentError> {
         let tools = Self::build_tools_registry(&req);
-        let mut session = Self::build_attempt_session(&tools, &req);
+        let mut session = Self::build_attempt_session(&tools, &req , self.exec_model.clone());
 
         loop {
             if session.steps_exhausted() {
@@ -170,12 +172,12 @@ impl AgentLoop for ReflexionLoop {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::interfaces::session::AgentSession;
+    use crate::interfaces::session::{AgentSession , Model};
     use crate::groq::client::GroqClient;
     use serde_json::json;
     
     fn make_attempt_session() -> AgentSession {
-        let mut session = AgentSession::new(vec![], 10);
+        let mut session = AgentSession::new(vec![], 10 , Model::GptOss120B );
         session.add_system("You are an expert bash execution agent embedded in a developer's shell.");
         session.add_user("Find the 3 largest files modified in the last 7 days, show their sizes in human readable format, sorted by size descending");
         session.add_tool_call("find_files", json!({"path": "."}), "call_1");
@@ -197,7 +199,7 @@ mod tests {
 
     #[test]
     fn test_build_reflection_session_structure() {
-        let loop_ = ReflexionLoop::new(|_| None);
+        let loop_ = ReflexionLoop::new(|_| None , Model::GptOss120B , Model::GptOss120B);
         let attempt = make_attempt_session();
         let session = loop_.build_reflection_session(
             "script failed: find: illegal option -- -printf",
@@ -231,7 +233,7 @@ mod tests {
 
     #[test]
     fn test_build_reflection_session_injects_previous_reflections() {
-        let mut loop_ = ReflexionLoop::new(|_| None);
+        let mut loop_ = ReflexionLoop::new(|_| None , Model::GptOss120B , Model::Llma3p370B);
         loop_.reflections.push("Plan: Use BSD find syntax instead of GNU find".into());
         loop_.reflections.push("Plan: Use stat instead of -printf for file sizes".into());
 
@@ -250,7 +252,7 @@ mod tests {
 
     #[test]
     fn test_reflections_capped_at_3() {
-        let mut loop_ = ReflexionLoop::new(|_| None);
+        let mut loop_ = ReflexionLoop::new(|_| None ,Model::GptOss120B , Model::Llma3p370B);
         loop_.reflections = vec![
             "reflection 1".into(),
             "reflection 2".into(),
@@ -273,7 +275,7 @@ mod tests {
     #[tokio::test]
     async fn test_reflect_produces_plan() {
         let mut provider = GroqClient::default();
-        let loop_ = ReflexionLoop::new(|_| None);
+        let loop_ = ReflexionLoop::new(|_| None , Model::GptOss120B , Model::Llma3p370B);
         let attempt = make_attempt_session();
 
         let result = loop_.reflect(
@@ -292,7 +294,7 @@ mod tests {
     #[tokio::test]
     async fn test_reflect_with_previous_reflections() {
         let mut provider = GroqClient::default();
-        let mut loop_ = ReflexionLoop::new(|_| None);
+        let mut loop_ = ReflexionLoop::new(|_| None , Model::GptOss120B , Model::Llma3p370B);
         loop_.reflections.push(
             "Plan: Use BSD find syntax. Replace -printf with -exec stat.".into()
         );
@@ -403,7 +405,7 @@ mod integration_tests {
     
 
         let mut provider = GroqClient::default();
-        let mut loop_ = ReflexionLoop::new(evaluate_script);
+        let mut loop_ = ReflexionLoop::new(evaluate_script ,Model::GptOss120B , Model::GptOss120B);
 
         let req = AgentRequest::builder()
             .tools(vec![ToolNames::GitStatus, ToolNames::GitLog, ToolNames::GitDiffStaged])

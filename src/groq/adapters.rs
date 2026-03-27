@@ -1,4 +1,4 @@
-use crate::interfaces::session::{AgentSession, ConversationEvent};
+use crate::interfaces::session::{AgentSession, ConversationEvent , Model};
 use super::protocol:: message::Message;
 use super::protocol::tool::{self,Tool};
 use super::protocol::request::GroqRequest;
@@ -10,6 +10,17 @@ impl From<&ConversationEvent> for Message{
             ConversationEvent::User(message                                     )=> Message::user(Some(message.clone())),
             ConversationEvent::ToolResult { name, result, id } => Message::tool_responce(Some(result.clone()), id.clone(), name.clone()),
             ConversationEvent::ToolCall { name, arguments, id } => Message::tool_call(name.clone(), id.clone(), arguments.clone()),
+        }
+    }
+}
+
+impl From<Model> for String {
+    fn from(model: Model) -> String {
+        match model {
+            Model::GptOss120B   => "openai/gpt-oss-120b".into(),
+            Model::GptOss20B    => "openai/gpt-oss-20b".into(),
+            Model::Llma3p18B  => "llama-3.1-8b-instant".into(),
+            Model::Llma3p370B => "llama-3.3-70b-versatile".into(),
         }
     }
 }
@@ -34,8 +45,9 @@ impl From<&AgentSession> for GroqRequest {
             })
             .collect();
         
+        let model: String = session.model.clone().into();
         GroqRequest{
-            model:"openai/gpt-oss-120b".into(),
+            model,
             messages,
             tools,
             tool_choice:"auto".into(),
@@ -156,7 +168,8 @@ mod tests {
                 }
             ],
             // add other fields if needed
-            steps:5
+            steps:5,
+            model:Model::GptOss120B,
         };
 
         // ---- Act ----
