@@ -1,14 +1,15 @@
 use serde_json::Value;
-use crate::interfaces::session::{AgentOutcome, AgentSession, ConversationEvent};
+use crate::interfaces::session::{AgentOutcome, AgentSession, ConversationEvent , Model};
 use crate::interfaces::capability::ToolFunction;
 use super::request::Message;
 
 impl AgentSession {
-    pub fn new(available_tools: Vec<ToolFunction>, steps: usize) -> Self {
+    pub fn new(available_tools: Vec<ToolFunction>, steps: usize , model:Model) -> Self {
         Self {
             events: Vec::new(),
             available_tools,
             steps,
+            model
         }
     }
     pub fn add_system(&mut self, message: impl Into<String>) {
@@ -100,7 +101,7 @@ mod tests {
     use serde_json::json;
 
     fn make_session(steps: usize) -> AgentSession {
-        AgentSession::new(vec![], steps)
+        AgentSession::new(vec![], steps , Model::GptOss120B)
     }
 
     fn make_tool_outcome(name: &str, id: &str) -> AgentOutcome {
