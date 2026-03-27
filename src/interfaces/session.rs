@@ -2,6 +2,15 @@ use crate::interfaces::capability::ToolFunction;
 use serde_json::Value;
 
 #[derive(Debug , PartialEq)]
+pub enum Model{
+    GptOss120B,
+    GptOss20B,
+    Llma3p18B,
+    Llma3p370B,
+}
+
+
+#[derive(Debug , PartialEq)]
 pub enum ConversationEvent {
     System(String),
     User(String),
@@ -35,4 +44,5 @@ pub struct AgentSession{
     pub events:Vec<ConversationEvent>,
     pub available_tools:Vec<ToolFunction>,
     pub steps:usize,
+    pub model:Model,
 }
