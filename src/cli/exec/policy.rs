@@ -1,9 +1,9 @@
 use crate::agent::request::{AgentRequest,AgentPolicy , AgentIntent , AgentMode};
 use crate::interfaces::capability::{ToolNames};
 use crate::utils::FlatSchema;
+use crate::cli::context::shell::ShellEnv;
 use schemars::JsonSchema;
-use serde::{Serialize , Deserialize};
-use std::env;
+use serde::Deserialize;
 
 pub struct Policy{}
 
@@ -17,7 +17,6 @@ impl Policy {
     }
 }
 
-
 #[derive(JsonSchema , Deserialize )]
 pub struct Script{
     ///Shell executable programm.
@@ -26,78 +25,12 @@ pub struct Script{
 
 impl FlatSchema for Script {}
 
-#[derive(Serialize, Debug)]
-pub struct ToolVersions {
-    bash: String,
-    awk: String,
-    sed: String,
-    grep: String,
-    find: String,
-}
-
-impl ToolVersions {
-    pub fn gather() -> Self {
-        Self {
-            bash: get_version("bash", "--version"),
-            awk: get_version("awk", "--version"),
-            sed: get_version("sed", "--version"),
-            grep: get_version("grep", "--version"),
-            find: get_version("find", "--version"),
-        }
-    }
-}
-
-fn get_version(cmd: &str, flag: &str) -> String {
-    std::process::Command::new(cmd)
-        .arg(flag)
-        .output()
-        .ok()
-        .and_then(|o| {
-            let stdout = String::from_utf8(o.stdout).ok().unwrap_or_default();
-            let stderr = String::from_utf8(o.stderr).ok().unwrap_or_default();
-            let out = if !stdout.is_empty() { stdout } else { stderr };
-            out.lines().next().map(|l| l.to_string())
-        })
-        .unwrap_or_else(|| "unknown".to_string())
-}
-
-
-#[derive(Serialize, Debug)]
-pub struct TerminalContext {
-    ///All supported tools from the shlle you are going to use in the system.
-    shell_tools:ToolVersions,
-
-    /// The operating system the agent is running on (linux, macos, windows).
-    os: &'static str,
-
-    /// The current working directory from which commands will be executed.
-    cwd: String,
-}
-
-impl TerminalContext {
-    pub fn gather() -> Self {
-        let shell_tools= ToolVersions::gather();
-
-        let os = std::env::consts::OS;
-
-        let cwd = env::current_dir()
-            .ok()
-            .and_then(|p| p.to_str().map(|s| s.to_string()))
-            .unwrap_or_else(|| "unknown".to_string());
-
-        Self {
-            shell_tools,
-            os,
-            cwd,
-        }
-    }
-}
 struct AutoPolicy;
 
 impl AgentPolicy for AutoPolicy {
     fn create_req(&self , itend:AgentIntent)->AgentRequest{
 
-        let terminal_ctx = TerminalContext::gather();
+        let terminal_ctx = ShellEnv::gather();
         AgentRequest::builder()
             .tools(vec![ToolNames::ReadDir ,ToolNames::GitLog , ToolNames::GitDiffStaged])
             .contract(Script::schema())
@@ -113,7 +46,7 @@ impl AgentPolicy for AlignPolicy{
 
     fn create_req(&self , itend:AgentIntent)->AgentRequest{
 
-        let terminal_ctx = TerminalContext::gather();
+        let terminal_ctx = ShellEnv::gather();
         AgentRequest::builder()
             .tools(vec![ToolNames::AskUser, ToolNames::ReadDir])
             .contract(Script::schema())
@@ -190,9 +123,3 @@ OUTPUT RULES:
 When you are fully aligned with the user's goal, submit the final script using the final_answer tool.
 The script must be executable as-is.
 Do not include explanations or comments in the script — code only.";
-
-#[tokio::test]
-async fn test_gather_context() {
-    let ctx = TerminalContext::gather();
-    println!("{}", serde_json::to_string_pretty(&ctx).unwrap());
-}
