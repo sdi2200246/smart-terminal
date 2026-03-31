@@ -80,6 +80,11 @@ impl AgentSession {
     fn tool_result_event(&mut self, name: String, result: String, id: String) {
         self.events.push(ConversationEvent::ToolResult { name, result, id });
     }
+
+    /// Remove all tools except final_answer
+    pub fn lock_to_final_answer(&mut self) {
+        self.available_tools.retain(|t| t.name == "final_answer");
+    }
 }
 
 impl From<Message> for ConversationEvent{
