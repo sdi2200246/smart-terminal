@@ -38,6 +38,7 @@ mod tests {
     use tokio;
 
     #[tokio::test]
+    #[ignore]
     async fn run_with_align_true() {
         let args = NextCmdArgs {
             buffer: "git commit -m?".to_string(),

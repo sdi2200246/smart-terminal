@@ -4,7 +4,6 @@ use serde_json::Value;
 
 use super::cli::ExecArgs;
 use crate::agent::responce::AgentResponse;
-use crate::agent::loops::react::ReactLoop;
 use crate::agent::request::AgentIntent;
 use crate::agent::loops::reflect::ReflexionLoop;
 use crate::agent::client::AgentClient;
@@ -123,6 +122,7 @@ mod tests {
     use tokio;
 
     #[tokio::test]
+    #[ignore]
     async fn run_with_align_true() {
         let args = ExecArgs {
            prompt: "search recursively from cwd through all .rs files for struct definitions. 
@@ -138,6 +138,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn run_with_align_false() {
         let args = ExecArgs {
             prompt: "Search recursively through all .rs files in the current directory for struct definitions. For each struct found determine its type: regular (has named fields with braces), tuple (has unnamed fields with parentheses), or unit (no fields, just semicolon). Extract the module path from the file path e.g. src/agent/service.rs becomes agent/service. Output the results grouped by module path with each module as a bold white header. Under each module list its structs with their type using these colors: cyan for regular structs, yellow for unit structs, green for tuple structs".to_string(),

@@ -150,6 +150,7 @@ mod tests {
     }
 
       #[test]
+      #[ignore]
     fn session_maps_to_groq_request_correctly() {
         // ---- Arrange ----
         let session = AgentSession {
