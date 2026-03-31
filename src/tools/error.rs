@@ -1,5 +1,5 @@
 use thiserror::Error;
-use crate::interfaces::error::InternalError;
+use crate::core::error::InternalError;
 
 #[derive(Debug, Error)]
 pub enum ToolError{

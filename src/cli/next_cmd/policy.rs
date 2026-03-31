@@ -1,5 +1,5 @@
 use crate::agent::request::{AgentRequest , AgentPolicy , AgentIntent};
-use crate::interfaces::capability::{ToolNames};
+use crate::core::capability::{ToolNames};
 use crate::utils::FlatSchema;
 use crate::cli::context::shell::ShellEnv;
 use schemars::{JsonSchema};

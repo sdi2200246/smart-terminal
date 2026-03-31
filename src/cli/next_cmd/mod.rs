@@ -6,7 +6,7 @@ use crate::agent::client::AgentClient;
 use crate::cli::cli::NextCmdArgs;
 use crate::groq::client::GroqClient;
 use crate::agent::loops::react::ReactLoop;
-use crate::interfaces::session::{Model , ModelName};
+use crate::core::session::{Model , ModelName};
 
 pub async fn run(args:NextCmdArgs){
 

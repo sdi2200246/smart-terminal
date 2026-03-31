@@ -1,5 +1,5 @@
 use thiserror::Error;
-use crate::interfaces::error::ProviderError;
+use crate::core::error::ProviderError;
 
 #[derive(Debug, Error)]
 pub enum GroqError {

@@ -9,7 +9,7 @@ use crate::agent::request::AgentIntent;
 use crate::agent::loops::reflect::ReflexionLoop;
 use crate::agent::client::AgentClient;
 use crate::groq::client::GroqClient;
-use crate::interfaces::session::{Model , ModelName};
+use crate::core::session::{Model , ModelName};
 
 
 fn render_success(stdout: &str) {
@@ -55,10 +55,6 @@ fn evaluation_script(response: &Value) -> Option<String> {
 
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-    if !stdout.is_empty() {
-        println!("{stdout}");
-    }
 
     if !stderr.is_empty() {
         let first_three = stderr

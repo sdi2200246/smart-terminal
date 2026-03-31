@@ -2,7 +2,7 @@ use serde_json::Value;
 use serde::Deserialize;
 use schemars::{JsonSchema};
 use crate::utils::FlatSchema;
-use crate::interfaces::capability::{Capability, ToolFunction};
+use crate::core::capability::{Capability, ToolFunction};
 use super::error::ToolError;
 use std::io::{self, Write};
 

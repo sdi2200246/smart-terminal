@@ -1,6 +1,6 @@
 use std::process::Command;
 use serde_json::Value;
-use crate::interfaces::capability::{Capability , ToolFunction};
+use crate::core::capability::{Capability , ToolFunction};
 use super::error::ToolError;
 
 pub fn git_status(_args: Value) -> Result<String, ToolError> {
