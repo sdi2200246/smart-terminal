@@ -1,7 +1,98 @@
+use crate::core::capability::ToolFunction;
 use serde_json::Value;
-use crate::interfaces::session::{AgentOutcome, AgentSession, ConversationEvent , Model};
-use crate::interfaces::capability::ToolFunction;
-use super::request::Message;
+
+#[derive(Debug , PartialEq , Clone)]
+pub enum ModelName{
+    GptOss120B,
+    GptOss20B,
+    Llma3p18B,
+    Llma3p370B,
+}
+
+#[derive(Debug , PartialEq , Clone)]
+pub struct Model{
+    name: ModelName,
+    temperature:f32,
+}
+
+impl Model {
+    pub fn new(name: ModelName, temperature: f32) -> Self {
+        Self { name, temperature: temperature.clamp(0.0, 2.0) }
+    }
+    pub fn with_default_temp(name: ModelName) -> Self {
+        Self::new(name, 0.7)
+    }
+
+    pub fn deterministic(name: ModelName) -> Self {
+        Self::new(name, 0.1)
+    }
+
+    pub fn creative(name: ModelName) -> Self {
+        Self::new(name, 1.2)
+    }
+
+    pub fn cooler(&self) -> Self {
+        Self {
+            name: self.name.clone(),
+            temperature: (self.temperature / 2.0).max(0.05),
+        }
+    }
+    pub fn warmer(&self) -> Self {
+        Self {
+            name: self.name.clone(),
+            temperature: (self.temperature * 2.0).min(2.0),
+        }
+    }
+    pub fn with_temperature(&self, temperature: f32) -> Self {
+        Self {
+            name: self.name.clone(),
+            temperature: temperature.clamp(0.0, 2.0),
+        }
+    }
+    pub fn get_name(&self)->ModelName{
+        self.name.clone()
+    }
+    pub fn get_temp(&self)->f32{
+        self.temperature
+    }
+}
+
+#[derive(Debug , PartialEq)]
+pub enum ConversationEvent {
+    System(String),
+    User(String),
+    ToolCall {
+        name: String,
+        arguments: Value,
+        id: String,
+    },
+    ToolResult {
+        name: String,
+        result: String,
+        id: String,
+    },
+}
+
+#[derive(Debug)]
+pub enum AgentOutcome{
+
+    FinalAnswer{
+        arguments:Value
+    },
+    Tool{
+        name: String,
+        id: String,
+        arguments: Value,
+    },
+}
+
+#[derive(Debug)]
+pub struct AgentSession{
+    pub events:Vec<ConversationEvent>,
+    pub available_tools:Vec<ToolFunction>,
+    pub steps:usize,
+    pub model:Model,
+}
 
 impl AgentSession {
     pub fn new(available_tools: Vec<ToolFunction>, steps: usize , model:Model) -> Self {
@@ -46,12 +137,10 @@ impl AgentSession {
         matches!(outcome, AgentOutcome::FinalAnswer { .. })
     }
 
-    /// Number of tool calls made so far in this session
     pub fn current_steps(&self) -> usize {
         self.events.iter().filter(|e| matches!(e, ConversationEvent::ToolCall { .. })).count()
     }
 
-    /// Whether the session has exhausted its allowed steps
     pub fn steps_exhausted(&self) -> bool {
         self.current_steps() >= self.steps
     }
@@ -76,7 +165,6 @@ impl AgentSession {
             _ => {}
         }
     }
-
     fn tool_result_event(&mut self, name: String, result: String, id: String) {
         self.events.push(ConversationEvent::ToolResult { name, result, id });
     }
@@ -85,28 +173,24 @@ impl AgentSession {
     pub fn lock_to_final_answer(&mut self) {
         self.available_tools.retain(|t| t.name == "final_answer");
     }
-}
-
-impl From<Message> for ConversationEvent{
-
-    fn from(message: Message) -> Self{
-        if message.is_system() == true {
-            return ConversationEvent::System(message.content);
-        }
-        else {
-            return ConversationEvent::User(message.content);
-        } 
+    pub fn get_model(&self)->&Model{
+        &self.model
     }
+
 }
+
+
 
 
 #[cfg(test)]
 mod tests {
+    use crate::core::session::ModelName;
+
     use super::*;
     use serde_json::json;
 
     fn make_session(steps: usize) -> AgentSession {
-        AgentSession::new(vec![], steps , Model::GptOss120B)
+        AgentSession::new(vec![], steps , Model::new(ModelName::GptOss120B , 0.5))
     }
 
     fn make_tool_outcome(name: &str, id: &str) -> AgentOutcome {

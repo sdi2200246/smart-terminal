@@ -6,13 +6,13 @@ use crate::agent::client::AgentClient;
 use crate::cli::cli::NextCmdArgs;
 use crate::groq::client::GroqClient;
 use crate::agent::loops::react::ReactLoop;
-use crate::interfaces::session::Model;
+use crate::interfaces::session::{Model , ModelName};
 
 pub async fn run(args:NextCmdArgs){
 
     let itend = AgentIntent::from(args);
     let provider = GroqClient::pooled();
-    let agent_loop = ReactLoop::new(Model::GptOss120B);
+    let agent_loop = ReactLoop::new(Model::with_default_temp(ModelName::GptOss120B));
 
     let mut agent = AgentClient::new("NEXT_CMD_AGENT", provider, agent_loop);
 

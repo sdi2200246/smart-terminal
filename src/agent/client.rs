@@ -1,4 +1,4 @@
-use crate::interfaces::llm_client::LLMProvider;
+use crate::core::llm_client::LLMProvider;
 use super::loops::traits::AgentLoop;
 use super::request::AgentRequest;
 use super::responce::AgentResponse;

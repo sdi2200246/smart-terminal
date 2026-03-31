@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
- use crate::interfaces::capability::ToolNames;
+use crate::core::capability::ToolNames;
+use crate::core::session::ConversationEvent;
 
 
 #[derive(Clone)]
@@ -81,6 +82,18 @@ impl  Message {
             role:"system".into(),
             content:content,
         }
+    }
+}
+
+impl From<Message> for ConversationEvent{
+
+    fn from(message: Message) -> Self{
+        if message.is_system() == true {
+            return ConversationEvent::System(message.content);
+        }
+        else {
+            return ConversationEvent::User(message.content);
+        } 
     }
 }
 

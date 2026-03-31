@@ -2,7 +2,7 @@
 mod integration {
     use smart_terminal::groq::client::GroqClient;
     use smart_terminal::interfaces::llm_client::LLMProvider;
-    use smart_terminal::interfaces::session::{AgentSession, AgentOutcome, ConversationEvent , Model};
+    use smart_terminal::interfaces::session::{AgentSession, AgentOutcome, ConversationEvent , Model , ModelName};
     use smart_terminal::interfaces::capability::ToolFunction;
     use serde_json::json;
 
@@ -33,7 +33,7 @@ mod integration {
             ],
             available_tools: vec![final_answer_tool()],
             steps: 0,
-            model:Model::GptOss120B,
+            model:Model::new(ModelName::GptOss120B, 0.7),
         }
     }
 

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
-use crate::interfaces::llm_client::LLMProvider;
-use crate::interfaces::capability::{Capability , ToolFunction , FinalAnswer};
-use crate::interfaces::session::{AgentSession , ConversationEvent , Model};
+use crate::core::llm_client::LLMProvider;
+use crate::core::capability::{Capability , ToolFunction , FinalAnswer};
+use crate::core::session::{AgentSession , ConversationEvent , Model};
 use crate::agent::error::AgentError;
 use crate::agent::request::AgentRequest;
 use serde_json::Value;

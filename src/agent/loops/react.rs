@@ -3,9 +3,9 @@ use super::traits::AgentLoop;
 use crate::agent::request::AgentRequest;
 use crate::agent::error::AgentError;
 
-use crate::interfaces::error::ProviderError;
-use crate::interfaces::session::{AgentOutcome , Model};
-use crate::interfaces::llm_client::LLMProvider;
+use crate::core::error::ProviderError;
+use crate::core::session::{AgentOutcome , Model};
+use crate::core::llm_client::LLMProvider;
 
 use serde_json::Value;
 

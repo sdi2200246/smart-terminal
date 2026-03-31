@@ -9,7 +9,7 @@ use crate::agent::request::AgentIntent;
 use crate::agent::loops::reflect::ReflexionLoop;
 use crate::agent::client::AgentClient;
 use crate::groq::client::GroqClient;
-use crate::interfaces::session::Model;
+use crate::interfaces::session::{Model , ModelName};
 
 
 fn render_success(stdout: &str) {
@@ -85,7 +85,10 @@ pub async fn run(args:ExecArgs){
 
     let itend = AgentIntent::from(args);
     let provider = GroqClient::default();
-    let agent_loop = ReflexionLoop::new(evaluation_script , Model::GptOss120B , Model::Llma3p370B);
+    let agent_loop = ReflexionLoop::new(
+          evaluation_script ,
+         Model::with_default_temp(ModelName::GptOss120B), 
+    Model::creative(ModelName::GptOss120B));
 
     let mut agent = AgentClient::new("SHELL_AGENT", provider, agent_loop);
 

@@ -1,4 +1,4 @@
-use crate::interfaces::session::{AgentSession, ConversationEvent , Model};
+use crate::interfaces::session::{AgentSession, ConversationEvent , ModelName};
 use super::protocol:: message::Message;
 use super::protocol::tool::{self,Tool};
 use super::protocol::request::GroqRequest;
@@ -6,21 +6,21 @@ use super::protocol::request::GroqRequest;
 impl From<&ConversationEvent> for Message{
     fn from(event:&ConversationEvent)->Message{
         match event{
-            ConversationEvent::System(message)=> Message::system(Some(message.clone())),
-            ConversationEvent::User(message                                     )=> Message::user(Some(message.clone())),
+            ConversationEvent::System(message)                                   => Message::system(Some(message.clone())),
+            ConversationEvent::User(message)                                     => Message::user(Some(message.clone())),
             ConversationEvent::ToolResult { name, result, id } => Message::tool_responce(Some(result.clone()), id.clone(), name.clone()),
             ConversationEvent::ToolCall { name, arguments, id } => Message::tool_call(name.clone(), id.clone(), arguments.clone()),
         }
     }
 }
 
-impl From<Model> for String {
-    fn from(model: Model) -> String {
+impl From<ModelName> for String {
+    fn from(model: ModelName) -> String {
         match model {
-            Model::GptOss120B   => "openai/gpt-oss-120b".into(),
-            Model::GptOss20B    => "openai/gpt-oss-20b".into(),
-            Model::Llma3p18B  => "llama-3.1-8b-instant".into(),
-            Model::Llma3p370B => "llama-3.3-70b-versatile".into(),
+            ModelName::GptOss120B   => "openai/gpt-oss-120b".into(),
+            ModelName::GptOss20B    => "openai/gpt-oss-20b".into(),
+            ModelName::Llma3p18B  => "llama-3.1-8b-instant".into(),
+            ModelName::Llma3p370B => "llama-3.3-70b-versatile".into(),
         }
     }
 }
@@ -45,13 +45,14 @@ impl From<&AgentSession> for GroqRequest {
             })
             .collect();
         
-        let model: String = session.model.clone().into();
+        let model: String = session.get_model().get_name().into();
         GroqRequest{
             model,
             messages,
             tools,
             tool_choice:"auto".into(),
-            temperature:0.1
+            temperature:session.get_model().get_temp()
+            
         }
     }
 }
@@ -61,6 +62,7 @@ mod tests {
     use super::*;
     use serde_json::{json};
     use crate::interfaces::capability::ToolFunction;
+    use crate::interfaces::session::Model;
 
     // ---------- SYSTEM ----------
     #[test]
@@ -169,7 +171,7 @@ mod tests {
             ],
             // add other fields if needed
             steps:5,
-            model:Model::GptOss120B,
+            model:Model::new(ModelName::GptOss120B,0.5)
         };
 
         // ---- Act ----
