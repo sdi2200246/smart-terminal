@@ -129,7 +129,11 @@ impl AgentLoop for ReflexionLoop {
             match provider.complete(&session).await {
                 Err(ProviderError::InvalidToolCal { source }) => {
                     tracing::warn!(%source, "invalid tool call, recovering and continuing");
-                    session.add_error(source.to_string());
+                    let available: Vec<_> = tools.keys().copied().collect();
+                    session.add_error(format!(
+                        "Invalid tool call!:\nOnly Available tools:{}",
+                        available.join(", ")
+                    ));
                     continue;
                 }
                 Err(e) => return Err(e.into()),
@@ -145,9 +149,11 @@ impl AgentLoop for ReflexionLoop {
                             tracing::warn!(reason = %failure_reason, "answer failed evaluation, reflecting");
                             let reflection = self.reflect(&failure_reason, provider, &session).await?;
 
+                            session.lock_to_final_answer();
+
                             if self.reflections.len() == 3 {
                                 self.reflections.remove(0);
-                            }
+                            }   
                             self.reflections.push(reflection.clone());
                             session.add_reflection(reflection);
                         }

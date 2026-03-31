@@ -20,11 +20,7 @@ impl ReactLoop {
 impl AgentLoop for ReactLoop {
 
     #[tracing::instrument(skip(self , req , provider), fields(loop_kind = "React"))]
-    async fn agent_loop(
-        &mut self,
-        req: AgentRequest,
-        provider: &mut impl LLMProvider,
-    ) -> Result<Value, AgentError> {
+    async fn agent_loop(&mut self,req: AgentRequest,provider: &mut impl LLMProvider,) -> Result<Value, AgentError> {
         let tools = Self::build_tools_registry(&req);
         let mut session = Self::build_attempt_session(&tools, &req , self.model.clone());
 
@@ -37,9 +33,14 @@ impl AgentLoop for ReactLoop {
             match provider.complete(&session).await {
                 Err(ProviderError::InvalidToolCal { source }) => {
                     tracing::warn!(%source, "invalid tool call, recovering and continuing");
-                    session.add_error(source.to_string());
+                    let available: Vec<_> = tools.keys().copied().collect();
+                    session.add_error(format!(
+                        "Invalid tool call!:\nOnly Available tools:{}",
+                        available.join(", ")
+                    ));
                     continue;
                 }
+
                 Err(e) => return Err(e.into()),
 
                 Ok(AgentOutcome::FinalAnswer { arguments }) => {
