@@ -1,25 +1,21 @@
-use serde::{Deserialize};
+use serde::Deserialize;
 use serde_json::Value;
 use super::message::Message;
 use crate::groq::error::GroqError;
 
-pub enum LlmOutcome{
-    FinalAnswer{
-        answer:Value,
-    },
-    ToolCall{
-        name:String,
-        id:String,
-        args:Value,
-    }
+#[derive(Debug)]
+pub struct LlmToolCall {
+    pub name: String,
+    pub id: String,
+    pub args: Value,
 }
 
-#[derive(Deserialize , Debug)]
+#[derive(Deserialize, Debug)]
 pub struct GroqResponse {
     pub choices: Vec<Choice>,
 }
 
-#[derive(Deserialize , Debug)]
+#[derive(Deserialize, Debug)]
 pub struct Choice {
     pub index: usize,
     #[serde(default)]
@@ -27,13 +23,12 @@ pub struct Choice {
     #[serde(default)]
     pub logprobs: Option<serde_json::Value>,
     pub message: Message,
-} 
+}
 
-impl TryFrom<GroqResponse> for LlmOutcome {
+impl TryFrom<GroqResponse> for LlmToolCall {
     type Error = GroqError;
 
     fn try_from(value: GroqResponse) -> Result<Self, Self::Error> {
-
         let choice = value
             .choices
             .into_iter()
@@ -42,36 +37,29 @@ impl TryFrom<GroqResponse> for LlmOutcome {
                 source: anyhow::anyhow!("No choices in response"),
             })?;
 
-        let message = choice.message;
-        let tool_calls = message.tool_calls;
-
-        let tool = tool_calls
+        let tool = choice
+            .message
+            .tool_calls
             .into_iter()
             .next()
-            .ok_or(GroqError::InvalidToolCall{source:anyhow::anyhow!("No tools where found")})?;
+            .ok_or(GroqError::InvalidToolCall {
+                source: anyhow::anyhow!("No tools where found"),
+            })?;
 
-
-        let args_str = tool.function.arguments.ok_or(GroqError::InvalidToolCall{source:anyhow::anyhow!("No arguments where found")})?;
+        let args_str = tool.function.arguments.ok_or(GroqError::InvalidToolCall {
+            source: anyhow::anyhow!("No arguments where found"),
+        })?;
 
         let parsed_args: Value = serde_json::from_str(&args_str)
             .map_err(|e| GroqError::MalformedResponse { source: e.into() })?;
 
-        if tool.function.name == "final_answer" {
-            return Ok(LlmOutcome::FinalAnswer {
-                answer: parsed_args,
-            });
-        }
-
-        Ok(LlmOutcome::ToolCall {
+        Ok(LlmToolCall {
             name: tool.function.name,
             id: tool.id,
             args: parsed_args,
         })
-
     }
 }
-
-
 
 #[cfg(test)]
 mod tests {
@@ -83,7 +71,7 @@ mod tests {
     }
 
     #[test]
-    fn parses_final_answer_tool() {
+    fn parses_final_answer() {
         let raw = json!({
             "choices": [{
                 "index": 0,
@@ -104,15 +92,9 @@ mod tests {
             }]
         });
 
-        let resp = parse(raw);
-        let outcome = LlmOutcome::try_from(resp).unwrap();
-
-        match outcome {
-            LlmOutcome::FinalAnswer { answer } => {
-                assert_eq!(answer, json!({"result": "done"}));
-            }
-            _ => panic!("Expected FinalAnswer"),
-        }
+        let result = LlmToolCall::try_from(parse(raw)).unwrap();
+        assert_eq!(result.name, "final_answer");
+        assert_eq!(result.args, json!({"result": "done"}));
     }
 
     #[test]
@@ -137,32 +119,17 @@ mod tests {
             }]
         });
 
-        let resp = parse(raw);
-        let outcome = LlmOutcome::try_from(resp).unwrap();
-
-        match outcome {
-            LlmOutcome::ToolCall { name, id, args } => {
-                assert_eq!(name, "git_status");
-                assert_eq!(id, "call_2");
-                assert_eq!(args, json!({"path": "."}));
-            }
-            _ => panic!("Expected ToolCall"),
-        }
+        let result = LlmToolCall::try_from(parse(raw)).unwrap();
+        assert_eq!(result.name, "git_status");
+        assert_eq!(result.id, "call_2");
+        assert_eq!(result.args, json!({"path": "."}));
     }
 
     #[test]
     fn fails_when_no_choices() {
-        let raw = json!({
-            "choices": []
-        });
-
-        let resp = parse(raw);
-        let result = LlmOutcome::try_from(resp);
-
-        assert!(matches!(
-            result,
-            Err(GroqError::MalformedResponse { .. })
-        ));
+        let raw = json!({ "choices": [] });
+        let result = LlmToolCall::try_from(parse(raw));
+        assert!(matches!(result, Err(GroqError::MalformedResponse { .. })));
     }
 
     #[test]
@@ -179,8 +146,8 @@ mod tests {
             }]
         });
 
-        let resp = parse(raw);
-        let _result = LlmOutcome::try_from(resp);
+        let result = LlmToolCall::try_from(parse(raw));
+        assert!(matches!(result, Err(GroqError::InvalidToolCall { .. })));
     }
 
     #[test]
@@ -198,7 +165,7 @@ mod tests {
             }]
         });
 
-        let resp = parse(raw);
-        let _result = LlmOutcome::try_from(resp);
+        let result = LlmToolCall::try_from(parse(raw));
+        assert!(matches!(result, Err(GroqError::InvalidToolCall { .. })));
     }
 }

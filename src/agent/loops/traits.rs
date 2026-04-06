@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use crate::core::llm_client::LLMProvider;
-use crate::core::capability::{Capability , ToolFunction , FinalAnswer};
+use crate::core::capability::{Capability , ToolFunction};
 use crate::core::session::{AgentSession , ConversationEvent , Model};
 use crate::agent::error::AgentError;
 use crate::agent::request::AgentRequest;
@@ -23,11 +23,9 @@ pub trait AgentLoop:Send{
     }
 
     fn build_attempt_session(tools: &ToolRegistry, req: &AgentRequest , model:Model) -> AgentSession {
-        let mut tool_functions: Vec<ToolFunction> = tools.values()
+        let tool_functions: Vec<ToolFunction> = tools.values()
             .map(|t| t.metadata())
             .collect();
-
-        tool_functions.push(FinalAnswer { properties: req.contract.clone() }.metadata());
 
         let mut session = AgentSession::new(tool_functions, DEFAULT_STEPS , model);
         session.events = req.messages.iter()
@@ -35,20 +33,6 @@ pub trait AgentLoop:Send{
             .collect();
 
         session
-    }
-
-    fn validate_contract(&self, response: &Value, contract: &Value) -> Result<(), AgentError> {
-        if contract.is_null() {
-            return Ok(());
-        }
-        let validator = jsonschema::validator_for(contract)
-            .map_err(|e| AgentError::InvalidContract(e.to_string()))?;
-
-        if validator.is_valid(response) {
-            Ok(())
-        } else {
-            Err(AgentError::ContractViolation)
-        }
     }
 
     fn agent_loop(&mut self, req: AgentRequest,provider: &mut impl LLMProvider,) -> impl Future<Output = Result<Value, AgentError>> + Send;

@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use crate::core::capability::ToolNames;
 use crate::core::session::ConversationEvent;
 
@@ -8,23 +7,17 @@ use crate::core::session::ConversationEvent;
 pub struct AgentRequest {
     pub tools:Vec<ToolNames>,
     pub messages:Vec<Message>,
-    pub contract:Value,
 }
 
 impl AgentRequest {
-    pub fn new(tools: Vec<ToolNames>,messages: Vec<Message>,contract: Value) ->AgentRequest{
-        AgentRequest {tools, messages, contract}
+    pub fn new(tools: Vec<ToolNames>,messages: Vec<Message>) ->AgentRequest{
+        AgentRequest {tools, messages}
     }
     pub fn builder()-> AgentRequest{
-        AgentRequest {tools:vec![], messages:vec![], contract:Value::Null}
+        AgentRequest {tools:vec![], messages:vec![]}
     }
     pub fn tools(mut self, tools: Vec<ToolNames>) -> Self {
         self.tools = tools;
-        self
-    }
-
-    pub fn contract(mut self, contract: Value) ->  Self {
-        self.contract = contract;
         self
     }
 

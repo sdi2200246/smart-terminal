@@ -32,8 +32,7 @@ impl AgentPolicy for AutoPolicy {
 
         let terminal_ctx = ShellEnv::gather();
         AgentRequest::builder()
-            .tools(vec![ToolNames::ReadDir ,ToolNames::GitLog , ToolNames::GitDiffStaged])
-            .contract(Script::schema())
+            .tools(vec![ToolNames::Json(Script::schema()) ,ToolNames::ReadDir])
             .with_context(&terminal_ctx)
             .with_system_promt(AUTO_SYSTEM_POLICY.into())
             .with_user_promt(itend.prompt)
@@ -48,8 +47,7 @@ impl AgentPolicy for AlignPolicy{
 
         let terminal_ctx = ShellEnv::gather();
         AgentRequest::builder()
-            .tools(vec![ToolNames::AskUser, ToolNames::ReadDir])
-            .contract(Script::schema())
+            .tools(vec![ToolNames::Json(Script::schema()),ToolNames::AskUser, ToolNames::ReadDir])
             .with_context(&terminal_ctx)
             .with_system_promt(ALIGN_SYSTEM_POLICY.into())
             .with_user_promt(itend.prompt)

@@ -43,8 +43,7 @@ impl AgentPolicy for DefaultPolicy {
 
         let terminal_ctx = ShellEnv::gather();
         AgentRequest::builder()
-            .tools(vec![ToolNames::GitLog , ToolNames::GitDiffStaged])
-            .contract(NextCommand::schema())
+            .tools(vec![ToolNames::Json(NextCommand::schema()) ,ToolNames::GitLog , ToolNames::GitDiffStaged])
             .with_system_promt(DEFAULT_SYSTEM_POLICY.into())
             .with_user_promt(itend.prompt)
             .with_context(&terminal_ctx)

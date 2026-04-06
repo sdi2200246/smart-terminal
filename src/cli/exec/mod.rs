@@ -82,8 +82,8 @@ pub async fn run(args:ExecArgs){
     let provider = GroqClient::default();
     let agent_loop = ReflexionLoop::new(
           evaluation_script ,
-         Model::with_default_temp(ModelName::GptOss120B), 
-    Model::creative(ModelName::GptOss120B));
+         Model::creative(ModelName::GptOss120B), 
+    Model::deterministic(ModelName::GptOss120B));
 
     let mut agent = AgentClient::new("SHELL_AGENT", provider, agent_loop);
 
@@ -141,7 +141,7 @@ mod tests {
     #[ignore]
     async fn run_with_align_false() {
         let args = ExecArgs {
-            prompt: "Search recursively through all .rs files in the current directory for struct definitions. For each struct found determine its type: regular (has named fields with braces), tuple (has unnamed fields with parentheses), or unit (no fields, just semicolon). Extract the module path from the file path e.g. src/agent/service.rs becomes agent/service. Output the results grouped by module path with each module as a bold white header. Under each module list its structs with their type using these colors: cyan for regular structs, yellow for unit structs, green for tuple structs".to_string(),
+            prompt: "".to_string(),
             mode: Mode::Auto,
         };
         run(args).await;

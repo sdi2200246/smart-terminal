@@ -5,6 +5,7 @@ use crate::tools::git_status::GitStatus;
 use crate::tools::git_diff::GitDiffStaged;
 use crate::tools::git_log::GitLog;
 use crate::tools::ask_user::AskUser;
+use crate::tools::json::Json;
 use crate::tools::read_dir::ReadDir;
 use crate::tools::error::ToolError;
 
@@ -12,11 +13,11 @@ use crate::tools::error::ToolError;
 #[derive(Serialize , Deserialize , PartialEq, Eq , JsonSchema , Debug , Clone)]
 pub enum ToolNames{
     GitStatus,
-    FinalAnswer,
     GitDiffStaged,
     GitLog,
     AskUser,
     ReadDir,
+    Json(Value)
 }
 
 impl ToolNames {
@@ -24,7 +25,7 @@ impl ToolNames {
         match self {
             ToolNames::GitStatus =>   Box::new(GitStatus),
             ToolNames::GitDiffStaged => Box::new(GitDiffStaged),
-            ToolNames::FinalAnswer => Box::new(FinalAnswer{properties:Value::Null}),
+            ToolNames::Json(value) => Box::new(Json{ properties:value.clone()}),
             ToolNames::GitLog =>  Box::new(GitLog), 
             ToolNames::AskUser => Box::new(AskUser),
             ToolNames::ReadDir => Box::new(ReadDir),
@@ -46,29 +47,4 @@ pub trait Capability:Send + Sync{
     fn arg_schema(&self) -> Option<&Value> {
         None
     }
-}
-pub struct FinalAnswer {
-    pub properties: Value,
-}
-
-impl Capability for FinalAnswer {
-    fn name(&self) -> &'static str {
-        "final_answer"
-    }
-
-    fn metadata(&self) -> ToolFunction{
-        ToolFunction {
-            name: self.name().into(),
-            description:"You MUST use this tool for your final answer.".into(),
-            parameters:self.properties.clone(),
-        }
-    }
-
-    fn execute(&self, _args: Value) -> Result<String,  ToolError> {
-        Err(ToolError::ToolExecution{source: anyhow::anyhow!("FinalAnswer tool should not be called.")})
-    }
-    fn arg_schema(&self) -> Option<&Value> {
-        Some(&self.properties)
-    }
-
 }
