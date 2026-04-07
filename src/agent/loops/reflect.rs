@@ -229,7 +229,7 @@ mod tests {
         );
 
         assert_eq!(session.available_tools.len(), 1);
-        assert_eq!(session.available_tools[0].name, "json");
+        assert_eq!(session.available_tools[0].name, "final_answer");
 
         let system_count = session.events.iter()
             .filter(|e| matches!(e, ConversationEvent::System(_)))

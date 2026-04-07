@@ -8,7 +8,7 @@ pub struct Json {
 
 impl Capability for Json {
     fn name(&self) -> &'static str {
-        "final_answe"
+        "final_answer"
     }
 
     fn metadata(&self) -> ToolFunction {
@@ -128,8 +128,8 @@ mod tests {
     #[test]
     fn metadata_name_is_final_answer() {
         let tool = json_tool(Script::schema());
-        assert_eq!(tool.name(), "json");
-        assert_eq!(tool.metadata().name, "json");
+        assert_eq!(tool.name(), "final_answer");
+        assert_eq!(tool.metadata().name, "final_answer");
     }
 
     #[test]
