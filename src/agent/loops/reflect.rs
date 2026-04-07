@@ -152,6 +152,7 @@ impl AgentLoop for ReflexionLoop {
                         }
                         self.reflections.push(reflection.clone());
                         session.add_reflection(reflection);
+                        session.lock_to_final_answer();
                     }
                 }
                 continue;
@@ -161,17 +162,19 @@ impl AgentLoop for ReflexionLoop {
                 Ok(call) => call,
                 Err(ProviderError::InvalidToolCal { source }) => {
                     tracing::warn!(%source, "invalid tool call, recovering and continuing");
-                    let available: Vec<_> = tools.keys().copied().collect();
-                    session.add_error(format!(
-                        "Invalid tool call!:\nOnly Available tools:{}",
-                        available.join(", ")
-                    ));
+                    let compressed = source.to_string() 
+                        .lines()
+                        .take(3)
+                        .collect::<Vec<_>>()
+                        .join("\n");
+
+                    session.add_error(format!("Invalid tool call!:\n{}",compressed));
                     continue;
                 }
                 Err(e) => return Err(e.into()),
             };
 
-            tracing::info!(tool = %call.name(), args = %call.arguments(), "executing tool");
+            tracing::info!(tool = %call.name(),"executing tool");
 
             let result = match tools[call.name()].execute(call.arguments().clone()) {
                 Ok(result) => result,
