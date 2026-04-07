@@ -2,7 +2,7 @@
 mod integration {
     use smart_terminal::groq::client::GroqClient;
     use smart_terminal::core::llm_client::LLMProvider;
-    use smart_terminal::core::session::{AgentSession, AgentOutcome, ConversationEvent , Model , ModelName};
+    use smart_terminal::core::session::{AgentSession, Model, ModelName};
     use smart_terminal::core::capability::ToolFunction;
     use serde_json::json;
 
@@ -24,23 +24,19 @@ mod integration {
     }
 
     fn simple_session() -> AgentSession {
-        AgentSession {
-            events: vec![
-                ConversationEvent::System(
-                    "You are a helpful assistant. You MUST always respond by calling the final_answer tool.".into()
-                ),
-                ConversationEvent::User("What is 1 + 1?".into()),
-            ],
-            available_tools: vec![final_answer_tool()],
-            steps: 0,
-            model:Model::new(ModelName::GptOss120B, 0.7),
-        }
+        let mut session = AgentSession::new(
+            vec![final_answer_tool()],
+            5,
+            Model::new(ModelName::GptOss120B, 0.7),
+        );
+        session.add_system("You are a helpful assistant. You MUST always respond by calling the final_answer tool.");
+        session.add_user("What is 1 + 1?");
+        session
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     #[ignore]
-    async fn complete_returns_final_answer() {
-
+    async fn complete_returns_tool_call() {
         dotenv::dotenv().ok();
 
         let key = std::env::var("GROQ_API_KEY")
@@ -57,14 +53,9 @@ mod integration {
 
         assert!(result.is_ok(), "complete() failed: {:?}", result.err());
 
-        match result.unwrap() {
-            AgentOutcome::FinalAnswer { arguments } => {
-                println!("Got final answer: {}", arguments);
-                assert!(arguments.get("result").is_some(), "missing 'result' key");
-            }
-            AgentOutcome::Tool { name, .. } => {
-                panic!("Expected FinalAnswer but got tool call: {}", name);
-            }
-        }
+        let call = result.unwrap();
+        println!("Got tool call: {} with args: {}", call.name(), call.arguments());
+        assert_eq!(call.name(), "final_answer");
+        assert!(call.arguments().get("result").is_some(), "missing 'result' key");
     }
 }

@@ -1,9 +1,9 @@
 use reqwest::{Client, StatusCode };
 use crate::core::llm_client::LLMProvider;
-use crate::core::session::{AgentSession , AgentOutcome};
+use crate::core::session::{AgentSession , AgentToolCall};
 use crate::core::error::ProviderError;
 use super::error::GroqError;
-use super::protocol::responce::{GroqResponse , LlmOutcome};
+use super::protocol::responce::{GroqResponse , LlmToolCall};
 use super::protocol::request::GroqRequest;
 
 pub struct GroqClient{
@@ -94,25 +94,21 @@ impl Default for  GroqClient{
 
 impl LLMProvider for GroqClient {
 
-    async fn complete(&mut self , session:&AgentSession,)->Result<AgentOutcome,ProviderError>{
+    async fn complete(&mut self , session:&AgentSession,)->Result<AgentToolCall,ProviderError>{
         let req = GroqRequest::from(session);
         let res = self.call_llm(req).await.map_err(ProviderError::from)?;
-        let outcome = LlmOutcome::try_from(res).map_err(ProviderError::from)?;
+        let tool_call = LlmToolCall::try_from(res).map_err(ProviderError::from)?;
 
-        match outcome {
-            LlmOutcome::FinalAnswer { answer } => Ok(AgentOutcome::FinalAnswer { arguments: answer }),
-            LlmOutcome::ToolCall { name, id, args } => Ok(AgentOutcome::Tool { name, id, arguments: args }),
-        }
-    }   
+        Ok(AgentToolCall::new(tool_call.name, tool_call.id, tool_call.args))
+    }
 }
 
 #[cfg(test)]
 mod unit {
-    use crate::groq::protocol::responce::{GroqResponse, LlmOutcome};
-    use crate::core::session::AgentOutcome;
+    use crate::groq::protocol::responce::{GroqResponse, LlmToolCall};
+    use crate::core::session::AgentToolCall;
     use serde_json::json;
 
-    
     fn groq_response(tool_name: &str, arguments: &str) -> GroqResponse {
         serde_json::from_value(json!({
             "choices": [{
@@ -135,37 +131,30 @@ mod unit {
         })).unwrap()
     }
 
-    // ── LlmOutcome::try_from ───────────────────────────────────────────────
-
     #[test]
-    fn final_answer_maps_to_outcome() {
+    fn final_answer_parses_as_tool_call() {
         let resp = groq_response("final_answer", r#"{"result":"42"}"#);
-        let outcome = LlmOutcome::try_from(resp).unwrap();
-        assert!(matches!(outcome, LlmOutcome::FinalAnswer { .. }));
+        let call = LlmToolCall::try_from(resp).unwrap();
+        assert_eq!(call.name, "final_answer");
+        assert_eq!(call.args, json!({"result": "42"}));
     }
 
     #[test]
-    fn tool_call_maps_to_outcome() {
+    fn regular_tool_parses_as_tool_call() {
         let resp = groq_response("git_status", r#"{"path":"."}"#);
-        let outcome = LlmOutcome::try_from(resp).unwrap();
-        match outcome {
-            LlmOutcome::ToolCall { name, id, args } => {
-                assert_eq!(name, "git_status");
-                assert_eq!(id, "call_test");
-                assert_eq!(args, json!({"path": "."}));
-            }
-            _ => panic!("Expected ToolCall"),
-        }
+        let call = LlmToolCall::try_from(resp).unwrap();
+        assert_eq!(call.name, "git_status");
+        assert_eq!(call.id, "call_test");
+        assert_eq!(call.args, json!({"path": "."}));
     }
 
     #[test]
-    fn final_answer_converts_to_agent_outcome() {
+    fn llm_tool_call_converts_to_agent_tool_call() {
         let resp = groq_response("final_answer", r#"{"result":"42"}"#);
-        let outcome = LlmOutcome::try_from(resp).unwrap();
-        let agent_outcome = match outcome {
-            LlmOutcome::FinalAnswer { answer } => AgentOutcome::FinalAnswer { arguments: answer },
-            LlmOutcome::ToolCall { name, id, args } => AgentOutcome::Tool { name, id, arguments: args },
-        };
-        assert!(matches!(agent_outcome, AgentOutcome::FinalAnswer { .. }));
+        let llm_call = LlmToolCall::try_from(resp).unwrap();
+        let agent_call = AgentToolCall::new(llm_call.name, llm_call.id, llm_call.args);
+        assert_eq!(agent_call.name(), "final_answer");
+        assert_eq!(agent_call.id(), "call_test");
+        assert_eq!(agent_call.arguments().clone(), json!({"result": "42"}));
     }
 }

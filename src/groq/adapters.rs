@@ -50,7 +50,7 @@ impl From<&AgentSession> for GroqRequest {
             model,
             messages,
             tools,
-            tool_choice:"auto".into(),
+            tool_choice:"required".into(),
             temperature:session.get_model().get_temp()
             
         }
@@ -172,7 +172,8 @@ mod tests {
             ],
             // add other fields if needed
             steps:5,
-            model:Model::new(ModelName::GptOss120B,0.5)
+            model:Model::new(ModelName::GptOss120B,0.5),
+            last_tool:Some("".into())
         };
 
         // ---- Act ----

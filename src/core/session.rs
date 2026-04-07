@@ -74,35 +74,49 @@ pub enum ConversationEvent {
 }
 
 #[derive(Debug)]
-pub enum AgentOutcome{
-
-    FinalAnswer{
-        arguments:Value
-    },
-    Tool{
-        name: String,
-        id: String,
-        arguments: Value,
-    },
+ pub struct AgentToolCall{
+    id: String,
+    arguments: Value,
+    name: String,
+}
+impl AgentToolCall {
+    pub fn new(name: String, id: String, arguments: Value) -> Self {
+        Self { name, id, arguments }
+    }
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+    pub fn arguments(&self) -> &Value {
+        &self.arguments
+    }
+    pub fn into_arguments(self) -> Value {
+        self.arguments
+    }
 }
 
 #[derive(Debug)]
-pub struct AgentSession{
-    pub events:Vec<ConversationEvent>,
-    pub available_tools:Vec<ToolFunction>,
-    pub steps:usize,
-    pub model:Model,
+pub struct AgentSession {
+    pub events: Vec<ConversationEvent>,
+    pub available_tools: Vec<ToolFunction>,
+    pub steps: usize,
+    pub model: Model,
+    pub last_tool: Option<String>,
 }
 
 impl AgentSession {
-    pub fn new(available_tools: Vec<ToolFunction>, steps: usize , model:Model) -> Self {
+    pub fn new(available_tools: Vec<ToolFunction>, steps: usize, model: Model) -> Self {
         Self {
             events: Vec::new(),
             available_tools,
             steps,
-            model
+            model,
+            last_tool: None,
         }
     }
+
     pub fn add_system(&mut self, message: impl Into<String>) {
         self.events.push(ConversationEvent::System(message.into()));
     }
@@ -111,30 +125,40 @@ impl AgentSession {
         self.events.push(ConversationEvent::User(message.into()));
     }
 
-    pub fn add_outcome(&mut self, outcome: AgentOutcome) {
-        match outcome {
-            AgentOutcome::Tool { name, id, arguments } => {
-                self.events.push(ConversationEvent::ToolCall { name, arguments, id });
-            }
-            AgentOutcome::FinalAnswer { .. } => {}
-        }
-    }
     pub fn add_reflection(&mut self, reflection: impl Into<String>) {
         self.events.push(ConversationEvent::System(
-            format!("[REFLECTION] {}", reflection.into())
+            format!("[REFLECTION] {}", reflection.into()),
         ));
-}
+    }
 
-    pub fn add_tool_call(&mut self, name: impl Into<String>, arguments:Value, id: impl Into<String>) {
-         self.events.push(ConversationEvent::ToolCall { name:name.into(), arguments,id:id.into() });
+    pub fn add_tool_call(&mut self, name: impl Into<String>, arguments: Value, id: impl Into<String>) {
+        let name = name.into();
+        self.last_tool = Some(name.clone());
+        self.events.push(ConversationEvent::ToolCall {
+            name,
+            arguments,
+            id: id.into(),
+        });
     }
 
     pub fn add_tool_result(&mut self, name: impl Into<String>, result: impl Into<String>, id: impl Into<String>) {
-        self.tool_result_event(name.into(), result.into(), id.into());
+        self.events.push(ConversationEvent::ToolResult {
+            name: name.into(),
+            result: result.into(),
+            id: id.into(),
+        });
     }
 
-    pub fn is_final(outcome: &AgentOutcome) -> bool {
-        matches!(outcome, AgentOutcome::FinalAnswer { .. })
+    pub fn add_error(&mut self, er: String) {
+        self.events.push(ConversationEvent::System(er));
+    }
+
+    pub fn is_resolved(&self) -> bool {
+        self.last_tool.as_deref() == Some("final_answer")
+    }
+
+    pub fn clear_resolved(&mut self) {
+        self.last_tool = None;
     }
 
     pub fn current_steps(&self) -> usize {
@@ -153,32 +177,14 @@ impl AgentSession {
         self.events.is_empty()
     }
 
-    pub fn add_error(&mut self, er: String) {
-        self.events.push(ConversationEvent::System(er));
-    }
-
-    fn _tool_call_event(&mut self, tool_call: AgentOutcome) {
-        match tool_call {
-            AgentOutcome::Tool { name, id, arguments } => {
-                self.events.push(ConversationEvent::ToolCall { name, arguments, id });
-            }
-            _ => {}
-        }
-    }
-    fn tool_result_event(&mut self, name: String, result: String, id: String) {
-        self.events.push(ConversationEvent::ToolResult { name, result, id });
-    }
-
-    /// Remove all tools except final_answer
     pub fn lock_to_final_answer(&mut self) {
         self.available_tools.retain(|t| t.name == "final_answer");
     }
-    pub fn get_model(&self)->&Model{
+
+    pub fn get_model(&self) -> &Model {
         &self.model
     }
-
 }
-
 
 
 
@@ -190,11 +196,11 @@ mod tests {
     use serde_json::json;
 
     fn make_session(steps: usize) -> AgentSession {
-        AgentSession::new(vec![], steps , Model::new(ModelName::GptOss120B , 0.5))
+        AgentSession::new(vec![], steps, Model::new(ModelName::GptOss120B, 0.5))
     }
 
-    fn make_tool_outcome(name: &str, id: &str) -> AgentOutcome {
-        AgentOutcome::Tool {
+    fn make_tool_call(name: &str, id: &str) -> AgentToolCall {
+        AgentToolCall {
             name: name.to_string(),
             id: id.to_string(),
             arguments: json!({}),
@@ -202,15 +208,16 @@ mod tests {
     }
 
     #[test]
-    fn test_new_session_is_empty() {
+    fn new_session_is_empty() {
         let session = make_session(5);
         assert!(session.is_empty());
         assert_eq!(session.current_steps(), 0);
         assert_eq!(session.steps, 5);
+        assert!(!session.is_resolved());
     }
 
     #[test]
-    fn test_add_system_event() {
+    fn add_system_event() {
         let mut session = make_session(5);
         session.add_system("you are a helpful assistant");
         assert_eq!(session.events().len(), 1);
@@ -218,59 +225,26 @@ mod tests {
     }
 
     #[test]
-    fn test_add_user_event() {
+    fn add_user_event() {
         let mut session = make_session(5);
         session.add_user("hello");
         assert!(matches!(&session.events()[0], ConversationEvent::User(msg) if msg == "hello"));
     }
 
     #[test]
-    fn test_add_tool_outcome_pushes_tool_call() {
+    fn add_tool_call_pushes_event_and_tracks_name() {
         let mut session = make_session(5);
-        session.add_outcome(make_tool_outcome("search", "id-1"));
+        let call = make_tool_call("search", "id-1");
+        session.add_tool_call(call.name, call.arguments, call.id);
         assert_eq!(session.current_steps(), 1);
-        assert!(matches!(&session.events()[0], ConversationEvent::ToolCall { name, id, .. } if name == "search" && id == "id-1"));
+        assert!(matches!(
+            &session.events()[0],
+            ConversationEvent::ToolCall { name, id, .. } if name == "search" && id == "id-1"
+        ));
     }
 
     #[test]
-    fn test_add_final_answer_pushes_no_event() {
-        let mut session = make_session(5);
-        session.add_outcome(AgentOutcome::FinalAnswer { arguments: json!({"answer": "42"}) });
-        assert!(session.is_empty());
-        assert_eq!(session.current_steps(), 0);
-    }
-
-    #[test]
-    fn test_is_final() {
-        let tool = make_tool_outcome("search", "id-1");
-        let final_answer = AgentOutcome::FinalAnswer { arguments: json!({}) };
-        assert!(!AgentSession::is_final(&tool));
-        assert!(AgentSession::is_final(&final_answer));
-    }
-
-    #[test]
-    fn test_steps_exhausted() {
-        let mut session = make_session(2);
-        assert!(!session.steps_exhausted());
-
-        session.add_outcome(make_tool_outcome("search", "id-1"));
-        assert!(!session.steps_exhausted());
-
-        session.add_outcome(make_tool_outcome("search", "id-2"));
-        assert!(session.steps_exhausted());
-    }
-
-    #[test]
-    fn test_steps_not_exhausted_by_non_tool_events() {
-        let mut session = make_session(2);
-        session.add_system("system prompt");
-        session.add_user("user message");
-        assert!(!session.steps_exhausted());
-        assert_eq!(session.current_steps(), 0);
-    }
-
-    #[test]
-    fn test_add_tool_result() {
+    fn add_tool_result() {
         let mut session = make_session(5);
         session.add_tool_result("search", "some results", "id-1");
         assert!(matches!(
@@ -281,22 +255,83 @@ mod tests {
     }
 
     #[test]
-    fn test_current_steps_only_counts_tool_calls() {
+    fn is_resolved_after_final_answer() {
+        let mut session = make_session(5);
+        session.add_tool_call("final_answer", json!({"script": "echo hi"}), "id-1");
+        assert!(session.is_resolved());
+    }
+
+    #[test]
+    fn not_resolved_after_regular_tool() {
+        let mut session = make_session(5);
+        session.add_tool_call("git_status", json!({}), "id-1");
+        assert!(!session.is_resolved());
+    }
+
+    #[test]
+    fn clear_resolved_resets_state() {
+        let mut session = make_session(5);
+        session.add_tool_call("final_answer", json!({}), "id-1");
+        assert!(session.is_resolved());
+        session.clear_resolved();
+        assert!(!session.is_resolved());
+    }
+
+    #[test]
+    fn steps_exhausted() {
+        let mut session = make_session(2);
+        assert!(!session.steps_exhausted());
+
+        session.add_tool_call("search", json!({}), "id-1");
+        assert!(!session.steps_exhausted());
+
+        session.add_tool_call("search", json!({}), "id-2");
+        assert!(session.steps_exhausted());
+    }
+
+    #[test]
+    fn steps_not_exhausted_by_non_tool_events() {
+        let mut session = make_session(2);
+        session.add_system("system prompt");
+        session.add_user("user message");
+        assert!(!session.steps_exhausted());
+        assert_eq!(session.current_steps(), 0);
+    }
+
+    #[test]
+    fn current_steps_only_counts_tool_calls() {
         let mut session = make_session(10);
         session.add_system("sys");
         session.add_user("user");
-        session.add_outcome(make_tool_outcome("tool_a", "id-1"));
+        session.add_tool_call("tool_a", json!({}), "id-1");
         session.add_tool_result("tool_a", "result", "id-1");
-        session.add_outcome(make_tool_outcome("tool_b", "id-2"));
+        session.add_tool_call("tool_b", json!({}), "id-2");
 
         assert_eq!(session.current_steps(), 2);
         assert_eq!(session.events().len(), 5);
     }
 
     #[test]
-    fn test_error_event_pushes_system_message() {
+    fn error_event_pushes_system_message() {
         let mut session = make_session(5);
         session.add_error("something went wrong".to_string());
         assert!(matches!(&session.events()[0], ConversationEvent::System(msg) if msg == "something went wrong"));
+    }
+
+    #[test]
+    fn resolved_tracks_last_tool_not_history() {
+        let mut session = make_session(5);
+        session.add_tool_call("final_answer", json!({}), "id-1");
+        assert!(session.is_resolved());
+        session.add_tool_call("git_status", json!({}), "id-2");
+        assert!(!session.is_resolved());
+    }
+
+    #[test]
+    fn reflection_does_not_affect_resolution() {
+        let mut session = make_session(5);
+        session.add_tool_call("final_answer", json!({}), "id-1");
+        session.add_reflection("Use BSD find syntax");
+        assert!(session.is_resolved());
     }
 }
