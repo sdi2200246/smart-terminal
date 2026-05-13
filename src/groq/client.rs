@@ -7,6 +7,7 @@ use super::error::GroqError;
 use super::protocol::responce::{GroqResponse , LlmToolCall , LlmStructuredOutput};
 use super::protocol::request::GroqRequest;
 
+#[derive(Clone)]
 pub struct GroqClient{
     pub client:Client,
     pub api_key:String,

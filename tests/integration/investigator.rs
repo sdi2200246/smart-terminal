@@ -6,7 +6,7 @@ use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
 
 use smart_terminal::agent::agents::Agent;
-use smart_terminal::agent::loops::ReactLoop;
+use smart_terminal::agent::archtectures::react::ReactLoop;
 use smart_terminal::core::session::{Model, ModelName};
 use smart_terminal::groq::client::GroqClient;
 use smart_terminal::utils::FlatSchema;
@@ -56,7 +56,7 @@ async fn plan_then_investigate() {
     let provider = GroqClient::pooled();
     let mut runner = ReactLoop::new(provider);
 
-    let question = "what agents are impilmented in this app? what are their purposes?";
+    let question = "Give a review of the project for a senior dev to evaluate the autho and to show the htinking of the programmer strenghts and weeknesses";
 
 
     // ── Phase 1 — planner ───────────────────────────────────────────────

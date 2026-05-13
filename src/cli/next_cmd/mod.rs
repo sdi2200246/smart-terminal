@@ -1,5 +1,5 @@
 use crate::cli::adapters::{AgentIntent};
-use crate::agent::loops::ReactLoop;
+use crate::agent::archtectures::react::ReactLoop;
 use crate::cli::cli::NextCmdArgs;
 use crate::groq::client::GroqClient;
  
