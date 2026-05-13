@@ -1,6 +1,6 @@
 use std::process::Command;
 use serde_json::Value;
-use crate::core::capability::{Capability , ToolFunction};
+use crate::core::capability::{Capability , ToolMetaData};
 use super::error::ToolError;
 
 pub fn git_diff_staged(_args: Value) -> Result<String, ToolError> {
@@ -26,8 +26,8 @@ impl Capability for GitDiffStaged {
         "git_diff_staged"
     }
 
-    fn metadata(&self) -> ToolFunction {
-        ToolFunction {
+    fn metadata(&self) -> ToolMetaData {
+        ToolMetaData {
             name: self.name().into(),
             description:"Returns the staged changes (git diff --staged) of the current repository".into(),
             parameters: serde_json::json!({

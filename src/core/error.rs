@@ -29,7 +29,7 @@ pub enum ProviderError {
 
 #[derive(Debug, Error)]
 pub enum InternalError{
-    #[error("Tool execution failed")]
+     #[error("Tool execution failed: {source}")]
     Tool {
         #[source]
         source: anyhow::Error,

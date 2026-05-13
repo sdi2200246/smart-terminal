@@ -1,6 +1,6 @@
 use std::process::Command;
 use serde_json::Value;
-use crate::core::capability::{Capability, ToolFunction};
+use crate::core::capability::{Capability, ToolMetaData};
 use super::error::ToolError;
 
 pub fn git_log(_args: Value) -> Result<String, ToolError> {
@@ -19,8 +19,8 @@ impl Capability for GitLog {
         "git_log"
     }
 
-    fn metadata(&self) -> ToolFunction {
-        ToolFunction {
+    fn metadata(&self) -> ToolMetaData {
+        ToolMetaData {
             name: self.name().into(),
             description: "Returns the last 10 commit messages of the current repository".into(),
             parameters: serde_json::json!({

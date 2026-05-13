@@ -1,4 +1,5 @@
-use crate::core::session::{AgentSession, ConversationEvent , ModelName};
+use crate::core::session::{ConversationEvent , ModelName};
+use crate::core::llm_client::AgentRequest;
 use super::protocol:: message::Message;
 use super::protocol::tool::{self,Tool};
 use super::protocol::request::GroqRequest;
@@ -25,44 +26,45 @@ impl From<ModelName> for String {
     }
 }
 
-impl From<&AgentSession> for GroqRequest {
-    fn from(session: &AgentSession) -> Self{
-        let messages = session.events.iter()
-            .map(|e| Message::from(e))
+impl From<&AgentRequest<'_>> for GroqRequest {
+    fn from(request: &AgentRequest<'_>) -> Self {
+        let messages = request.session.events.iter()
+            .map(Message::from)
             .collect();
 
-        let tools = session.available_tools.iter()
-            .map(|t|{
-                Tool{
-                    r#type:"function".into(),
-                    function:tool::ToolFunction{
-                            name:t.name.clone(),
-                            description:Some(t.description.clone()),
-                            parameters:t.parameters.clone(),
-                            arguments:None,
-                        }
-                }
+        let tools = request.tools_metadata.iter()
+            .map(|t| Tool {
+                r#type: "function".into(),
+                function: tool::ToolMetaData {
+                    name: t.name.clone(),
+                    description: Some(t.description.clone()),
+                    parameters: t.parameters.clone(),
+                    arguments: None,
+                },
             })
             .collect();
-        
-        let model: String = session.get_model().get_name().into();
-        GroqRequest{
+
+        let model: String = request.model.get_name().into();
+
+        GroqRequest {
             model,
             messages,
             tools,
-            tool_choice:"required".into(),
-            temperature:session.get_model().get_temp()
-            
+            tool_choice: Some("auto".into()),
+            temperature: request.model.get_temp(),
+            response_format: None,
         }
     }
 }
+
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::{json};
-    use crate::core::capability::ToolFunction;
+    use crate::core::capability::ToolMetaData;
     use crate::core::session::Model;
+    use crate::core::session::{AgentSession};
 
     // ---------- SYSTEM ----------
     #[test]
@@ -149,9 +151,8 @@ mod tests {
         assert_eq!(serialized, expected);
     }
 
-      #[test]
-      #[ignore]
-    fn session_maps_to_groq_request_correctly() {
+     #[test]
+    fn agent_request_maps_to_groq_request_correctly() {
         // ---- Arrange ----
         let session = AgentSession {
             events: vec![
@@ -163,27 +164,31 @@ mod tests {
                     id: "123".into(),
                 },
             ],
-            available_tools: vec![
-                ToolFunction {
-                    name: "get_weather".into(),
-                    description: "gets weather".into(),
-                    parameters: json!({"type": "object"}),
-                }
-            ],
-            // add other fields if needed
-            steps:5,
-            model:Model::new(ModelName::GptOss120B,0.5),
-            last_tool:Some("".into())
+            steps: 5,
+        };
+
+        let tools_metadata = vec![ToolMetaData {
+            name: "get_weather".into(),
+            description: "gets weather".into(),
+            parameters: json!({"type": "object"}),
+        }];
+
+        let model = Model::new(ModelName::GptOss120B, 0.5);
+
+        let request = AgentRequest {
+            model: &model,
+            session: &session,
+            tools_metadata: &tools_metadata,
         };
 
         // ---- Act ----
-        let req = GroqRequest::from(&session);
+        let req = GroqRequest::from(&request);
+
         // ---- Assert: Messages mapped ----
         assert_eq!(req.messages.len(), 3);
         assert_eq!(req.messages[0].role, "system");
         assert_eq!(req.messages[1].role, "user");
 
-        // Tool call message
         let tool_msg = &req.messages[2];
         assert_eq!(tool_msg.role, "assistant");
         assert_eq!(tool_msg.tool_calls.len(), 1);
@@ -197,8 +202,10 @@ mod tests {
         assert_eq!(tool.function.description, Some("gets weather".into()));
         assert_eq!(tool.function.parameters, json!({"type": "object"}));
         assert!(tool.function.arguments.is_none());
-        println!("{:?}", req);
-    }
 
-   
+        // ---- Assert: Model mapped ----
+        assert_eq!(req.model, "openai/gpt-oss-120b");
+        assert_eq!(req.temperature, 0.5);
+    }
+    
 }
