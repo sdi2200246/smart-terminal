@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use super::tool::{ToolCall , ToolFunction};
+use super::tool::{ToolCall , ToolMetaData};
 
 #[derive(Serialize, Deserialize, Debug, Clone , PartialEq)]
 pub struct Message {
@@ -66,7 +66,7 @@ impl  Message {
         }
     }
     pub fn tool_call(name:String , id:String , args:Value)->Message{
-        let function = ToolFunction{
+        let function = ToolMetaData{
             name:name.clone(),
             description:None,
             parameters:serde_json::Value::Null,

@@ -5,11 +5,11 @@ use serde_json::Value;
 #[derive(Serialize , Deserialize , PartialEq, Eq , JsonSchema , Debug, Clone)]
 pub struct Tool {
     pub r#type: String,
-    pub function: ToolFunction,
+    pub function: ToolMetaData,
 }
 
 impl Tool{
-    pub fn factory(function:ToolFunction)->Tool{
+    pub fn factory(function:ToolMetaData)->Tool{
         Tool { 
             r#type:"function".to_string(),
             function
@@ -18,7 +18,7 @@ impl Tool{
 }
 
 #[derive(Serialize , Deserialize , PartialEq , Eq , JsonSchema , Debug , Clone )]
-pub struct ToolFunction {
+pub struct ToolMetaData {
     #[serde(default)]
     pub name: String,
     #[serde(default)]
@@ -36,7 +36,7 @@ pub struct ToolCall{
     pub id: String,
     #[serde(rename = "type")]
     pub call_type: String,
-    pub function: ToolFunction,
+    pub function: ToolMetaData,
 }
 
 

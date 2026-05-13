@@ -1,7 +1,15 @@
 use clap::ValueEnum;
 use super::cli::ExecArgs;
 use super::cli::NextCmdArgs;
-use crate::agent::request::{AgentIntent , AgentMode};
+pub enum AgentMode {
+    Auto,
+    Align,
+}
+pub struct AgentIntent {
+    pub prompt: String,
+    pub mode: AgentMode,
+}
+
 
 #[derive(ValueEnum, Clone, Debug)]
 pub enum Mode {

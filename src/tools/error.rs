@@ -9,8 +9,8 @@ pub enum ToolError{
         #[source]
         source: anyhow::Error,
     },
-
-    #[error("Tool execution failed.")]
+    
+    #[error("Tool execution failed: {source}")]
     ToolExecution{
         #[source]
         source: anyhow::Error,

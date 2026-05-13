@@ -1,7 +1,7 @@
 use serde_json::Value;
 use serde::Deserialize;
 use schemars::JsonSchema;
-use crate::core::capability::{Capability, ToolFunction};
+use crate::core::capability::{Capability, ToolMetaData};
 use crate::utils::FlatSchema;
 use super::error::ToolError;
 
@@ -21,14 +21,14 @@ impl Capability for ReadDir {
         "read_dir"
     }
 
-    fn metadata(&self) -> ToolFunction {
-        ToolFunction {
+    fn metadata(&self) -> ToolMetaData {
+        ToolMetaData {
             name: self.name().into(),
             description: "Read the contents of a directory. \
-                Use this to explore the filesystem before writing your script. \
                 Set recursive to true to include all subdirectories. \
                 Automatically excludes target/ and .git/ directories. \
-                Only for reading directory structure — not for reading file contents.".into(),
+                Only for reading directory structure — not for reading file contents. \
+                Returns an error if the path is a file;".into(),
             parameters: ReadDirArgs::schema(),
         }
     }
@@ -36,6 +36,20 @@ impl Capability for ReadDir {
     fn execute(&self, args: Value) -> Result<String, ToolError> {
         let args: ReadDirArgs = serde_json::from_value(args)
             .map_err(|e| ToolError::ToolExecution { source: e.into() })?;
+
+        let metadata = std::fs::metadata(&args.path)
+            .map_err(|e| ToolError::ToolExecution {
+                source: anyhow::anyhow!("cannot access '{}': {}", args.path, e),
+            })?;
+
+        if !metadata.is_dir() {
+            return Err(ToolError::ToolExecution {
+                source: anyhow::anyhow!(
+                    "[ERROR]'{}' is not a directory. read_dir only lists directory contents",
+                    args.path
+                ),
+            });
+        }
 
         let output = if args.recursive {
             std::process::Command::new("find")
@@ -88,5 +102,14 @@ mod tests {
         let tool = ReadDir;
         let result = tool.execute(json!({ "path": "./nonexistent", "recursive": false }));
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_file_path_returns_error() {
+        let tool = ReadDir;
+        let result = tool.execute(json!({ "path": "./Cargo.toml", "recursive": false }));
+        assert!(result.is_err(), "should reject file paths");
+        let err = result.unwrap_err().to_string();
+        println!("{err}");
     }
 }

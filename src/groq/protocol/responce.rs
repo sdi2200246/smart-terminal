@@ -37,13 +37,28 @@ impl TryFrom<GroqResponse> for LlmToolCall {
                 source: anyhow::anyhow!("No choices in response"),
             })?;
 
-        let tool = choice
-            .message
-            .tool_calls
-            .into_iter()
-            .next()
+        if choice.finish_reason == Some("stop".to_string()) {
+            let conclusion = choice.message.content
+                .filter(|s| !s.trim().is_empty())
+                .ok_or(GroqError::MalformedResponse {
+                    source: anyhow::anyhow!(
+                        "Model stopped without producing a conclusion. \
+                         Expected non-empty content alongside finish_reason=stop."
+                    ),
+                })?;
+
+            return Ok(LlmToolCall {
+                name: "stop".into(),
+                id: "".into(),
+                args: Value::String(conclusion),
+            });
+        }
+        
+        let tool = choice.message.tool_calls.into_iter().next()
             .ok_or(GroqError::InvalidToolCall {
-                source: anyhow::anyhow!("No tools where found"),
+                source: anyhow::anyhow!(
+                    "Model responded with text"
+                ),
             })?;
 
         let args_str = tool.function.arguments.ok_or(GroqError::InvalidToolCall {
@@ -61,6 +76,32 @@ impl TryFrom<GroqResponse> for LlmToolCall {
     }
 }
 
+pub struct LlmStructuredOutput {
+    pub value: Value,
+}
+
+impl TryFrom<GroqResponse> for LlmStructuredOutput {
+    type Error = GroqError;
+
+    fn try_from(res: GroqResponse) -> Result<Self, Self::Error> {
+        let choice = res.choices.into_iter().next()
+            .ok_or_else(|| GroqError::MalformedResponse {
+                source: anyhow::anyhow!("No choices in response"),
+            })?;
+
+        let content = choice.message.content
+            .ok_or_else(|| GroqError::MalformedResponse {
+                source: anyhow::anyhow!("Expected content field, got none"),
+            })?;
+
+        let value: Value = serde_json::from_str(&content)
+            .map_err(|e| GroqError::MalformedResponse { source: e.into() })?;
+
+        Ok(LlmStructuredOutput { value })
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -71,44 +112,17 @@ mod tests {
     }
 
     #[test]
-    fn parses_final_answer() {
+    fn parses_tool_call() {
         let raw = json!({
             "choices": [{
                 "index": 0,
-                "finish_reason": "stop",
+                "finish_reason": "tool_calls",
                 "logprobs": null,
                 "message": {
                     "role": "assistant",
                     "content": null,
                     "tool_calls": [{
                         "id": "call_1",
-                        "type": "function",
-                        "function": {
-                            "name": "final_answer",
-                            "arguments": "{\"result\":\"done\"}"
-                        }
-                    }]
-                }
-            }]
-        });
-
-        let result = LlmToolCall::try_from(parse(raw)).unwrap();
-        assert_eq!(result.name, "final_answer");
-        assert_eq!(result.args, json!({"result": "done"}));
-    }
-
-    #[test]
-    fn parses_regular_tool_call() {
-        let raw = json!({
-            "choices": [{
-                "index": 0,
-                "finish_reason": "stop",
-                "logprobs": null,
-                "message": {
-                    "role": "assistant",
-                    "content": null,
-                    "tool_calls": [{
-                        "id": "call_2",
                         "type": "function",
                         "function": {
                             "name": "git_status",
@@ -121,8 +135,63 @@ mod tests {
 
         let result = LlmToolCall::try_from(parse(raw)).unwrap();
         assert_eq!(result.name, "git_status");
-        assert_eq!(result.id, "call_2");
+        assert_eq!(result.id, "call_1");
         assert_eq!(result.args, json!({"path": "."}));
+    }
+
+    #[test]
+    fn stop_with_content_maps_to_stop_sentinel() {
+        let raw = json!({
+            "choices": [{
+                "index": 0,
+                "finish_reason": "stop",
+                "logprobs": null,
+                "message": {
+                    "role": "assistant",
+                    "content": "I have everything I need."
+                }
+            }]
+        });
+
+        let result = LlmToolCall::try_from(parse(raw)).unwrap();
+        assert_eq!(result.name, "stop");
+        assert_eq!(result.args, json!("I have everything I need."));
+    }
+
+    #[test]
+    fn stop_without_content_is_malformed() {
+        let raw = json!({
+            "choices": [{
+                "index": 0,
+                "finish_reason": "stop",
+                "logprobs": null,
+                "message": {
+                    "role": "assistant",
+                    "content": null
+                }
+            }]
+        });
+
+        let result = LlmToolCall::try_from(parse(raw));
+        assert!(matches!(result, Err(GroqError::MalformedResponse { .. })));
+    }
+
+    #[test]
+    fn stop_with_empty_content_is_malformed() {
+        let raw = json!({
+            "choices": [{
+                "index": 0,
+                "finish_reason": "stop",
+                "logprobs": null,
+                "message": {
+                    "role": "assistant",
+                    "content": "   "
+                }
+            }]
+        });
+
+        let result = LlmToolCall::try_from(parse(raw));
+        assert!(matches!(result, Err(GroqError::MalformedResponse { .. })));
     }
 
     #[test]
@@ -137,7 +206,7 @@ mod tests {
         let raw = json!({
             "choices": [{
                 "index": 0,
-                "finish_reason": "stop",
+                "finish_reason": "tool_calls",
                 "logprobs": null,
                 "message": {
                     "role": "assistant",
@@ -155,7 +224,7 @@ mod tests {
         let raw = json!({
             "choices": [{
                 "index": 0,
-                "finish_reason": "stop",
+                "finish_reason": "tool_calls",
                 "logprobs": null,
                 "message": {
                     "role": "assistant",

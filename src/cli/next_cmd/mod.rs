@@ -1,47 +1,24 @@
-mod policy;
-use policy::{Policy , NextCommand};
-use crate::agent::request::AgentIntent;
-use crate::agent::responce::AgentResponse;
-use crate::agent::client::AgentClient;
+use crate::cli::adapters::{AgentIntent};
+use crate::agent::loops::ReactLoop;
 use crate::cli::cli::NextCmdArgs;
 use crate::groq::client::GroqClient;
-use crate::agent::loops::react::ReactLoop;
-use crate::core::session::{Model , ModelName};
-
-pub async fn run(args:NextCmdArgs){
-
-    let itend = AgentIntent::from(args);
+ 
+pub async fn run(args: NextCmdArgs) {
+    let intent = AgentIntent::from(args);
     let provider = GroqClient::pooled();
-    let agent_loop = ReactLoop::new(Model::with_default_temp(ModelName::GptOss120B));
-
-    let mut agent = AgentClient::new("NEXT_CMD_AGENT", provider, agent_loop);
-
-    let req = Policy::select_policy().create_req(itend);
-    let response = agent.execute_request(req).await;
-
-
-    match response {
-        AgentResponse::Success(value) => {
-            let suggestion: NextCommand = serde_json::from_value(value).unwrap();
-
-            println!("{}" , &suggestion.cmd);
-            println!("{}" , &suggestion.man);
-            println!("{:?}" , &suggestion.scale);
-        }
-        _=>{}
-    }
+    let agent_loop = ReactLoop::new(provider);
+ 
+    // let mut agent = AgentClient::new("NEXT_CMD_AGENT", provider, agent_loop);
+    // let (session, tools) = Policy::build(&intent);
+    // let response = agent.execute(session, tools).await;
+ 
+    // match response {
+    //     AgentResponse::Success(value) => {
+    //         let suggestion: NextCommand = serde_json::from_value(value).unwrap();
+    //         println!("{}", &suggestion.cmd);
+    //         println!("{}", &suggestion.man);
+    //         println!("{:?}", &suggestion.scale);
+    //     }
+    //     _ => {}
+    // }
 }
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use tokio;
-
-    #[tokio::test]
-    #[ignore]
-    async fn run_with_align_true() {
-        let args = NextCmdArgs {
-            buffer: "git commit -m?".to_string(),
-        };
-        run(args).await;
-    }
-}       

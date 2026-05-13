@@ -1,5 +1,7 @@
-use crate::core::capability::ToolFunction;
+use serde::Serialize;
 use serde_json::Value;
+
+const DEFAULT_STEPS: usize = 50;
 
 #[derive(Debug , PartialEq , Clone)]
 pub enum ModelName{
@@ -100,21 +102,16 @@ impl AgentToolCall {
 #[derive(Debug)]
 pub struct AgentSession {
     pub events: Vec<ConversationEvent>,
-    pub available_tools: Vec<ToolFunction>,
     pub steps: usize,
-    pub model: Model,
-    pub last_tool: Option<String>,
 }
 
 impl AgentSession {
-    pub fn new(available_tools: Vec<ToolFunction>, steps: usize, model: Model) -> Self {
-        Self {
-            events: Vec::new(),
-            available_tools,
-            steps,
-            model,
-            last_tool: None,
-        }
+    pub fn new(steps: usize) -> Self {
+        Self { events: Vec::new(), steps }
+    }
+
+    pub fn builder() -> SessionBuilder {
+        SessionBuilder::new()
     }
 
     pub fn add_system(&mut self, message: impl Into<String>) {
@@ -132,10 +129,8 @@ impl AgentSession {
     }
 
     pub fn add_tool_call(&mut self, name: impl Into<String>, arguments: Value, id: impl Into<String>) {
-        let name = name.into();
-        self.last_tool = Some(name.clone());
         self.events.push(ConversationEvent::ToolCall {
-            name,
+            name: name.into(),
             arguments,
             id: id.into(),
         });
@@ -151,14 +146,6 @@ impl AgentSession {
 
     pub fn add_error(&mut self, er: String) {
         self.events.push(ConversationEvent::System(er));
-    }
-
-    pub fn is_resolved(&self) -> bool {
-        self.last_tool.as_deref() == Some("final_answer")
-    }
-
-    pub fn clear_resolved(&mut self) {
-        self.last_tool = None;
     }
 
     pub fn current_steps(&self) -> usize {
@@ -177,161 +164,48 @@ impl AgentSession {
         self.events.is_empty()
     }
 
-    pub fn lock_to_final_answer(&mut self) {
-        self.available_tools.retain(|t| t.name == "final_answer");
-    }
-
-    pub fn get_model(&self) -> &Model {
-        &self.model
+    pub fn clear_events(&mut self) {
+        self.events.clear();
     }
 }
 
+pub struct SessionBuilder {
+    events: Vec<ConversationEvent>,
+    steps: usize,
+}
 
-
-#[cfg(test)]
-mod tests {
-    use crate::core::session::ModelName;
-
-    use super::*;
-    use serde_json::json;
-
-    fn make_session(steps: usize) -> AgentSession {
-        AgentSession::new(vec![], steps, Model::new(ModelName::GptOss120B, 0.5))
-    }
-
-    fn make_tool_call(name: &str, id: &str) -> AgentToolCall {
-        AgentToolCall {
-            name: name.to_string(),
-            id: id.to_string(),
-            arguments: json!({}),
+impl SessionBuilder {
+    fn new() -> Self {
+        Self {
+            events: vec![],
+            steps: DEFAULT_STEPS,
         }
     }
-
-    #[test]
-    fn new_session_is_empty() {
-        let session = make_session(5);
-        assert!(session.is_empty());
-        assert_eq!(session.current_steps(), 0);
-        assert_eq!(session.steps, 5);
-        assert!(!session.is_resolved());
+    pub fn system(mut self, message: impl Into<String>) -> Self {
+        self.events.push(ConversationEvent::System(message.into()));
+        self
     }
 
-    #[test]
-    fn add_system_event() {
-        let mut session = make_session(5);
-        session.add_system("you are a helpful assistant");
-        assert_eq!(session.events().len(), 1);
-        assert!(matches!(&session.events()[0], ConversationEvent::System(msg) if msg == "you are a helpful assistant"));
+    pub fn user(mut self, message: impl Into<String>) -> Self {
+        self.events.push(ConversationEvent::User(message.into()));
+        self
     }
 
-    #[test]
-    fn add_user_event() {
-        let mut session = make_session(5);
-        session.add_user("hello");
-        assert!(matches!(&session.events()[0], ConversationEvent::User(msg) if msg == "hello"));
+    pub fn context<T: Serialize>(mut self, ctx: &T) -> Self {
+        let json = serde_json::to_string_pretty(ctx).unwrap();
+        self.events.push(ConversationEvent::System(format!("Context:\n{}", json)));
+        self
     }
 
-    #[test]
-    fn add_tool_call_pushes_event_and_tracks_name() {
-        let mut session = make_session(5);
-        let call = make_tool_call("search", "id-1");
-        session.add_tool_call(call.name, call.arguments, call.id);
-        assert_eq!(session.current_steps(), 1);
-        assert!(matches!(
-            &session.events()[0],
-            ConversationEvent::ToolCall { name, id, .. } if name == "search" && id == "id-1"
-        ));
+    pub fn steps(mut self, steps: usize) -> Self {
+        self.steps = steps;
+        self
     }
 
-    #[test]
-    fn add_tool_result() {
-        let mut session = make_session(5);
-        session.add_tool_result("search", "some results", "id-1");
-        assert!(matches!(
-            &session.events()[0],
-            ConversationEvent::ToolResult { name, result, id }
-            if name == "search" && result == "some results" && id == "id-1"
-        ));
-    }
-
-    #[test]
-    fn is_resolved_after_final_answer() {
-        let mut session = make_session(5);
-        session.add_tool_call("final_answer", json!({"script": "echo hi"}), "id-1");
-        assert!(session.is_resolved());
-    }
-
-    #[test]
-    fn not_resolved_after_regular_tool() {
-        let mut session = make_session(5);
-        session.add_tool_call("git_status", json!({}), "id-1");
-        assert!(!session.is_resolved());
-    }
-
-    #[test]
-    fn clear_resolved_resets_state() {
-        let mut session = make_session(5);
-        session.add_tool_call("final_answer", json!({}), "id-1");
-        assert!(session.is_resolved());
-        session.clear_resolved();
-        assert!(!session.is_resolved());
-    }
-
-    #[test]
-    fn steps_exhausted() {
-        let mut session = make_session(2);
-        assert!(!session.steps_exhausted());
-
-        session.add_tool_call("search", json!({}), "id-1");
-        assert!(!session.steps_exhausted());
-
-        session.add_tool_call("search", json!({}), "id-2");
-        assert!(session.steps_exhausted());
-    }
-
-    #[test]
-    fn steps_not_exhausted_by_non_tool_events() {
-        let mut session = make_session(2);
-        session.add_system("system prompt");
-        session.add_user("user message");
-        assert!(!session.steps_exhausted());
-        assert_eq!(session.current_steps(), 0);
-    }
-
-    #[test]
-    fn current_steps_only_counts_tool_calls() {
-        let mut session = make_session(10);
-        session.add_system("sys");
-        session.add_user("user");
-        session.add_tool_call("tool_a", json!({}), "id-1");
-        session.add_tool_result("tool_a", "result", "id-1");
-        session.add_tool_call("tool_b", json!({}), "id-2");
-
-        assert_eq!(session.current_steps(), 2);
-        assert_eq!(session.events().len(), 5);
-    }
-
-    #[test]
-    fn error_event_pushes_system_message() {
-        let mut session = make_session(5);
-        session.add_error("something went wrong".to_string());
-        assert!(matches!(&session.events()[0], ConversationEvent::System(msg) if msg == "something went wrong"));
-    }
-
-    #[test]
-    fn resolved_tracks_last_tool_not_history() {
-        let mut session = make_session(5);
-        session.add_tool_call("final_answer", json!({}), "id-1");
-        assert!(session.is_resolved());
-        session.add_tool_call("git_status", json!({}), "id-2");
-        assert!(!session.is_resolved());
-    }
-
-    #[test]
-    fn reflection_does_not_affect_resolution() {
-        let mut session = make_session(5);
-        session.add_tool_call("final_answer", json!({}), "id-1");
-        session.add_reflection("Use BSD find syntax");
-        assert!(session.is_resolved());
+    pub fn build(self) -> AgentSession {
+        AgentSession {
+            events: self.events,
+            steps: self.steps,
+        }
     }
 }

@@ -15,6 +15,6 @@ pub enum AgentError {
     #[error("Contract schema is invalid: {0}")]
     InvalidContract(String),
 
-    #[error("Final answer does not satisfy the contract schema")]
-    ContractViolation,
+    #[error("Final answer does not satisfy the expected schema")]
+    ScheemaViolation,
 }

@@ -2,7 +2,7 @@ use serde_json::Value;
 use serde::Deserialize;
 use schemars::{JsonSchema};
 use crate::utils::FlatSchema;
-use crate::core::capability::{Capability, ToolFunction};
+use crate::core::capability::{Capability, ToolMetaData};
 use super::error::ToolError;
 use std::io::{self, Write};
 
@@ -22,8 +22,8 @@ impl  Capability  for AskUser{
     fn name(&self) -> &'static str {
         "ask_user"
     }
-    fn metadata(&self) -> ToolFunction {
-        ToolFunction {
+    fn metadata(&self) -> ToolMetaData {
+        ToolMetaData {
             name: self.name().into(),
             description:"Use this tool to achieve alignment with the user when their intent, \
               preferences, or context are unclear. Ask one focused question at a time. \

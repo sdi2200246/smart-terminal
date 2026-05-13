@@ -1,9 +1,10 @@
 use reqwest::{Client, StatusCode };
-use crate::core::llm_client::LLMProvider;
+use serde_json::Value;
+use crate::core::llm_client::{LLMProvider , AgentRequest};
 use crate::core::session::{AgentSession , AgentToolCall};
 use crate::core::error::ProviderError;
 use super::error::GroqError;
-use super::protocol::responce::{GroqResponse , LlmToolCall};
+use super::protocol::responce::{GroqResponse , LlmToolCall , LlmStructuredOutput};
 use super::protocol::request::GroqRequest;
 
 pub struct GroqClient{
@@ -37,7 +38,6 @@ impl GroqClient{
     }
 
     pub async fn call_llm(&mut self,req: GroqRequest) -> Result<GroqResponse, GroqError> {
-
         let res = self.client
             .post(&self.completions_url)
             .header("Authorization", format!("Bearer {}", &self.api_key))
@@ -64,7 +64,7 @@ impl GroqClient{
             return GroqError::TokenLimit{ source: anyhow::anyhow!("{} {}", status, body),};
         }
 
-        if status == StatusCode::BAD_REQUEST && body.contains("tool_use_failed") {
+        if status == StatusCode::BAD_REQUEST && (body.contains("tool_use_failed")|| body.contains("output_parse_failed")){
             return GroqError::InvalidToolCall { source: anyhow::anyhow!("{} {}", status, body) };
         }
 
@@ -94,12 +94,19 @@ impl Default for  GroqClient{
 
 impl LLMProvider for GroqClient {
 
-    async fn complete(&mut self , session:&AgentSession,)->Result<AgentToolCall,ProviderError>{
-        let req = GroqRequest::from(session);
+    async fn complete(&mut self , request:AgentRequest<'_>)->Result<AgentToolCall,ProviderError>{
+        let req = GroqRequest::from(&request);
         let res = self.call_llm(req).await.map_err(ProviderError::from)?;
         let tool_call = LlmToolCall::try_from(res).map_err(ProviderError::from)?;
 
         Ok(AgentToolCall::new(tool_call.name, tool_call.id, tool_call.args))
+    }
+
+     async fn complete_structured(&mut self, session: &AgentSession, schema: Value) -> Result<Value, ProviderError> {
+        let req = GroqRequest::structured(&session, schema);
+        let res = self.call_llm(req).await.map_err(ProviderError::from)?;
+        let out = LlmStructuredOutput::try_from(res).map_err(ProviderError::from)?;
+        Ok(out.value)
     }
 }
 
