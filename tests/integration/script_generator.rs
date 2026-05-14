@@ -55,6 +55,12 @@ async fn run_case(label: &str, prompt: &str) -> (ScriptDesign, Script) {
         println!("  • {}", s);
     }
 
+     println!("evidence:");
+    for s in &design.coding_decisions {
+        println!("  • {:?}", s);
+    }
+
+
     println!("\n═══ {label} — SCRIPT ═══");
     println!("filename:   {}", script.filename);
     println!("invocation: {}", script.invocation_example);
@@ -77,11 +83,6 @@ async fn timestamped_directory_backup() {
     let prompt = "Create a script that takes user voice input and prints what they said";
 
     let (design, script) = run_case("backup", prompt).await;
-
-    assert!(
-        !design.arguments.is_empty(),
-        "script takes a directory path — should have at least one argument"
-    );
 }
 
 // ── Case 2: code-aware — architect should probe the repo ────────────────

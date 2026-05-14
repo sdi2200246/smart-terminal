@@ -23,7 +23,7 @@ impl GroqRequest {
         GroqRequest {
             model:"openai/gpt-oss-120b".into(),
             messages,
-            temperature:0.7,
+            temperature:0.1,
             tools: vec![],
             tool_choice: None,
             response_format: Some(ResponseFormat::json_schema("output", schema)),

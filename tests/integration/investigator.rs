@@ -1,15 +1,11 @@
 use std::error::Error;
 
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
 
-use smart_terminal::agent::agents::Agent;
 use smart_terminal::agent::archtectures::react::ReactLoop;
-use smart_terminal::core::session::{Model, ModelName};
+use smart_terminal::agent::workflows::investigator::{Investigator, Plan, Report};
 use smart_terminal::groq::client::GroqClient;
-use smart_terminal::utils::FlatSchema;
 
 fn init_test_tracing() {
     tracing_subscriber::registry()
@@ -24,94 +20,41 @@ fn init_test_tracing() {
         .ok();
 }
 
-#[derive(JsonSchema, Deserialize, Serialize, Debug)]
-#[schemars(deny_unknown_fields)]
-struct PlanStep {
-    pub action: String,
-    pub rationale: String,
-}
-
-#[derive(JsonSchema, Deserialize, Serialize, Debug)]
-#[schemars(deny_unknown_fields)]
-struct Plan {
-    pub goal: String,
-    pub steps: Vec<PlanStep>,
-}
-impl FlatSchema for Plan {}
-
-#[derive(JsonSchema, Deserialize, Debug)]
-#[schemars(deny_unknown_fields)]
-struct Report {
-    pub summary: String,
-    pub findings: Vec<String>,
-    pub gaps: Vec<String>,
-}
-impl FlatSchema for Report {}
-
-#[tokio::test]
-#[ignore = "requires GROQ_API_KEY"]
-async fn plan_then_investigate() {
+async fn run_case(label: &str, question: &str) -> (Plan, Report) {
     init_test_tracing();
 
     let provider = GroqClient::pooled();
     let mut runner = ReactLoop::new(provider);
+    let mut workflow = Investigator::new(&mut runner);
 
-    let question = "Give a review of the project for a senior dev to evaluate the autho and to show the htinking of the programmer strenghts and weeknesses";
+    let (plan, report) = workflow
+        .run(question)
+        .await
+        .unwrap_or_else(|e| panic!("[{label}] workflow failed: {:?}", e.source()));
 
-
-    // ── Phase 1 — planner ───────────────────────────────────────────────
-    let plan = {
-        let mut planner = Agent::planner(
-            &mut runner,
-            Model::with_default_temp(ModelName::GptOss120B),
-        );
-        let user = format!("Question\n: {}", question);
-
-        planner
-            .run::<Plan>(user)
-            .await
-            .unwrap_or_else(|e| panic!("planner failed: {:?}", e.source()))
-    };
-
-    println!("\n═══ PLAN ═══");
+    println!("\n═══ {label} — PLAN ═══");
     println!("goal: {}", plan.goal);
     for (i, step) in plan.steps.iter().enumerate() {
         println!("{}. {}", i + 1, step.action);
         println!("     why: {}", step.rationale);
     }
-    assert!(!plan.goal.is_empty(), "plan goal should not be empty");
-    assert!(!plan.steps.is_empty(), "plan should have at least one step");
 
-    // ── Phase 2 — investigator ──────────────────────────────────────────
-    let report = {
-        let mut executor = Agent::executor(
-            &mut runner,
-            Model::with_default_temp(ModelName::GptOss120B),
-        );
-        let plan_json = serde_json::to_string_pretty(&plan).expect("plan serializes");
-        let user = format!(
-            "Question: {}\n\nInvestigation plan:\n{}",
-            question, plan_json
-        );
+    println!("\n═══ {label} — REPORT ═══");
+    println!("report: {}", report.report);
 
-        executor
-            .run::<Report>(user)
-            .await
-            .unwrap_or_else(|e| panic!("investigator failed: {:?}", e.source()))
-    };
+    // Shape checks every investigation must pass — keeps the per-test asserts focused on semantics.
+    assert!(!plan.goal.is_empty(),       "[{label}] plan.goal empty");
+    assert!(!plan.steps.is_empty(),      "[{label}] plan.steps empty");
+    assert!(!report.report.is_empty(),  "[{label}] report.summary empty");
 
-    println!("\n═══ REPORT ═══");
-    println!("summary: {}", report.summary);
-    println!("\nfindings:");
-    for f in &report.findings {
-        println!("  • {}", f);
-    }
-    if !report.gaps.is_empty() {
-        println!("\ngaps:");
-        for g in &report.gaps {
-            println!("  • {}", g);
-        }
-    }
-    assert!(!report.summary.is_empty(), "report summary should not be empty");
-    assert!(!report.findings.is_empty(), "report should have at least one finding");
+    (plan, report)
+}
+
+// ── Case 1: broad project overview — planner must orient, executor must synthesize ──
+#[tokio::test]
+#[ignore = "requires GROQ_API_KEY"]
+async fn project_overview() {
+    let question = "How could i combine the investigator project , with bash in order to make the investigator phisically answer with voice? ";
+
+    let (_plan, report) = run_case("overview", question).await;
 }

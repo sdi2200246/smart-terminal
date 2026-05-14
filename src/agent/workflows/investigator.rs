@@ -22,7 +22,7 @@ pub struct PlanStep {
 pub struct Plan {
     /// One-line restatement of the user's question.
     pub goal: String,
-    /// 3–6 ordered, atomic investigation steps grounded in paths verified to exist.
+    /// ordered, atomic investigation steps grounded in directory paths verified to exist.
     pub steps: Vec<PlanStep>,
 }
 impl FlatSchema for Plan {}
@@ -30,12 +30,8 @@ impl FlatSchema for Plan {}
 #[derive(JsonSchema, Deserialize, Serialize, Debug)]
 #[schemars(deny_unknown_fields)]
 pub struct Report {
-    /// 1–3 sentences directly answering the user's question. Not a description of what was done.
-    pub summary: String,
-    /// Concrete observations from tool calls — each tied to a file, command output, or verified fact. No speculation.
-    pub findings: Vec<String>,
-    /// Anything that could not be determined and why.
-    pub gaps: Vec<String>,
+    ///A direct report answering the user's question. Not a description of what was done.
+    pub report: String,
 }
 impl FlatSchema for Report {}
 pub struct Investigator<'a, P: LLMProvider> {

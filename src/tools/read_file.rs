@@ -43,10 +43,10 @@ impl Capability for ReadFile {
  
     fn execute(&self, args: Value) -> Result<String, ToolError> {
         let args: ReadFileArgs = serde_json::from_value(args)
-            .map_err(|e| ToolError::ArgumentsParsing { source: e.into() })?;
+            .map_err(|e| ToolError::ArgumentsParsing {source: anyhow::anyhow!("[ERROR] {}", e)})?;
  
         let raw = fs::read_to_string(&args.path)
-            .map_err(|e| ToolError::ToolExecution { source: e.into() })?;
+            .map_err(|e| ToolError::ToolExecution {source: anyhow::anyhow!("[ERROR] {}", e)})?;
  
         let lines: Vec<&str> = raw.lines().collect();
         let total_lines = lines.len();
