@@ -5,9 +5,12 @@ use crate::agent::archtectures::oneshot::OneShot;
 use crate::core::capability::{Capability, ToolRegistry, ToolMetaData};
 use crate::core::session::{Model , AgentSession};
 use crate::core::llm_client::LLMProvider;
+use crate::tools::git_diff::GitDiffStaged;
+use crate::tools::git_log::GitLog;
 use crate::tools::read_dir::ReadDir;
 use crate::tools::bash::Bash;
 use crate::tools::read_file::ReadFile;
+use crate::tools::docker::Docker;
 use crate:: utils::FlatSchema;
 use crate::agent::error::AgentError;
 use serde::de::DeserializeOwned;
@@ -42,7 +45,6 @@ impl<'a, P: LLMProvider> Agent<'a, P> {
 
     pub fn planner(runner: &'a mut ReactLoop<P>, model: Model) -> Self {
         let read_dir = Box::new(ReadDir) as Box<dyn Capability>;
-
         let tools_metadata = vec![read_dir.metadata()];
 
         let mut registry = ToolRegistry::new();
@@ -92,6 +94,28 @@ impl<'a, P: LLMProvider> Agent<'a, P> {
         Self::new(runner, registry, tools_metadata, prompts::ARCHITECT_SYS_PROMPT, model)
             .with_context(&contexts::ShellEnv::gather())
     }
+
+
+    pub fn cmd_predictor(runner: &'a mut ReactLoop<P>, model: Model) -> Self {
+        let git_diff  = Box::new(GitDiffStaged)  as Box<dyn Capability>;
+        let git_log  = Box::new(GitLog)  as Box<dyn Capability>;
+        let docker  = Box::new(Docker)  as Box<dyn Capability>;
+
+        let tools_metadata = vec![
+            git_diff.metadata(),
+            git_log.metadata(),
+            docker.metadata(),
+        ];
+
+        let mut registry = ToolRegistry::new();
+        registry.insert(git_diff.name(),    git_diff);
+        registry.insert(git_log.name(),     git_log);
+        registry.insert(docker.name(),      docker);
+
+        Self::new(runner, registry, tools_metadata, prompts::CMD_PREDICTOR_SYS_PROMPT, model)
+            .with_context(&contexts::ShellEnv::gather())
+    }
+
 
     pub async fn run<T>(&mut self, user_prompt: impl Into<String>) -> Result<T, AgentError>
     where

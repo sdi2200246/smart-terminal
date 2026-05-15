@@ -54,7 +54,7 @@ async fn run_case(label: &str, question: &str) -> (Plan, Report) {
 #[tokio::test]
 #[ignore = "requires GROQ_API_KEY"]
 async fn project_overview() {
-    let question = "How could i combine the investigator project , with bash in order to make the investigator phisically answer with voice? ";
+    let question = "can you tell me what pivots the project made? what it was before and what is it now? ";
 
     let (_plan, report) = run_case("overview", question).await;
 }
