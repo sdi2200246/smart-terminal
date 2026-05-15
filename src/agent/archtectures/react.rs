@@ -41,11 +41,14 @@ impl<P: LLMProvider> ReactLoop<P> {
             call = match self.provider.complete(request).await {
                 Ok(call) => call,
                 Err(ProviderError::InvalidToolCal { source }) => {
-                    let compressed = source.to_string().lines().take(3).collect::<Vec<_>>().join("\n");
-                    session.add_error(format!("Invalid tool call:\n{}\n", compressed));
+                    tracing::warn!(Error = %source.to_string(),"tool call failed");
+                    let compressed = source.to_string().lines().take(10).collect::<Vec<_>>().join("\n");
+                    session.add_error(format!("[ERROR] Invalid tool call or tool not existent:\n{}\n", compressed));
                     continue;
                 }
-                Err(e) => return Err(e.into()),
+                Err(e) => {
+                    return Err(e.into())
+                },
             };
 
             tracing::info!(tool = %call.name(), args = %call.arguments(), "executing tool");
