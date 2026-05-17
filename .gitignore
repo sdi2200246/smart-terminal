@@ -1,4 +1,5 @@
 /target
+/memory
 .DS_Store
 *.swp
 *.swo
