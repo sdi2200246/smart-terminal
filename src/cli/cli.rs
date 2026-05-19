@@ -1,5 +1,4 @@
 use clap::{Parser, Subcommand, Args};
-use super::adapters::Mode;
 
 #[derive(Parser)]
 #[command(name = "agent")]
@@ -12,9 +11,8 @@ pub struct Cli {
 pub enum Commands {
     /// Suggest the next command based on context
     NextCmd(NextCmdArgs),
-
-    /// Execute a command with AI assistance
-    Exec(ExecArgs),
+    /// Manipulate the memory of you assistant 
+    Memory(MemoryArgs),
 }
 
 #[derive(Args)]
@@ -24,10 +22,19 @@ pub struct NextCmdArgs{
 }
 
 #[derive(Args)]
-pub struct ExecArgs {
-    /// The prompt describing what you want to execute
-    pub prompt: String,
+pub struct MemoryArgs {
+    #[command(subcommand)]
+    pub action: MemoryAction,
+}
 
-   #[arg(long, value_enum, default_value = "auto")]
-    pub mode: Mode,
+#[derive(Subcommand)]
+pub enum MemoryAction {
+    /// Register current directory for memory
+    Init,
+    /// Unregister and delete memory for current directory
+    Delete,
+    /// Wipe interactions but keep the folder registered
+    Clear,
+    /// Print the current folder's stored interactions
+    Show,
 }

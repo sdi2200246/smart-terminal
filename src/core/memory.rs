@@ -87,6 +87,7 @@ pub trait Memory: Send + Sync {
     fn append(&mut self, entry: Interaction) -> Result<(), MemoryError>;
     fn register(&mut self, cwd: &Path) -> Result<(), MemoryError>;
     fn unregister(&mut self, cwd: &Path) -> Result<(), MemoryError>;
+    fn clear(&mut self) -> Result<(), MemoryError>;
 }
 
 #[cfg(test)]

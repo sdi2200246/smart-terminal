@@ -1,5 +1,3 @@
-// src/tools/docker.rs
-
 use serde_json::Value;
 use serde::{Deserialize, Serialize};
 use std::process::Command;

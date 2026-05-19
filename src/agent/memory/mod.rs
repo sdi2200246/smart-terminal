@@ -29,7 +29,7 @@ impl FolderMemory {
         fs::create_dir_all(&root)?;
         Ok(Self::new(root))
     }
-    
+
     pub fn with_conversation(
         root: impl Into<PathBuf>,
         cwd: impl Into<PathBuf>,
@@ -75,6 +75,7 @@ impl FolderMemory {
         let json = serde_json::to_string_pretty(conv)?;
         atomic_write(&path, &json)
     }
+
 }
 
 impl Memory for FolderMemory {
@@ -162,6 +163,12 @@ impl Memory for FolderMemory {
         self.cwd = None;
         self.conversation = None;
         Ok(())
+    }
+
+    fn clear(&mut self) -> Result<(), MemoryError> {
+        let conv = self.conversation.as_mut().ok_or(MemoryError::NotLoaded)?;
+        conv.clear();
+        self.persist()
     }
 }
 
