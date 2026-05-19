@@ -1,5 +1,5 @@
-use smart_terminal::cli::{exec , next_cmd};
 use smart_terminal::cli::cli::{Cli , Commands};
+use smart_terminal::cli::cmds::{memory , next_cmd};
 use clap::Parser;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -9,8 +9,9 @@ pub struct Router;
 impl Router {
     pub async fn dispatch(cli: Cli) {
         match cli.command {
-            Commands::NextCmd(args) => next_cmd::run(args).await,
-            _ => {}
+            Commands::Memory(args) => {memory::run(args).await;}
+            Commands::NextCmd(args) => {next_cmd::run(args).await;}
+            _=>{},
         }
     }
 }
