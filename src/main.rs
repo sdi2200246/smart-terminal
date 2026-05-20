@@ -1,5 +1,5 @@
 use smart_terminal::cli::cli::{Cli , Commands};
-use smart_terminal::cli::cmds::{memory , next_cmd};
+use smart_terminal::cli::cmds::{memory , next_cmd , investigate};
 use clap::Parser;
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -11,7 +11,7 @@ impl Router {
         match cli.command {
             Commands::Memory(args) => {memory::run(args).await;}
             Commands::NextCmd(args) => {next_cmd::run(args).await;}
-            _=>{},
+            Commands::Investigate(args) => { investigate::run(args).await; }
         }
     }
 }
