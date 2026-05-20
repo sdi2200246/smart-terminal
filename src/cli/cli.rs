@@ -13,6 +13,8 @@ pub enum Commands {
     NextCmd(NextCmdArgs),
     /// Manipulate the memory of you assistant 
     Memory(MemoryArgs),
+    /// Investigate a question about the project or environment
+    Investigate(InvestigateArgs),
 }
 
 #[derive(Args)]
@@ -37,4 +39,10 @@ pub enum MemoryAction {
     Clear,
     /// Print the current folder's stored interactions
     Show,
+}
+
+#[derive(Args)]
+pub struct InvestigateArgs {
+    /// The question to investigate
+    pub question: String,
 }

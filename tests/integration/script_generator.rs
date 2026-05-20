@@ -1,9 +1,7 @@
 use std::error::Error;
-
 use smart_terminal::agent::archtectures::oneshot::OneShot;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
-
 use smart_terminal::agent::archtectures::react::ReactLoop;
 use smart_terminal::agent::workflows::script_gen::{Script, ScriptDesign, ScriptGenerator};
 use smart_terminal::groq::client::GroqClient;
