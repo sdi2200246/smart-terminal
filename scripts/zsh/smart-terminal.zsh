@@ -1,4 +1,3 @@
-# --- AI Terminal Suggestion Script ---
 AI_LAST_SUGGESTION=""
 AI_LAST_REVERSIBILITY=""
 AI_LAST_DESCRIPTION=""
@@ -32,7 +31,7 @@ ai_accept_suggestion() {
   if [[ -n "$AI_LAST_SUGGESTION" ]]; then
     BUFFER="$AI_LAST_SUGGESTION"
     CURSOR=${#BUFFER}
-    print -s "$AI_LAST_SUGGESTION"
+    print -rs -- "$AI_LAST_SUGGESTION"
     AI_LAST_SUGGESTION=""
     AI_LAST_REVERSIBILITY=""
     AI_LAST_DESCRIPTION=""
