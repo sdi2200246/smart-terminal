@@ -15,14 +15,17 @@ ai_reversibility_color() {
 }
 
 ai_fetch_suggestion() {
-    export AI_CONTEXT_HISTORY="$(history -n -10)"
+    export AI_CONTEXT_HISTORY="$(history -n -20)"
 
     local result
     result="$(smart-terminal next-cmd "$BUFFER" 2>/dev/null)"
 
-    AI_LAST_SUGGESTION="$(echo "$result" | sed -n '1p')"
-    AI_LAST_DESCRIPTION="$(echo "$result" | sed -n '2p')"
-    AI_LAST_REVERSIBILITY="$(echo "$result" | sed -n '3p')"
+    local -a lines
+    lines=("${(@f)result}")
+
+    AI_LAST_SUGGESTION="${lines[1]}"
+    AI_LAST_DESCRIPTION="${lines[2]}"
+    AI_LAST_REVERSIBILITY="${lines[3]}"
     AI_BUFFER_OWNER="$BUFFER"
     zle redisplay
 }
@@ -31,7 +34,6 @@ ai_accept_suggestion() {
   if [[ -n "$AI_LAST_SUGGESTION" ]]; then
     BUFFER="$AI_LAST_SUGGESTION"
     CURSOR=${#BUFFER}
-    print -rs -- "$AI_LAST_SUGGESTION"
     AI_LAST_SUGGESTION=""
     AI_LAST_REVERSIBILITY=""
     AI_LAST_DESCRIPTION=""
