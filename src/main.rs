@@ -38,5 +38,7 @@ async fn main() {
 
 
     let cli = Cli::parse();
+    tracing::info!("CMD Task Started");
     Router::dispatch(cli).await;
+    tracing::info!("CMD Task Ended");
 }

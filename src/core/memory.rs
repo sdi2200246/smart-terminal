@@ -46,12 +46,12 @@ pub struct Conversation {
 }
 
 impl Conversation {
-    pub const MAX_INTERACTIONS: usize = 15;
-
+    pub const MAX_INTERACTIONS: usize = 8;
     pub fn push(&mut self, entry: Interaction) {
         self.interactions.push(entry);
         if self.interactions.len() > Self::MAX_INTERACTIONS {
-            self.interactions.remove(0);
+            let excess = self.interactions.len() - Self::MAX_INTERACTIONS;
+            self.interactions.drain(0..excess);
         }
     }
 

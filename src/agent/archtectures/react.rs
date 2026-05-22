@@ -25,13 +25,13 @@ impl<P: LLMProvider> ReactLoop<P> {
     where
         T: FlatSchema + DeserializeOwned,
     {
+        tracing::info!("Model Task Started");
         let mut call: AgentToolCall;
         loop {
             if session.steps_exhausted() {
                 tracing::warn!("agent exhausted all steps");
                 return Err(AgentError::StepsExhausted);
             }
-
             let request = AgentRequest {
                 model,
                 session,
@@ -69,9 +69,12 @@ impl<P: LLMProvider> ReactLoop<P> {
         }
 
         session.clear_events();
+        session.add_system("Your one and only! job is to return the following text into a structurred output");
         session.add_user(call.arguments().to_string());
+        tracing::info!("Model structurring output");
         let raw = self.provider.complete_structured(&session, T::schema()).await?;
         let typed = serde_json::from_value::<T>(raw).expect("Type must always be right");
+        tracing::info!("Model finished structurred output");
         Ok(typed)
     }
 }

@@ -57,7 +57,7 @@ impl<'a, P: LLMProvider, M: Memory> NextCmd<'a, P, M> {
         let prediction: NextCommand = {
             let mut predictor = Agent::cmd_predictor(
                 &mut *self.runner,
-                Model::deterministic(ModelName::GptOss20B),
+                Model::creative(ModelName::GptOss120B),
             );
             predictor.run(user_prompt).await?
         };

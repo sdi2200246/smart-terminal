@@ -109,7 +109,6 @@ impl<'a, P: LLMProvider> Agent<'a, P> {
 
         let mut registry = ToolRegistry::new();
         registry.insert(git_diff.name(),    git_diff);
-        registry.insert(git_log.name(),     git_log);
         registry.insert(docker.name(),      docker);
 
         Self::new(runner, registry, tools_metadata, prompts::CMD_PREDICTOR_SYS_PROMPT, model)

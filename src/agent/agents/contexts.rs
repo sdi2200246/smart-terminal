@@ -76,8 +76,8 @@ impl ShellEnv{
             .unwrap_or_else(|| "unknown".to_string());
 
         let mut history = Self::gather_history();
-        if history.len() > 20 {
-            history.drain(0..history.len() - 20);
+        if history.len() > 10 {
+            history.drain(0..history.len() - 10);
         }
         let cwd_contents = std::fs::read_dir(&cwd)
             .ok()
