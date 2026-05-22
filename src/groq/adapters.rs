@@ -165,6 +165,7 @@ mod tests {
                 },
             ],
             steps: 5,
+            final_answer:None
         };
 
         let tools_metadata = vec![ToolMetaData {

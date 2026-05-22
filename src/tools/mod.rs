@@ -6,3 +6,4 @@ pub mod read_dir;
 pub mod read_file;
 pub mod bash;
 pub mod docker;
+pub mod json;
