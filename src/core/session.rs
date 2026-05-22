@@ -103,11 +103,12 @@ impl AgentToolCall {
 pub struct AgentSession {
     pub events: Vec<ConversationEvent>,
     pub steps: usize,
+    pub final_answer: Option<Value>,
 }
 
 impl AgentSession {
     pub fn new(steps: usize) -> Self {
-        Self { events: Vec::new(), steps }
+        Self { events: Vec::new(), steps , final_answer:None}
     }
 
     pub fn builder() -> SessionBuilder {
@@ -167,6 +168,14 @@ impl AgentSession {
     pub fn clear_events(&mut self) {
         self.events.clear();
     }
+
+    pub fn set_final_answer(&mut self, value: Value) {
+        self.final_answer = Some(value);
+    }
+
+    pub fn take_final_answer(&mut self) -> Option<Value> {
+        self.final_answer.take()
+    }
 }
 
 pub struct SessionBuilder {
@@ -206,6 +215,7 @@ impl SessionBuilder {
         AgentSession {
             events: self.events,
             steps: self.steps,
+            final_answer:None
         }
     }
 }

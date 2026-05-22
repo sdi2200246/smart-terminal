@@ -11,10 +11,12 @@ use crate::tools::read_dir::ReadDir;
 use crate::tools::bash::Bash;
 use crate::tools::read_file::ReadFile;
 use crate::tools::docker::Docker;
+use crate::tools::json::Json;
 use crate:: utils::FlatSchema;
 use crate::agent::error::AgentError;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde_json::Value;
 
 pub struct Agent<'a, P: LLMProvider> {
     runner: &'a mut  ReactLoop<P>,
@@ -96,20 +98,21 @@ impl<'a, P: LLMProvider> Agent<'a, P> {
     }
 
 
-    pub fn cmd_predictor(runner: &'a mut ReactLoop<P>, model: Model) -> Self {
+    pub fn cmd_predictor(runner: &'a mut ReactLoop<P>, model: Model , scheema:Value) -> Self {
         let git_diff  = Box::new(GitDiffStaged)  as Box<dyn Capability>;
-        let git_log  = Box::new(GitLog)  as Box<dyn Capability>;
         let docker  = Box::new(Docker)  as Box<dyn Capability>;
+        let json=Box::new(Json{properties:scheema}) as Box<dyn Capability>;
 
         let tools_metadata = vec![
             git_diff.metadata(),
-            git_log.metadata(),
             docker.metadata(),
+            json.metadata(),
         ];
 
         let mut registry = ToolRegistry::new();
-        registry.insert(git_diff.name(),    git_diff);
-        registry.insert(docker.name(),      docker);
+        registry.insert(git_diff.name(), git_diff);
+        registry.insert(docker.name(),   docker);
+        registry.insert(json.name(),     json);
 
         Self::new(runner, registry, tools_metadata, prompts::CMD_PREDICTOR_SYS_PROMPT, model)
             .with_context(&contexts::ShellEnv::gather())

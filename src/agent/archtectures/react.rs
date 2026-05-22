@@ -3,8 +3,9 @@ use crate::core::capability::{ToolRegistry , ToolMetaData};
 use crate::core::error::ProviderError;
 use crate::core::session::{AgentSession, AgentToolCall , Model};
 use crate::core::llm_client::{LLMProvider , AgentRequest};
-use serde::de::DeserializeOwned;
 use crate::utils::FlatSchema;
+use serde::de::DeserializeOwned;
+use serde_json::Value;
 pub struct ReactLoop<P: LLMProvider> {
     provider: P,
 }
@@ -28,27 +29,20 @@ impl<P: LLMProvider> ReactLoop<P> {
         tracing::info!("Model Task Started");
         let mut call: AgentToolCall;
         loop {
+
+            if let Some(value) = session.take_final_answer() {
+                tracing::info!("agent exitting early");
+                return serde_json::from_value::<T>(value).map_err(|_| AgentError::ScheemaViolation);
+            }
+
             if session.steps_exhausted() {
                 tracing::warn!("agent exhausted all steps");
                 return Err(AgentError::StepsExhausted);
             }
-            let request = AgentRequest {
-                model,
-                session,
-                tools_metadata: tools_meta,
-            };
-
-            call = match self.provider.complete(request).await {
-                Ok(call) => call,
-                Err(ProviderError::InvalidToolCal { source }) => {
-                    tracing::warn!(Error = %source.to_string(),"tool call failed");
-                    let compressed = source.to_string().lines().take(10).collect::<Vec<_>>().join("\n");
-                    session.add_error(format!("[ERROR] Invalid tool call or tool not existent:\n{}\n", compressed));
-                    continue;
-                }
-                Err(e) => {
-                    return Err(e.into())
-                },
+            
+            call = match self.call_llm(session, tools_meta, model).await? {
+                Some(c) => c,
+                None => continue,
             };
 
             tracing::info!(tool = %call.name(), args = %call.arguments(), "executing tool");
@@ -56,25 +50,78 @@ impl<P: LLMProvider> ReactLoop<P> {
                 break;
             }
 
-            let result = match tools[call.name()].execute(call.arguments().clone()) {
-                Ok(result) => result,
-                Err(e) => {
-                    tracing::warn!(tool = %call.name(), error = %e, "tool execution failed");
-                    session.add_error(format!("Tool '{}' failed: {}", call.name(), e));
-                    continue;
-                }
-            };
+            if self.dispatch_tool_step(session, tools, &call).is_err() {
+                continue;
+            }
+        }
+       self.structure_output::<T>(session, call.arguments()).await
+    }
+
+
+    fn dispatch_tool_step(
+        &self,
+        session: &mut AgentSession,
+        tools: &ToolRegistry,
+        call: &AgentToolCall,
+    ) -> Result<(), ()> {
+        let result = match tools[call.name()].execute(call.arguments().clone()) {
+            Ok(result) => result,
+            Err(e) => {
+                tracing::warn!(tool = %call.name(), error = %e, "tool execution failed");
+                session.add_error(format!("Tool '{}' failed: {}", call.name(), e));
+                return Err(());
+            }
+        };
+
+        if call.name() == "final_answer" {
+            session.set_final_answer(call.arguments().clone());
+        } else {
             session.add_tool_call(call.name(), call.arguments().clone(), call.id());
             session.add_tool_result(call.name(), result, call.id());
         }
+        Ok(())
+    }
 
+    async fn call_llm(
+        &mut self,
+        session: &mut AgentSession,
+        tools_meta: &[ToolMetaData],
+        model: &Model,
+    ) -> Result<Option<AgentToolCall>, AgentError> {
+        let request = AgentRequest {
+            model,
+            session,
+            tools_metadata: tools_meta,
+        };
+
+        match self.provider.complete(request).await {
+            Ok(call) => Ok(Some(call)),
+            Err(ProviderError::InvalidToolCal { source }) => {
+                tracing::warn!(Error = %source.to_string(), "tool call failed");
+                let compressed = source.to_string().lines().take(10).collect::<Vec<_>>().join("\n");
+                session.add_error(format!("[ERROR] Invalid tool call or tool not existent:\n{}\n", compressed));
+                Ok(None)
+            }
+            Err(e) => Err(e.into()),
+        }
+    }
+    async fn structure_output<T>(
+        &mut self,
+        session: &mut AgentSession,
+        stop_args: &Value,
+    ) -> Result<T, AgentError>
+    where
+        T: FlatSchema + DeserializeOwned,
+    {
         session.clear_events();
-        session.add_system("Your one and only! job is to return the following text into a structurred output");
-        session.add_user(call.arguments().to_string());
+        session.add_system("Your one and ONLY job is to return the following text into a structurred output");
+        session.add_user(stop_args.to_string());
+
         tracing::info!("Model structurring output");
-        let raw = self.provider.complete_structured(&session, T::schema()).await?;
+        let raw = self.provider.complete_structured(session, T::schema()).await?;
         let typed = serde_json::from_value::<T>(raw).expect("Type must always be right");
         tracing::info!("Model finished structurred output");
         Ok(typed)
     }
+
 }
