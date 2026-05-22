@@ -127,3 +127,79 @@ Formatted Response + Persisted Memory
 - **Pluggable** — New agent architectures and LLM providers can be added easily.
 - **Stateful** — Persistent JSON memory enables cross-session continuity.
 - **Testable** — Integration tests validate real workflow execution end-to-end.
+
+
+## Setup
+ 
+**Requirements**: macOS or Linux with **zsh**.
+ 
+**1. Install Rust**
+ 
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+ 
+Follow the prompts (defaults are fine). Then either open a new terminal or run `source $HOME/.cargo/env`.
+ 
+**2. Get a Groq API key**
+ 
+Sign up at [console.groq.com](https://console.groq.com), create an API key, and copy it. The free tier is enough to get going.
+ 
+**3. Clone and install**
+ 
+```bash
+git clone https://github.com/yourusername/smart-terminal.git
+cd smart-terminal
+cargo install --path .
+```
+ 
+This builds and installs `smart-terminal` into `~/.cargo/bin`, which `rustup` already added to your `$PATH`.
+ 
+**4. Configure zsh**
+ 
+Still inside the cloned directory, append the integration to your `.zshrc`:
+ 
+```bash
+cat <<EOF >> ~/.zshrc
+ 
+# smart-terminal
+export GROQ_API_KEY="paste-your-key-here"
+source "$(pwd)/scripts/zsh/smart-terminal.zsh"
+EOF
+```
+ 
+Then open `~/.zshrc` and replace `paste-your-key-here` with the key from step 2.
+ 
+**5. Apply and verify**
+ 
+```bash
+source ~/.zshrc
+smart-terminal next-cmd "list files"
+```
+ 
+You should see a command suggestion printed. Now open a fresh zsh session and press `^G` on an empty prompt — a ghost suggestion should appear inline. If it does, you're done.
+ 
+> **Groq free tier limits**: the free API key has rate limits that can throttle `investigate` (which chains multiple LLM calls across planner + executor) and some `next-cmd` flows that inspect git diffs or docker state before predicting. `next-cmd` on simple completions stays fast. If you hit rate limits, wait a few seconds and retry — or upgrade your Groq plan.
+
+## Planned Improvements
+
+- **More reliable planning** — improve the investigation planner so it scopes tasks more precisely.
+- **Faster execution** — reduce repeated tool calls and make multi-step workflows more efficient.
+
+## Future Features
+
+- **Per-project instruction profiles** — allow users to define custom behavior and instructions scoped to specific project folders.
+- **Personalized command modeling** — build a lightweight behavioral profile from user workflows and shell habits to create more customized suggestions over time.
+- **More integrations** — support additional shells and future LLM providers.
+
+Contributions, bug reports, and feature suggestions are welcome.
+ 
+## Author & Contact
+
+Built with 🦀 by **Jason Stefanou**  
+Informatics Undergraduate at the National and Kapodistrian University of Athens.
+
+- **Email:** jasonstephanou3@gmail.com
+
+Questions, setup issues, bug reports, and improvement ideas are always welcome.  
+If something breaks, feels unclear, or you have suggestions for new features or workflow improvements, feel free to open an issue or reach out directly.
