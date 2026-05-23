@@ -37,6 +37,20 @@ https://github.com/user-attachments/assets/eeaf6ddf-c746-493a-a106-3639c9605ea0
 
 Press `^G` to fetch a suggestion, `^F` to accept, `^B` to clear.
 
+The inline # description next to each suggestion is color-coded by how reversible the predicted command is — at a glance you know the cost of pressing ^F
+
+> [!NOTE]
+> These levels are intentionally approximate — they are not strict safety guarantees.  
+> They exist to provide a quick intuition about the potential impact and reversibility of a command, so the color alone gives the user an immediate signal about how careful they should be before pressing `^F`.
+
+| Level | Color | Meaning | Example |
+|---|---|---|---|
+| **Full** | 🟢 | read-only or fully reversible | `ls`, `grep`, `git log` |
+| **Mostly** | 🔵 | undoable in one step | `git stash`, `git commit` |
+| **Partial** | 🟡 | some effects stick | `mkdir`, `touch`, `git add` |
+| **Hard** | 🔴 | requires manual cleanup | `git switch`, `docker system prune` |
+| **Irreversible** | 🟥 | cannot be undone | `rm -rf`, `git push --force` |
+
 
 ### `memory` — per-project context
 Memory is scoped per folder. When registered, `next-cmd` reads prior interactions in this project and feeds them back into the model, so suggestions sharpen over time.
