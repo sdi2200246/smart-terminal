@@ -98,11 +98,7 @@ Useful for anything you'd normally answer by poking around — what does this co
 ## Architecture Overview
 
 <p align="center">
-  <img 
-    src="https://github.com/user-attachments/assets/58023429-2c73-42b1-a246-ad342ad71b77" 
-    alt="smart-terminal architecture"
-    width="600"
-  />
+    <img height="500 " alt="smart_terminal_precise_deps" src="https://github.com/user-attachments/assets/3567df53-eab3-44ff-8138-0e566f9eb168" />
 </p>
 
 `smart-terminal` is organized into a modular, layered architecture that separates terminal interaction, reasoning workflows, LLM integration, and system tooling.
@@ -120,20 +116,21 @@ Useful for anything you'd normally answer by poking around — what does this co
 | `tests/` | End-to-end integration tests covering workflows and provider interaction. |
 
 ### High-Level Code Flow
+Every command follows the same call stack. `cli` is the composition root — it constructs `GroqClient` and hands it to the workflow. The workflow spins up one or more agents, each agent assembles a tool registry and delegates to a loop. The loop drives everything: it calls the provider, dispatches tool results, and repeats until the model signals completion, at which point it makes a final structured output call and unwinds back up the stack.
+ 
+Memory is not part of the call chain. The workflow loads it before the loop starts and appends to it after the result returns — nothing below the workflow layer touches it.
+ 
+The only thing that varies per command is what happens inside the workflow box:
+ 
+| Command | Agents | Loop |
+|---|---|---|
+| `next-cmd` | 1 — `cmd_predictor` | `ReactLoop` |
+| `investigate` | 2 — `planner` then `executor` | `ReactLoop` (shared) |
+| `exec` | 1 — `architect` + 1 — `generator` | `ReactLoop` + `OneShot` |
 
-```text
-CLI Command
-    ↓
-Core Session + Memory
-    ↓
-Agent Architecture (OneShot / ReAct)
-    ↓
-Workflow Execution
-    ↓
-LLM + Tool Calls
-    ↓
-Formatted Response + Persisted Memory
-```
+<p align="center">
+<img height="500" alt="smart_terminal_runtime_flow_clean" src="https://github.com/user-attachments/assets/17b9772b-a549-493f-aade-7859b931ac56" />
+</>
 
 ### Design Goals
 
