@@ -126,7 +126,6 @@ The only thing that varies per command is what happens inside the workflow box:
 |---|---|---|
 | `next-cmd` | 1 — `cmd_predictor` | `ReactLoop` |
 | `investigate` | 2 — `planner` then `executor` | `ReactLoop` (shared) |
-| `exec` | 1 — `architect` + 1 — `generator` | `ReactLoop` + `OneShot` |
 
 <p align="center">
 <img height="500" alt="smart_terminal_runtime_flow_clean" src="https://github.com/user-attachments/assets/17b9772b-a549-493f-aade-7859b931ac56" />
