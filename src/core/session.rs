@@ -75,7 +75,7 @@ pub enum ConversationEvent {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug , Clone)]
  pub struct AgentToolCall{
     id: String,
     arguments: Value,
@@ -146,7 +146,8 @@ impl AgentSession {
     }
 
     pub fn add_error(&mut self, er: String) {
-        self.events.push(ConversationEvent::System(er));
+        let error = format!("[ERROR]:{}" , er);
+        self.events.push(ConversationEvent::System(error));
     }
 
     pub fn current_steps(&self) -> usize {

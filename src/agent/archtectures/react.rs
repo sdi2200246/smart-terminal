@@ -4,15 +4,25 @@ use crate::core::error::ProviderError;
 use crate::core::session::{AgentSession, AgentToolCall , Model};
 use crate::core::llm_client::{LLMProvider , AgentRequest};
 use crate::utils::FlatSchema;
+
+use super::hook::{LoopHook , HookAction};
+
 use serde::de::DeserializeOwned;
 use serde_json::Value;
+
 pub struct ReactLoop<P: LLMProvider> {
     provider: P,
+    hook: Option<Box<dyn LoopHook>>,
 }
 
 impl<P: LLMProvider> ReactLoop<P> {
     pub fn new(provider: P) -> Self {
-        ReactLoop { provider }
+        ReactLoop { provider , hook:None }
+    }
+
+    pub fn with_hook(mut self, hook: Box<dyn LoopHook>) -> Self {
+        self.hook = Some(hook);
+        self
     }
 
     #[tracing::instrument(skip(self, session, tools, tools_meta, model), fields(loop_kind = "React"))]
@@ -50,6 +60,13 @@ impl<P: LLMProvider> ReactLoop<P> {
                 break;
             }
 
+            if let Some(hook) = &mut self.hook {
+                if matches!(hook.pre_call(session, &call)?, HookAction::Skip) {
+                    tracing::warn!(tool = %call.name(), "Skipping tool");
+                    continue;
+                }
+            }
+
             if self.dispatch_tool_step(session, tools, &call).is_err() {
                 continue;
             }
@@ -72,7 +89,6 @@ impl<P: LLMProvider> ReactLoop<P> {
                 return Err(());
             }
         };
-
         if call.name() == "final_answer" {
             session.set_final_answer(call.arguments().clone());
         } else {
@@ -114,7 +130,8 @@ impl<P: LLMProvider> ReactLoop<P> {
         T: FlatSchema + DeserializeOwned,
     {
         session.clear_events();
-        session.add_system("Your one and ONLY job is to return the following text into a structurred output");
+        session.add_system("Your one and ONLY job is to return the following text into a structurred output .\
+                                    Dont change the content");
         session.add_user(stop_args.to_string());
 
         tracing::info!("Model structurring output");

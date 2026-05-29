@@ -4,13 +4,13 @@ use crate::core::error::InternalError;
 #[derive(Debug, Error)]
 pub enum ToolError{
 
- #[error("Invallid arguments.")]
+ #[error("[ERROR]Invallid arguments:{source}]")]
     ArgumentsParsing{
         #[source]
         source: anyhow::Error,
     },
     
-    #[error("Tool execution failed: {source}")]
+    #[error("[Error][Tool execution failed: {source}]")]
     ToolExecution{
         #[source]
         source: anyhow::Error,
