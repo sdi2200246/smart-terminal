@@ -1,12 +1,12 @@
 mod prompts;
 mod contexts;
+pub mod hooks;
 use crate::agent::archtectures::react::ReactLoop;
 use crate::agent::archtectures::oneshot::OneShot;
 use crate::core::capability::{Capability, ToolRegistry, ToolMetaData};
 use crate::core::session::{Model , AgentSession};
 use crate::core::llm_client::LLMProvider;
 use crate::tools::git_diff::GitDiffStaged;
-use crate::tools::git_log::GitLog;
 use crate::tools::read_dir::ReadDir;
 use crate::tools::bash::Bash;
 use crate::tools::read_file::ReadFile;

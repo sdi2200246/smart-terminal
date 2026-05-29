@@ -8,7 +8,6 @@ use crate::core::memory::{Conversation, Interaction, Memory, MemoryError, Memory
 const INDEX_FILENAME: &str = "index.json";
 const MEMORY_DIRNAME: &str = "memory";
 
-
 pub struct FolderMemory {
     root: PathBuf,
     cwd: Option<PathBuf>,
