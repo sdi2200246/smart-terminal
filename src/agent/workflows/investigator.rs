@@ -30,7 +30,7 @@ impl FlatSchema for Plan {}
 #[derive(JsonSchema, Deserialize, Serialize, Debug)]
 #[schemars(deny_unknown_fields)]
 pub struct Report {
-    ///A direct report answering the user's question. Not a description of what was done.
+    ///A direct text with out special characters report answering the user's question. Not a description of what was done.
     pub report: String,
 }
 impl FlatSchema for Report {}

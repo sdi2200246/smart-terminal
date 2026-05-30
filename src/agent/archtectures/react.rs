@@ -9,19 +9,26 @@ use super::hook::{LoopHook , HookAction};
 
 use serde::de::DeserializeOwned;
 use serde_json::Value;
+use tokio::sync::mpsc::UnboundedSender;
 
 pub struct ReactLoop<P: LLMProvider> {
     provider: P,
     hook: Option<Box<dyn LoopHook>>,
+    events_stream: Option<UnboundedSender<AgentToolCall>>
 }
 
 impl<P: LLMProvider> ReactLoop<P> {
     pub fn new(provider: P) -> Self {
-        ReactLoop { provider , hook:None }
+        ReactLoop { provider , hook:None , events_stream:None }
     }
 
     pub fn with_hook(mut self, hook: Box<dyn LoopHook>) -> Self {
         self.hook = Some(hook);
+        self
+    }
+
+    pub fn with_events_streaming(mut self, tx: UnboundedSender<AgentToolCall>) -> Self {
+        self.events_stream = Some(tx);
         self
     }
 
@@ -89,11 +96,16 @@ impl<P: LLMProvider> ReactLoop<P> {
                 return Err(());
             }
         };
+
         if call.name() == "final_answer" {
             session.set_final_answer(call.arguments().clone());
         } else {
             session.add_tool_call(call.name(), call.arguments().clone(), call.id());
             session.add_tool_result(call.name(), result, call.id());
+
+            if let Some(stream) = &self.events_stream{
+                let _ = stream.send(call.clone());
+            }
         }
         Ok(())
     }
@@ -130,8 +142,7 @@ impl<P: LLMProvider> ReactLoop<P> {
         T: FlatSchema + DeserializeOwned,
     {
         session.clear_events();
-        session.add_system("Your one and ONLY job is to return the following text into a structurred output .\
-                                    Dont change the content");
+        session.add_system("Your one and ONLY job is to return the following text into a structurred output");
         session.add_user(stop_args.to_string());
 
         tracing::info!("Model structurring output");
