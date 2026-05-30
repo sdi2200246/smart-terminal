@@ -88,7 +88,8 @@ Useful for anything you'd normally answer by poking around — what does this co
 ## Architecture Overview
 
 <p align="center">
-    <img height="500 " alt="smart_terminal_precise_deps" src="https://github.com/user-attachments/assets/3567df53-eab3-44ff-8138-0e566f9eb168" />
+<img height="500" alt="smart_terminal_architecture_straight_deps" src="https://github.com/user-attachments/assets/967a8ce7-3205-4ff7-b1dc-69d2d06750d6" />
+
 </p>
 
 `smart-terminal` is organized into a modular, layered architecture that separates terminal interaction, reasoning workflows, LLM integration, and system tooling.
