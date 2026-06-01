@@ -76,18 +76,8 @@ $ smart-terminal memory delete
  
 Pose a question; a planner agent forms a plan, an executor agent runs it against your filesystem and shell, and you get a grounded answer.
  
-```
-$ smart-terminal investigate "what dependencies does this use?"
-─── Plan ───
-Goal: List the project's direct dependencies.
- 
-  1. Read Cargo.toml to extract the [dependencies] section.
-     Cargo.toml is the canonical source of declared crates.
- 
-─── Report ───
-The project depends on tokio, reqwest, serde, schemars, jsonschema,
-clap, anyhow, thiserror, tracing, and a handful of dev-only crates.
-```
+
+https://github.com/user-attachments/assets/5ac577fa-13b1-421b-a1a2-649fb0c95211
  
 The planner uses `read_dir` to orient and emits a structured plan as JSON. The executor consumes that plan and runs it with `bash`, `read_dir`, and `read_file`, then writes the report.
  
@@ -98,7 +88,8 @@ Useful for anything you'd normally answer by poking around — what does this co
 ## Architecture Overview
 
 <p align="center">
-    <img height="500 " alt="smart_terminal_precise_deps" src="https://github.com/user-attachments/assets/3567df53-eab3-44ff-8138-0e566f9eb168" />
+<img height="500" alt="smart_terminal_architecture_straight_deps" src="https://github.com/user-attachments/assets/967a8ce7-3205-4ff7-b1dc-69d2d06750d6" />
+
 </p>
 
 `smart-terminal` is organized into a modular, layered architecture that separates terminal interaction, reasoning workflows, LLM integration, and system tooling.
