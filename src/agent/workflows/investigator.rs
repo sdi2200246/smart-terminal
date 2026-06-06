@@ -49,11 +49,12 @@ impl<'a, P: LLMProvider> Investigator<'a, P> {
 
         let plan: Plan = {
             let mut planner =
-                Agent::planner(&mut *self.runner, Model::creative(ModelName::GptOss120B));
+                Agent::planner(&mut *self.runner, Model::with_default_temp(ModelName::GptOss120B));
             planner
                 .run(format!("Question:\n{}", question))
                 .await?
         };
+        self.runner.clear_hook_state();
 
         let plan_json = serde_json::to_string_pretty(&plan).expect("plan serializes");
         let user_prompt = format!(

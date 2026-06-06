@@ -26,6 +26,11 @@ impl<P: LLMProvider> ReactLoop<P> {
         self.hook = Some(hook);
         self
     }
+    pub fn clear_hook_state(&mut self){
+        if let Some(hook) = &mut self.hook{
+            hook.clear_state();
+        }
+    }
 
     pub fn with_events_streaming(mut self, tx: UnboundedSender<AgentToolCall>) -> Self {
         self.events_stream = Some(tx);
@@ -66,6 +71,7 @@ impl<P: LLMProvider> ReactLoop<P> {
             if call.name() == "stop" {
                 break;
             }
+            session.add_tool_call(call.name(), call.arguments().clone(), call.id());
 
             if let Some(hook) = &mut self.hook {
                 if matches!(hook.pre_call(session, &call)?, HookAction::Skip) {
@@ -73,7 +79,6 @@ impl<P: LLMProvider> ReactLoop<P> {
                     continue;
                 }
             }
-
             if self.dispatch_tool_step(session, tools, &call).is_err() {
                 continue;
             }
@@ -100,9 +105,7 @@ impl<P: LLMProvider> ReactLoop<P> {
         if call.name() == "final_answer" {
             session.set_final_answer(call.arguments().clone());
         } else {
-            session.add_tool_call(call.name(), call.arguments().clone(), call.id());
             session.add_tool_result(call.name(), result, call.id());
-
             if let Some(stream) = &self.events_stream{
                 let _ = stream.send(call.clone());
             }
@@ -126,8 +129,7 @@ impl<P: LLMProvider> ReactLoop<P> {
             Ok(call) => Ok(Some(call)),
             Err(ProviderError::InvalidToolCal { source }) => {
                 tracing::warn!(Error = %source.to_string(), "tool call failed");
-                let compressed = source.to_string().lines().take(10).collect::<Vec<_>>().join("\n");
-                session.add_error(format!("[ERROR] Invalid tool call or tool not existent:\n{}\n", compressed));
+                session.add_error(format!("{}", source));
                 Ok(None)
             }
             Err(e) => Err(e.into()),
@@ -142,7 +144,7 @@ impl<P: LLMProvider> ReactLoop<P> {
         T: FlatSchema + DeserializeOwned,
     {
         session.clear_events();
-        session.add_system("Your one and ONLY job is to return the following text into a structurred output");
+        session.add_system("Your one and ONLY job is to return the following text into the scheema provided to you");
         session.add_user(stop_args.to_string());
 
         tracing::info!("Model structurring output");

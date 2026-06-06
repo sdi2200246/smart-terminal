@@ -41,6 +41,11 @@ impl LoopHook for ToolsRegulator {
             Ok(HookAction::Continue)
         }
     }
+
+    fn clear_state(&mut self) {
+        self.seen_tools.clear();
+        self.errors.clear();
+    }
 }
 
 

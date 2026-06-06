@@ -22,4 +22,5 @@ pub trait LoopHook: Send + Sync {
     ) -> Result<(), AgentError> {
         Ok(())
     }
+    fn clear_state(&mut self);
 }

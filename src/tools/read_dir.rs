@@ -101,6 +101,8 @@ mod tests {
     fn test_invalid_path_returns_error() {
         let tool = ReadDir;
         let result = tool.execute(json!({ "path": "./nonexistent", "recursive": false }));
+
+        print!("{:?}" , result);
         assert!(result.is_err());
     }
 

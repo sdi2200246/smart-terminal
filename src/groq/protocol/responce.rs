@@ -55,11 +55,12 @@ impl TryFrom<GroqResponse> for LlmToolCall {
         }
         
         let tool = choice.message.tool_calls.into_iter().next()
-            .ok_or(GroqError::InvalidToolCall {
-                source: anyhow::anyhow!(
-                    "Model responded with text"
-                ),
-            })?;
+           .ok_or(GroqError::MalformedResponse {
+                    source: anyhow::anyhow!(
+                        "Model stopped without producing a conclusion. \
+                         Expected non-empty content alongside finish_reason=stop."
+                    ),
+                })?;
 
         let args_str = tool.function.arguments.ok_or(GroqError::InvalidToolCall {
             source: anyhow::anyhow!("No arguments where found"),

@@ -1,3 +1,5 @@
+use std::error::Error;
+
 use crate::agent::archtectures::react::ReactLoop;
 use crate::agent::workflows::investigator::Investigator;
 use crate::cli::cli::InvestigateArgs;
@@ -29,7 +31,7 @@ pub async fn run(args: InvestigateArgs) {
             println!("{}", report.report);
         }
         Err(e) => {
-            eprintln!("investigation failed: {e}");
+            println!("Investigation failled {:?}" , e.source());
             std::process::exit(1);
         }
     }
