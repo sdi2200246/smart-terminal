@@ -1,8 +1,8 @@
-use std::future::Future;
-use serde_json::Value;
-use super::session::{AgentSession, AgentToolCall , Model};
+use super::capability::ToolMetaData;
 use super::error::ProviderError;
-use super::capability::{ToolMetaData};
+use super::session::{AgentSession, AgentToolCall, Model};
+use serde_json::Value;
+use std::future::Future;
 pub struct AgentRequest<'a> {
     pub model: &'a Model,
     pub session: &'a AgentSession,

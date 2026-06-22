@@ -1,14 +1,16 @@
-use std::process::Command;
-use serde_json::Value;
-use crate::core::capability::{Capability , ToolMetaData};
 use super::error::ToolError;
+use crate::core::capability::{Capability, ToolMetaData};
+use serde_json::Value;
+use std::process::Command;
 
 pub fn git_diff_staged(_args: Value) -> Result<String, ToolError> {
     let output = Command::new("git")
         .arg("diff")
-        .arg("--staged").arg("--stat").arg("-p")
+        .arg("--staged")
+        .arg("--stat")
+        .arg("-p")
         .output()
-        .map_err(|e| ToolError::ToolExecution { source: (e.into())})?;
+        .map_err(|e| ToolError::ToolExecution { source: (e.into()) })?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
 
@@ -29,7 +31,8 @@ impl Capability for GitDiffStaged {
     fn metadata(&self) -> ToolMetaData {
         ToolMetaData {
             name: self.name().into(),
-            description:"Returns the staged changes (git diff --staged) of the current repository".into(),
+            description: "Returns the staged changes (git diff --staged) of the current repository"
+                .into(),
             parameters: serde_json::json!({
                 "type": "object",
                 "properties": {}
@@ -49,8 +52,7 @@ mod tests {
 
     #[test]
     fn test_git_diff_staged_runs() {
-        let result = git_diff_staged(json!({}))
-            .expect("git diff --staged should run");
+        let result = git_diff_staged(json!({})).expect("git diff --staged should run");
 
         println!("{result}");
     }

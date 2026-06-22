@@ -1,6 +1,6 @@
-use serde_json::Value;
-use crate::core::capability::{Capability, ToolMetaData};
 use super::error::ToolError;
+use crate::core::capability::{Capability, ToolMetaData};
+use serde_json::Value;
 
 pub struct Json {
     pub properties: Value,
@@ -20,10 +20,11 @@ impl Capability for Json {
     }
 
     fn execute(&self, args: Value) -> Result<String, ToolError> {
-        let validator = jsonschema::validator_for(&self.properties)
-            .map_err(|e| ToolError::ArgumentsParsing {
+        let validator = jsonschema::validator_for(&self.properties).map_err(|e| {
+            ToolError::ArgumentsParsing {
                 source: anyhow::anyhow!("Invalid contract schema: {}", e),
-            })?;
+            }
+        })?;
 
         if validator.is_valid(&args) {
             Ok(args.to_string())
@@ -42,10 +43,10 @@ impl Capability for Json {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
+    use crate::utils::FlatSchema;
     use schemars::JsonSchema;
     use serde::Deserialize;
-    use crate::utils::FlatSchema;
+    use serde_json::json;
 
     #[derive(JsonSchema, Deserialize)]
     #[schemars(deny_unknown_fields)]
@@ -106,7 +107,9 @@ mod tests {
         let err = tool.execute(args).unwrap_err();
         let msg = err.to_string();
         // The wrapped anyhow error should mention what went wrong.
-        let source = std::error::Error::source(&err).map(|s| s.to_string()).unwrap_or_default();
+        let source = std::error::Error::source(&err)
+            .map(|s| s.to_string())
+            .unwrap_or_default();
         assert!(
             source.contains("man") || source.contains("required"),
             "expected validation detail in error source, got: {source}"

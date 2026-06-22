@@ -1,5 +1,5 @@
 pub mod agents;
-pub mod error;
-pub mod workflows;
 pub mod archtectures;
+pub mod error;
 pub mod memory;
+pub mod workflows;

@@ -1,16 +1,16 @@
-use thiserror::Error;
 use crate::core::error::ProviderError;
+use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum GroqError {
     #[error("Token limit exceeded")]
-    TokenLimit{
+    TokenLimit {
         #[source]
         source: anyhow::Error,
     },
 
     #[error("Invalid tool call from model")]
-    InvalidToolCall{
+    InvalidToolCall {
         #[source]
         source: anyhow::Error,
     },
@@ -22,26 +22,27 @@ pub enum GroqError {
     },
 
     #[error("API request rejected")]
-    Protocol{
+    Protocol {
         #[source]
         source: anyhow::Error,
     },
 
     #[error("HTTP transport error")]
-    Http{
+    Http {
         #[source]
         source: anyhow::Error,
     },
 }
 
-
 impl From<GroqError> for ProviderError {
     fn from(e: GroqError) -> Self {
         match e {
-            GroqError::TokenLimit { source }        => ProviderError::TokenLimit { source },
-            GroqError::InvalidToolCall { source }   => ProviderError::InvalidToolCal { source },
+            GroqError::TokenLimit { source } => ProviderError::TokenLimit { source },
+            GroqError::InvalidToolCall { source } => ProviderError::InvalidToolCal { source },
             GroqError::MalformedResponse { source } => ProviderError::MalformedResponse { source },
-            other                               => ProviderError::Protocol { source: other.into() },
+            other => ProviderError::Protocol {
+                source: other.into(),
+            },
         }
     }
 }

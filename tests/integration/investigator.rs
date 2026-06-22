@@ -3,8 +3,8 @@ use std::error::Error;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
 
-use smart_terminal::agent::archtectures::react::ReactLoop;
 use smart_terminal::agent::agents::hooks::ToolsRegulator;
+use smart_terminal::agent::archtectures::react::ReactLoop;
 use smart_terminal::agent::workflows::investigator::{Investigator, Plan, Report};
 use smart_terminal::groq::client::GroqClient;
 
@@ -44,9 +44,9 @@ async fn run_case(label: &str, question: &str) -> (Plan, Report) {
     println!("report: {}", report.report);
 
     // Shape checks every investigation must pass — keeps the per-test asserts focused on semantics.
-    assert!(!plan.goal.is_empty(),       "[{label}] plan.goal empty");
-    assert!(!plan.steps.is_empty(),      "[{label}] plan.steps empty");
-    assert!(!report.report.is_empty(),  "[{label}] report.summary empty");
+    assert!(!plan.goal.is_empty(), "[{label}] plan.goal empty");
+    assert!(!plan.steps.is_empty(), "[{label}] plan.steps empty");
+    assert!(!report.report.is_empty(), "[{label}] report.summary empty");
 
     (plan, report)
 }

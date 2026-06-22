@@ -1,22 +1,21 @@
-use crate::core::session::{AgentSession , AgentToolCall};
+use crate::agent::archtectures::hook::{HookAction, LoopHook};
 use crate::agent::error::AgentError;
-use crate::agent::archtectures::hook::{LoopHook , HookAction};
+use crate::core::session::{AgentSession, AgentToolCall};
 use std::collections::HashMap;
 
-pub struct ToolsRegulator{
-    seen_tools:HashMap<String,AgentToolCall>,
-    errors:Vec<AgentError> 
+pub struct ToolsRegulator {
+    seen_tools: HashMap<String, AgentToolCall>,
+    errors: Vec<AgentError>,
 }
 
 impl ToolsRegulator {
-
-    pub fn new()->Self{
-        Self { 
-            seen_tools:HashMap::new(),
-            errors:Vec::new()
+    pub fn new() -> Self {
+        Self {
+            seen_tools: HashMap::new(),
+            errors: Vec::new(),
         }
     }
-    pub fn mark_as_seen(&mut self , tool:AgentToolCall , key :String){
+    pub fn mark_as_seen(&mut self, tool: AgentToolCall, key: String) {
         self.seen_tools.insert(key, tool);
     }
 }
@@ -27,7 +26,6 @@ impl LoopHook for ToolsRegulator {
         session: &mut AgentSession,
         call: &AgentToolCall,
     ) -> Result<HookAction, AgentError> {
-
         let key = format!("{}::{}", call.name(), call.arguments());
 
         if let Some(prev_call) = self.seen_tools.get(&key) {
@@ -37,7 +35,7 @@ impl LoopHook for ToolsRegulator {
             ));
             Ok(HookAction::Skip)
         } else {
-            self.mark_as_seen(call.clone() , key);
+            self.mark_as_seen(call.clone(), key);
             Ok(HookAction::Continue)
         }
     }
@@ -48,12 +46,11 @@ impl LoopHook for ToolsRegulator {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::session::ConversationEvent;
     use serde_json::json;
-    use crate::core::session::{ConversationEvent};
 
     fn fake_call(name: &str, args: serde_json::Value) -> AgentToolCall {
         AgentToolCall::new(name.into(), "call_1".into(), args)
@@ -79,7 +76,7 @@ mod tests {
         let action = hook.pre_call(&mut session, &call).unwrap();
 
         assert!(matches!(action, HookAction::Skip));
-        println!("{:?}" , session);
+        println!("{:?}", session);
     }
 
     #[test]
@@ -105,10 +102,12 @@ mod tests {
         hook.pre_call(&mut session, &call).unwrap();
         hook.pre_call(&mut session, &call).unwrap();
 
-        let has_error = session.events().iter().any(|e| matches!(
-            e,
-            ConversationEvent::System(s) if s.contains("already called")
-        ));
+        let has_error = session.events().iter().any(|e| {
+            matches!(
+                e,
+                ConversationEvent::System(s) if s.contains("already called")
+            )
+        });
         assert!(has_error, "should inject error message on duplicate");
     }
 }

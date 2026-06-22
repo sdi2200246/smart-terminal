@@ -1,7 +1,7 @@
-use std::process::Command;
-use serde_json::Value;
-use crate::core::capability::{Capability, ToolMetaData};
 use super::error::ToolError;
+use crate::core::capability::{Capability, ToolMetaData};
+use serde_json::Value;
+use std::process::Command;
 
 pub fn git_log(_args: Value) -> Result<String, ToolError> {
     let output = Command::new("git")
@@ -42,8 +42,7 @@ mod tests {
 
     #[test]
     fn test_git_log_runs() {
-        let result = git_log(json!({}))
-            .expect("git log should run");
+        let result = git_log(json!({})).expect("git log should run");
 
         println!("{}", result);
     }

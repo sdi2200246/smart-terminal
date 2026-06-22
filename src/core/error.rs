@@ -3,13 +3,13 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum ProviderError {
     #[error("Token limit exceeded")]
-    TokenLimit{
+    TokenLimit {
         #[source]
         source: anyhow::Error,
     },
 
     #[error("Invalid tool call from model")]
-    InvalidToolCal{
+    InvalidToolCal {
         #[source]
         source: anyhow::Error,
     },
@@ -21,15 +21,15 @@ pub enum ProviderError {
     },
 
     #[error("API request rejected")]
-    Protocol{
+    Protocol {
         #[source]
         source: anyhow::Error,
     },
 }
 
 #[derive(Debug, Error)]
-pub enum InternalError{
-     #[error("Tool execution failed: {source}")]
+pub enum InternalError {
+    #[error("Tool execution failed: {source}")]
     Tool {
         #[source]
         source: anyhow::Error,
@@ -40,5 +40,4 @@ pub enum InternalError{
         #[source]
         source: anyhow::Error,
     },
-
 }

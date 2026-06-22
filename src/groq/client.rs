@@ -1,20 +1,19 @@
-use reqwest::{Client, StatusCode };
-use serde_json::Value;
-use crate::core::llm_client::{LLMProvider , AgentRequest};
-use crate::core::session::{AgentSession , AgentToolCall};
-use crate::core::error::ProviderError;
 use super::error::GroqError;
-use super::protocol::responce::{GroqResponse , LlmToolCall , LlmStructuredOutput};
 use super::protocol::request::GroqRequest;
+use super::protocol::responce::{GroqResponse, LlmStructuredOutput, LlmToolCall};
+use crate::core::error::ProviderError;
+use crate::core::llm_client::{AgentRequest, LLMProvider};
+use crate::core::session::{AgentSession, AgentToolCall};
+use reqwest::{Client, StatusCode};
+use serde_json::Value;
 
 #[derive(Clone)]
-pub struct GroqClient{
-    pub client:Client,
-    pub api_key:String,
-    pub completions_url:String,
+pub struct GroqClient {
+    pub client: Client,
+    pub api_key: String,
+    pub completions_url: String,
 }
-impl GroqClient{
-
+impl GroqClient {
     pub fn pooled() -> Self {
         Self::build(2)
     }
@@ -38,14 +37,15 @@ impl GroqClient{
         }
     }
 
-    pub async fn call_llm(&mut self,req: GroqRequest) -> Result<GroqResponse, GroqError> {
-        let res = self.client
+    pub async fn call_llm(&mut self, req: GroqRequest) -> Result<GroqResponse, GroqError> {
+        let res = self
+            .client
             .post(&self.completions_url)
             .header("Authorization", format!("Bearer {}", &self.api_key))
             .json(&req)
             .send()
             .await
-            .map_err(| e| GroqError::Http{source:e.into()})?;
+            .map_err(|e| GroqError::Http { source: e.into() })?;
 
         let status = res.status();
 
@@ -60,50 +60,63 @@ impl GroqClient{
     }
 
     fn map_status(status: StatusCode, body: String) -> GroqError {
-
         if status == StatusCode::PAYLOAD_TOO_LARGE {
-            return GroqError::TokenLimit{ source: anyhow::anyhow!("{} {}", status, body),};
+            return GroqError::TokenLimit {
+                source: anyhow::anyhow!("{} {}", status, body),
+            };
         }
 
-        if status == StatusCode::BAD_REQUEST && (body.contains("tool_use_failed")|| body.contains("output_parse_failed")){
-            return GroqError::InvalidToolCall { source: anyhow::anyhow!("{} {}", status, body) };
+        if status == StatusCode::BAD_REQUEST
+            && (body.contains("tool_use_failed") || body.contains("output_parse_failed"))
+        {
+            return GroqError::InvalidToolCall {
+                source: anyhow::anyhow!("{} {}", status, body),
+            };
         }
 
         GroqError::Protocol {
             source: anyhow::anyhow!("{} {}", status, body),
         }
-    }  
+    }
 }
-impl Default for  GroqClient{
-    
-    fn default()->GroqClient{
-
+impl Default for GroqClient {
+    fn default() -> GroqClient {
         let client = Client::builder()
             .pool_idle_timeout(std::time::Duration::from_secs(10))
-            .pool_max_idle_per_host(0) 
+            .pool_max_idle_per_host(0)
             .tcp_keepalive(std::time::Duration::from_secs(30))
             .build()
             .unwrap();
 
-        GroqClient{
+        GroqClient {
             client,
-            api_key:std::env::var("GROQ_API_KEY").unwrap(),
-            completions_url:"https://api.groq.com/openai/v1/chat/completions".into(),
+            api_key: std::env::var("GROQ_API_KEY").unwrap(),
+            completions_url: "https://api.groq.com/openai/v1/chat/completions".into(),
         }
     }
 }
 
 impl LLMProvider for GroqClient {
-
-    async fn complete(&mut self , request:AgentRequest<'_>)->Result<AgentToolCall,ProviderError>{
+    async fn complete(
+        &mut self,
+        request: AgentRequest<'_>,
+    ) -> Result<AgentToolCall, ProviderError> {
         let req = GroqRequest::from(&request);
         let res = self.call_llm(req).await.map_err(ProviderError::from)?;
         let tool_call = LlmToolCall::try_from(res).map_err(ProviderError::from)?;
 
-        Ok(AgentToolCall::new(tool_call.name, tool_call.id, tool_call.args))
+        Ok(AgentToolCall::new(
+            tool_call.name,
+            tool_call.id,
+            tool_call.args,
+        ))
     }
 
-     async fn complete_structured(&mut self, session: &AgentSession, schema: Value) -> Result<Value, ProviderError> {
+    async fn complete_structured(
+        &mut self,
+        session: &AgentSession,
+        schema: Value,
+    ) -> Result<Value, ProviderError> {
         let req = GroqRequest::structured(&session, schema);
         let res = self.call_llm(req).await.map_err(ProviderError::from)?;
         let out = LlmStructuredOutput::try_from(res).map_err(ProviderError::from)?;
@@ -113,8 +126,8 @@ impl LLMProvider for GroqClient {
 
 #[cfg(test)]
 mod unit {
-    use crate::groq::protocol::responce::{GroqResponse, LlmToolCall};
     use crate::core::session::AgentToolCall;
+    use crate::groq::protocol::responce::{GroqResponse, LlmToolCall};
     use serde_json::json;
 
     fn groq_response(tool_name: &str, arguments: &str) -> GroqResponse {
@@ -136,7 +149,8 @@ mod unit {
                     }]
                 }
             }]
-        })).unwrap()
+        }))
+        .unwrap()
     }
 
     #[test]

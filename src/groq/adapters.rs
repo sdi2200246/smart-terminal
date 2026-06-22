@@ -1,16 +1,22 @@
-use crate::core::session::{ConversationEvent , ModelName};
-use crate::core::llm_client::AgentRequest;
-use super::protocol:: message::Message;
-use super::protocol::tool::{self,Tool};
+use super::protocol::message::Message;
 use super::protocol::request::GroqRequest;
+use super::protocol::tool::{self, Tool};
+use crate::core::llm_client::AgentRequest;
+use crate::core::session::{ConversationEvent, ModelName};
 
-impl From<&ConversationEvent> for Message{
-    fn from(event:&ConversationEvent)->Message{
-        match event{
-            ConversationEvent::System(message)                                   => Message::system(Some(message.clone())),
-            ConversationEvent::User(message)                                     => Message::user(Some(message.clone())),
-            ConversationEvent::ToolResult { name, result, id } => Message::tool_responce(Some(result.clone()), id.clone(), name.clone()),
-            ConversationEvent::ToolCall { name, arguments, id } => Message::tool_call(name.clone(), id.clone(), arguments.clone()),
+impl From<&ConversationEvent> for Message {
+    fn from(event: &ConversationEvent) -> Message {
+        match event {
+            ConversationEvent::System(message) => Message::system(Some(message.clone())),
+            ConversationEvent::User(message) => Message::user(Some(message.clone())),
+            ConversationEvent::ToolResult { name, result, id } => {
+                Message::tool_responce(Some(result.clone()), id.clone(), name.clone())
+            }
+            ConversationEvent::ToolCall {
+                name,
+                arguments,
+                id,
+            } => Message::tool_call(name.clone(), id.clone(), arguments.clone()),
         }
     }
 }
@@ -18,9 +24,9 @@ impl From<&ConversationEvent> for Message{
 impl From<ModelName> for String {
     fn from(model: ModelName) -> String {
         match model {
-            ModelName::GptOss120B   => "openai/gpt-oss-120b".into(),
-            ModelName::GptOss20B    => "openai/gpt-oss-20b".into(),
-            ModelName::Llma3p18B  => "llama-3.1-8b-instant".into(),
+            ModelName::GptOss120B => "openai/gpt-oss-120b".into(),
+            ModelName::GptOss20B => "openai/gpt-oss-20b".into(),
+            ModelName::Llma3p18B => "llama-3.1-8b-instant".into(),
             ModelName::Llma3p370B => "llama-3.3-70b-versatile".into(),
         }
     }
@@ -28,11 +34,11 @@ impl From<ModelName> for String {
 
 impl From<&AgentRequest<'_>> for GroqRequest {
     fn from(request: &AgentRequest<'_>) -> Self {
-        let messages = request.session.events.iter()
-            .map(Message::from)
-            .collect();
+        let messages = request.session.events.iter().map(Message::from).collect();
 
-        let tools = request.tools_metadata.iter()
+        let tools = request
+            .tools_metadata
+            .iter()
             .map(|t| Tool {
                 r#type: "function".into(),
                 function: tool::ToolMetaData {
@@ -57,14 +63,13 @@ impl From<&AgentRequest<'_>> for GroqRequest {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::{json};
     use crate::core::capability::ToolMetaData;
+    use crate::core::session::AgentSession;
     use crate::core::session::Model;
-    use crate::core::session::{AgentSession};
+    use serde_json::json;
 
     // ---------- SYSTEM ----------
     #[test]
@@ -151,7 +156,7 @@ mod tests {
         assert_eq!(serialized, expected);
     }
 
-     #[test]
+    #[test]
     fn agent_request_maps_to_groq_request_correctly() {
         // ---- Arrange ----
         let session = AgentSession {
@@ -165,7 +170,7 @@ mod tests {
                 },
             ],
             steps: 5,
-            final_answer:None
+            final_answer: None,
         };
 
         let tools_metadata = vec![ToolMetaData {
@@ -208,5 +213,4 @@ mod tests {
         assert_eq!(req.model, "openai/gpt-oss-120b");
         assert_eq!(req.temperature, 0.5);
     }
-    
 }

@@ -2,8 +2,8 @@ use std::env;
 use std::path::PathBuf;
 
 use crate::agent::memory::FolderMemory;
+use crate::cli::cli::{MemoryAction, MemoryArgs};
 use crate::core::memory::{Memory, MemoryError};
-use crate::cli::cli::{MemoryArgs, MemoryAction};
 
 pub async fn run(args: MemoryArgs) {
     let cwd = match env::current_dir() {
@@ -23,10 +23,10 @@ pub async fn run(args: MemoryArgs) {
     };
 
     let result = match args.action {
-        MemoryAction::Init   => init(&mut memory, &cwd),
+        MemoryAction::Init => init(&mut memory, &cwd),
         MemoryAction::Delete => delete(&mut memory, &cwd),
-        MemoryAction::Clear  => clear(&mut memory, &cwd),
-        MemoryAction::Show   => show(&mut memory, &cwd),
+        MemoryAction::Clear => clear(&mut memory, &cwd),
+        MemoryAction::Show => show(&mut memory, &cwd),
     };
 
     if let Err(e) = result {
@@ -53,7 +53,10 @@ fn clear(memory: &mut FolderMemory, cwd: &PathBuf) -> Result<(), MemoryError> {
         return Ok(());
     }
     memory.clear()?;
-    println!("\x1b[32m✓ cleared\x1b[0m interactions for {}", cwd.display());
+    println!(
+        "\x1b[32m✓ cleared\x1b[0m interactions for {}",
+        cwd.display()
+    );
     Ok(())
 }
 
@@ -69,9 +72,18 @@ fn show(memory: &mut FolderMemory, cwd: &PathBuf) -> Result<(), MemoryError> {
         return Ok(());
     }
 
-    println!("memory for {} ({} interactions):\n", cwd.display(), conv.interactions.len());
+    println!(
+        "memory for {} ({} interactions):\n",
+        cwd.display(),
+        conv.interactions.len()
+    );
     for (i, entry) in conv.interactions.iter().enumerate() {
-        println!("{:>3}. {} → {}", i + 1, entry.user_input.trim(), entry.predicted_cmd);
+        println!(
+            "{:>3}. {} → {}",
+            i + 1,
+            entry.user_input.trim(),
+            entry.predicted_cmd
+        );
     }
     Ok(())
 }

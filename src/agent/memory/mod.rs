@@ -23,7 +23,7 @@ impl FolderMemory {
         }
     }
 
-   pub fn project_local() -> Result<Self, MemoryError> {
+    pub fn project_local() -> Result<Self, MemoryError> {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(MEMORY_DIRNAME);
         fs::create_dir_all(&root)?;
         Ok(Self::new(root))
@@ -74,7 +74,6 @@ impl FolderMemory {
         let json = serde_json::to_string_pretty(conv)?;
         atomic_write(&path, &json)
     }
-
 }
 
 impl Memory for FolderMemory {
@@ -101,7 +100,10 @@ impl Memory for FolderMemory {
     }
 
     fn append(&mut self, entry: Interaction) -> Result<(), MemoryError> {
-        let conv = self.conversation.as_mut().ok_or(MemoryError::NotRegistered)?;
+        let conv = self
+            .conversation
+            .as_mut()
+            .ok_or(MemoryError::NotRegistered)?;
         conv.push(entry);
         self.persist()
     }
@@ -171,7 +173,6 @@ impl Memory for FolderMemory {
     }
 }
 
-
 fn atomic_write(path: &Path, contents: &str) -> Result<(), MemoryError> {
     let tmp = path.with_extension("tmp");
     fs::write(&tmp, contents)?;
@@ -185,7 +186,13 @@ fn slugify(path: &Path) -> String {
         .and_then(|s| s.to_str())
         .unwrap_or("root")
         .chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect::<String>();
 
     let mut hasher = DefaultHasher::new();
@@ -279,7 +286,9 @@ mod tests {
     #[test]
     fn with_conversation_seeds_in_memory_state_only() {
         let tmp = TempDir::new().unwrap();
-        let seed = Conversation { interactions: vec![entry("prev", "ls")] };
+        let seed = Conversation {
+            interactions: vec![entry("prev", "ls")],
+        };
         let mem = FolderMemory::with_conversation(tmp.path(), Path::new("/x"), seed);
 
         let conv = mem.current().unwrap();
@@ -360,6 +369,9 @@ mod tests {
         let mem = FolderMemory::project_local().unwrap();
         let expected_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("memory");
         assert_eq!(mem.root, expected_root);
-        assert!(expected_root.exists(), "project_local should create the directory");
+        assert!(
+            expected_root.exists(),
+            "project_local should create the directory"
+        );
     }
 }

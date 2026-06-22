@@ -1,6 +1,6 @@
-pub mod groq;
-pub mod core;
 pub mod agent;
-pub mod tools;
 pub mod cli;
+pub mod core;
+pub mod groq;
+pub mod tools;
 pub mod utils;

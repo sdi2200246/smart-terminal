@@ -2,8 +2,8 @@ use crate::core::session::AgentToolCall;
 use serde_json::Value;
 
 const RESET: &str = "\x1b[0m";
-const BOLD:  &str = "\x1b[1m";
-const DIM:   &str = "\x1b[2m";
+const BOLD: &str = "\x1b[1m";
+const DIM: &str = "\x1b[2m";
 const GREEN: &str = "\x1b[32m";
 
 pub(super) fn format_call(call: &AgentToolCall) -> String {

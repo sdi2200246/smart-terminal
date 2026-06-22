@@ -1,6 +1,6 @@
-use smart_terminal::cli::cli::{Cli , Commands};
-use smart_terminal::cli::cmds::{memory , next_cmd , investigate};
 use clap::Parser;
+use smart_terminal::cli::cli::{Cli, Commands};
+use smart_terminal::cli::cmds::{investigate, memory, next_cmd};
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
@@ -9,15 +9,20 @@ pub struct Router;
 impl Router {
     pub async fn dispatch(cli: Cli) {
         match cli.command {
-            Commands::Memory(args) => {memory::run(args).await;}
-            Commands::NextCmd(args) => {next_cmd::run(args).await;}
-            Commands::Investigate(args) => { investigate::run(args).await; }
+            Commands::Memory(args) => {
+                memory::run(args).await;
+            }
+            Commands::NextCmd(args) => {
+                next_cmd::run(args).await;
+            }
+            Commands::Investigate(args) => {
+                investigate::run(args).await;
+            }
         }
     }
 }
 #[tokio::main]
 async fn main() {
-
     let log_dir = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|p| p.to_path_buf()))
@@ -30,12 +35,13 @@ async fn main() {
         .with(
             tracing_subscriber::fmt::layer()
                 .with_writer(non_blocking)
-                .with_ansi(false)
+                .with_ansi(false),
         )
-        .with(tracing_subscriber::EnvFilter::new("warn,smart_terminal=debug"))
+        .with(tracing_subscriber::EnvFilter::new(
+            "warn,smart_terminal=debug",
+        ))
         .try_init()
         .ok();
-
 
     let cli = Cli::parse();
     tracing::info!("CMD Task Started");

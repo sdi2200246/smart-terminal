@@ -1,8 +1,8 @@
+use super::tool::{ToolCall, ToolMetaData};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use super::tool::{ToolCall , ToolMetaData};
 
-#[derive(Serialize, Deserialize, Debug, Clone , PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Message {
     pub role: String,
     #[serde(default)]
@@ -10,82 +10,81 @@ pub struct Message {
     pub content: Option<String>,
 
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
-    pub tool_calls:Vec<ToolCall>,
+    pub tool_calls: Vec<ToolCall>,
 
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<String>,
 
-     #[serde(default)]
-     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+}
 
-}   
-
-impl  Message {
-
-    pub fn user(content:Option<String>)->Message{
+impl Message {
+    pub fn user(content: Option<String>) -> Message {
         Message {
-            role:"user".into(),
+            role: "user".into(),
             content,
-            tool_calls:vec![],
-            tool_call_id:None,
-            name:None
+            tool_calls: vec![],
+            tool_call_id: None,
+            name: None,
         }
-
     }
-    pub fn system(content:Option<String>)->Message{
+    pub fn system(content: Option<String>) -> Message {
         Message {
-            role:"system".into(),
+            role: "system".into(),
             content,
-            tool_calls:vec![],
-            tool_call_id:None,
-            name:None
+            tool_calls: vec![],
+            tool_call_id: None,
+            name: None,
         }
-
     }
-    pub fn context<T:Serialize>(ctx:&T)->Message{
+    pub fn context<T: Serialize>(ctx: &T) -> Message {
         let json = serde_json::to_string_pretty(ctx).unwrap();
         let content = format!("Context:\n{}", json);
 
         Message {
-            role:"system".into(),
-            content:Some(content),
-            tool_calls:vec![],
-            tool_call_id:None,
-            name:None
+            role: "system".into(),
+            content: Some(content),
+            tool_calls: vec![],
+            tool_call_id: None,
+            name: None,
         }
     }
-    pub fn tool_responce(content: Option<String> , tool_call_id:String , tool_name:String)->Message{
-        Message { 
-            role:"tool".into(),
-            content:content,
-            tool_calls:vec![],
-            tool_call_id:Some(tool_call_id),
-            name: Some(tool_name)
+    pub fn tool_responce(
+        content: Option<String>,
+        tool_call_id: String,
+        tool_name: String,
+    ) -> Message {
+        Message {
+            role: "tool".into(),
+            content: content,
+            tool_calls: vec![],
+            tool_call_id: Some(tool_call_id),
+            name: Some(tool_name),
         }
     }
-    pub fn tool_call(name:String , id:String , args:Value)->Message{
-        let function = ToolMetaData{
-            name:name.clone(),
-            description:None,
-            parameters:serde_json::Value::Null,
-            arguments:Some(args.to_string()),
+    pub fn tool_call(name: String, id: String, args: Value) -> Message {
+        let function = ToolMetaData {
+            name: name.clone(),
+            description: None,
+            parameters: serde_json::Value::Null,
+            arguments: Some(args.to_string()),
         };
-        let tool_call = ToolCall{
-            id:id.clone(),
-            call_type:"function".to_string(),
+        let tool_call = ToolCall {
+            id: id.clone(),
+            call_type: "function".to_string(),
             function,
         };
         Message {
-            role:"assistant".into(),
-            content:None,
-            tool_calls:vec![tool_call],
-            tool_call_id:None,
-            name:None,
+            role: "assistant".into(),
+            content: None,
+            tool_calls: vec![tool_call],
+            tool_call_id: None,
+            name: None,
         }
     }
-
 }
 #[cfg(test)]
 mod tests {
@@ -111,6 +110,3 @@ mod tests {
         println!("CONTENT:\n{}", msg.content.clone().unwrap());
     }
 }
-
-
-

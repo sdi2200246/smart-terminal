@@ -41,7 +41,11 @@ mod integration {
         assert!(result.is_ok(), "complete() failed: {:?}", result.err());
 
         let call = result.unwrap();
-        println!("Got tool call: {} with args: {}", call.name(), call.arguments());
+        println!(
+            "Got tool call: {} with args: {}",
+            call.name(),
+            call.arguments()
+        );
         assert_eq!(call.name(), "stop");
     }
 }
@@ -50,8 +54,8 @@ mod integration {
 mod integration_structured_responces {
     use schemars::JsonSchema;
     use serde::Deserialize;
-    use smart_terminal::core::llm_client::{LLMProvider};
-    use smart_terminal::core::session::{AgentSession};
+    use smart_terminal::core::llm_client::LLMProvider;
+    use smart_terminal::core::session::AgentSession;
     use smart_terminal::groq::client::GroqClient;
     use smart_terminal::utils::FlatSchema;
 
@@ -98,15 +102,24 @@ mod integration_structured_responces {
     async fn structured_returns_valid_next_command() {
         let mut client = client();
         let session = session("git sta");
-        let result = client.complete_structured(&session, NextCommand::schema()).await;
+        let result = client
+            .complete_structured(&session, NextCommand::schema())
+            .await;
 
-        assert!(result.is_ok(), "complete_structured failed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "complete_structured failed: {:?}",
+            result.err()
+        );
         let value = result.unwrap();
         println!("raw value: {value}");
 
         let parsed: NextCommand = serde_json::from_value(value).expect("schema mismatch");
         assert!(!parsed.cmd.is_empty());
         assert!(!parsed.man.is_empty());
-        println!("cmd: {}\nman: {}\nscale: {:?}", parsed.cmd, parsed.man, parsed.scale);
+        println!(
+            "cmd: {}\nman: {}\nscale: {:?}",
+            parsed.cmd, parsed.man, parsed.scale
+        );
     }
 }

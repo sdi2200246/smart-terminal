@@ -1,12 +1,12 @@
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use crate::agent::agents::{Agent, OneShotAgent};
 use crate::agent::archtectures::oneshot::OneShot;
 use crate::agent::archtectures::react::ReactLoop;
-use crate::agent::agents::{Agent, OneShotAgent};
 use crate::agent::error::AgentError;
 use crate::core::llm_client::LLMProvider;
 use crate::core::session::{Model, ModelName};
 use crate::utils::FlatSchema;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 
 #[derive(JsonSchema, Deserialize, Serialize, Debug)]
 #[schemars(deny_unknown_fields)]
@@ -127,7 +127,9 @@ impl<'a, P: LLMProvider> ScriptGenerator<'a, P> {
                 &mut *self.react_runner,
                 Model::creative(ModelName::GptOss120B),
             );
-            architect.run(format!("Script request:\n{}", prompt)).await?
+            architect
+                .run(format!("Script request:\n{}", prompt))
+                .await?
         };
 
         let design_json = serde_json::to_string_pretty(&design).expect("design serializes");

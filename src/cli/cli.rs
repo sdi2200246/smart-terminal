@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand, Args};
+use clap::{Args, Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(name = "agent")]
@@ -11,14 +11,14 @@ pub struct Cli {
 pub enum Commands {
     /// Suggest the next command based on context
     NextCmd(NextCmdArgs),
-    /// Manipulate the memory of you assistant 
+    /// Manipulate the memory of you assistant
     Memory(MemoryArgs),
     /// Investigate a question about the project or environment
     Investigate(InvestigateArgs),
 }
 
 #[derive(Args)]
-pub struct NextCmdArgs{
+pub struct NextCmdArgs {
     ///Terminal buffer or a promt describing the expected command
     pub buffer: String,
 }

@@ -1,7 +1,7 @@
-use serde::Deserialize;
-use serde_json::Value;
 use super::message::Message;
 use crate::groq::error::GroqError;
+use serde::Deserialize;
+use serde_json::Value;
 
 #[derive(Debug)]
 pub struct LlmToolCall {
@@ -29,16 +29,19 @@ impl TryFrom<GroqResponse> for LlmToolCall {
     type Error = GroqError;
 
     fn try_from(value: GroqResponse) -> Result<Self, Self::Error> {
-        let choice = value
-            .choices
-            .into_iter()
-            .next()
-            .ok_or_else(|| GroqError::MalformedResponse {
-                source: anyhow::anyhow!("No choices in response"),
-            })?;
+        let choice =
+            value
+                .choices
+                .into_iter()
+                .next()
+                .ok_or_else(|| GroqError::MalformedResponse {
+                    source: anyhow::anyhow!("No choices in response"),
+                })?;
 
         if choice.finish_reason == Some("stop".to_string()) {
-            let conclusion = choice.message.content
+            let conclusion = choice
+                .message
+                .content
                 .filter(|s| !s.trim().is_empty())
                 .ok_or(GroqError::MalformedResponse {
                     source: anyhow::anyhow!(
@@ -53,9 +56,14 @@ impl TryFrom<GroqResponse> for LlmToolCall {
                 args: Value::String(conclusion),
             });
         }
-        
-        let tool = choice.message.tool_calls.into_iter().next()
-           .ok_or(GroqError::MalformedResponse {
+
+        let tool =
+            choice
+                .message
+                .tool_calls
+                .into_iter()
+                .next()
+                .ok_or(GroqError::MalformedResponse {
                     source: anyhow::anyhow!(
                         "Model stopped without producing a conclusion. \
                          Expected non-empty content alongside finish_reason=stop."
@@ -85,12 +93,17 @@ impl TryFrom<GroqResponse> for LlmStructuredOutput {
     type Error = GroqError;
 
     fn try_from(res: GroqResponse) -> Result<Self, Self::Error> {
-        let choice = res.choices.into_iter().next()
-            .ok_or_else(|| GroqError::MalformedResponse {
-                source: anyhow::anyhow!("No choices in response"),
-            })?;
+        let choice =
+            res.choices
+                .into_iter()
+                .next()
+                .ok_or_else(|| GroqError::MalformedResponse {
+                    source: anyhow::anyhow!("No choices in response"),
+                })?;
 
-        let content = choice.message.content
+        let content = choice
+            .message
+            .content
             .ok_or_else(|| GroqError::MalformedResponse {
                 source: anyhow::anyhow!("Expected content field, got none"),
             })?;
@@ -101,7 +114,6 @@ impl TryFrom<GroqResponse> for LlmStructuredOutput {
         Ok(LlmStructuredOutput { value })
     }
 }
-
 
 #[cfg(test)]
 mod tests {

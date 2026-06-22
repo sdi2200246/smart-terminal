@@ -1,35 +1,54 @@
-use serde_json::Value;
-use serde::{Deserialize, Serialize};
-use schemars::JsonSchema;
-use std::process::Command;
+use super::error::ToolError;
 use crate::core::capability::{Capability, ToolMetaData};
 use crate::utils::FlatSchema;
-use super::error::ToolError;
-
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::process::Command;
 
 const MAX_OUTPUT_LINES: usize = 250;
 
 const BLOCKLIST: &[&str] = &[
-    "rm ", "rm\t", "rmdir",
-    "mkfs", "dd ",
-    "mv ", "mv\t",
-    "cp ", "cp\t",
+    "rm ",
+    "rm\t",
+    "rmdir",
+    "mkfs",
+    "dd ",
+    "mv ",
+    "mv\t",
+    "cp ",
+    "cp\t",
     "mkdir",
     "touch ",
-    "chmod", "chown",
+    "chmod",
+    "chown",
     "truncate",
-    "sudo", "su ",
-    "kill", "pkill", "killall",
-    "shutdown", "reboot", "halt",
-    "pip install", "npm install", "cargo install",
-    "apt ", "brew ", "yum ", "dnf ", "pacman ",
-    "curl -x", "curl --request",
+    "sudo",
+    "su ",
+    "kill",
+    "pkill",
+    "killall",
+    "shutdown",
+    "reboot",
+    "halt",
+    "pip install",
+    "npm install",
+    "cargo install",
+    "apt ",
+    "brew ",
+    "yum ",
+    "dnf ",
+    "pacman ",
+    "curl -x",
+    "curl --request",
 ];
 
 fn is_blocked(cmd: &str) -> bool {
     let lower = cmd.to_lowercase();
 
-    if lower.contains(">>") || (lower.contains('>') && !lower.contains("2>&1") && !lower.contains("/dev/null")) {
+    if lower.contains(">>")
+        || (lower.contains('>') && !lower.contains("2>&1") && !lower.contains("/dev/null"))
+    {
         return true;
     }
 
@@ -46,7 +65,11 @@ fn truncate(s: &str) -> String {
         return s.to_string();
     }
     let kept: Vec<&str> = lines[..MAX_OUTPUT_LINES].to_vec();
-    format!("{}\n... ({} lines truncated)", kept.join("\n"), lines.len() - MAX_OUTPUT_LINES)
+    format!(
+        "{}\n... ({} lines truncated)",
+        kept.join("\n"),
+        lines.len() - MAX_OUTPUT_LINES
+    )
 }
 
 #[derive(JsonSchema, Deserialize, Debug)]
@@ -56,7 +79,7 @@ struct BashArgs {
 }
 impl FlatSchema for BashArgs {}
 
-#[derive(Serialize , Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct BashOutput {
     pub exit_code: i32,
     pub stdout: String,
@@ -96,7 +119,7 @@ impl Capability for Bash {
             });
         }
 
-       let output = Command::new("bash")
+        let output = Command::new("bash")
             .arg("-c")
             .arg(&args.command)
             .output()

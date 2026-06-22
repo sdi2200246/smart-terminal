@@ -2,8 +2,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::agent::agents::Agent;
-use crate::agent::error::AgentError;
 use crate::agent::archtectures::react::ReactLoop;
+use crate::agent::error::AgentError;
 use crate::core::llm_client::LLMProvider;
 use crate::core::session::{Model, ModelName};
 use crate::utils::FlatSchema;
@@ -40,19 +40,17 @@ pub struct Investigator<'a, P: LLMProvider> {
 
 impl<'a, P: LLMProvider> Investigator<'a, P> {
     pub fn new(runner: &'a mut ReactLoop<P>) -> Self {
-        Self {
-            runner,
-        }
+        Self { runner }
     }
-    pub async fn run(&mut self,question: impl Into<String>,) -> Result<(Plan, Report), AgentError> {
+    pub async fn run(&mut self, question: impl Into<String>) -> Result<(Plan, Report), AgentError> {
         let question = question.into();
 
         let plan: Plan = {
-            let mut planner =
-                Agent::planner(&mut *self.runner, Model::with_default_temp(ModelName::GptOss120B));
-            planner
-                .run(format!("Question:\n{}", question))
-                .await?
+            let mut planner = Agent::planner(
+                &mut *self.runner,
+                Model::with_default_temp(ModelName::GptOss120B),
+            );
+            planner.run(format!("Question:\n{}", question)).await?
         };
         self.runner.clear_hook_state();
 

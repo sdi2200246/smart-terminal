@@ -1,5 +1,5 @@
+use crate::core::error::{InternalError, ProviderError};
 use thiserror::Error;
-use crate::core::error::{ProviderError , InternalError};
 
 #[derive(Debug, Error)]
 pub enum AgentError {

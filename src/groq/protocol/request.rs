@@ -1,8 +1,8 @@
-use serde::Serialize;
-use serde_json::Value;
-use crate::core::session::AgentSession;
 use super::message::Message;
 use super::tool::Tool;
+use crate::core::session::AgentSession;
+use serde::Serialize;
+use serde_json::Value;
 
 #[derive(Serialize, Debug)]
 pub struct GroqRequest {
@@ -21,9 +21,9 @@ impl GroqRequest {
     pub fn structured(session: &AgentSession, schema: Value) -> Self {
         let messages = session.events.iter().map(Message::from).collect();
         GroqRequest {
-            model:"openai/gpt-oss-120b".into(),
+            model: "openai/gpt-oss-120b".into(),
             messages,
-            temperature:0.1,
+            temperature: 0.1,
             tools: vec![],
             tool_choice: None,
             response_format: Some(ResponseFormat::json_schema("output", schema)),
@@ -39,7 +39,7 @@ pub struct ResponseFormat {
 #[derive(Serialize, Debug)]
 pub struct JsonSchemaSpec {
     pub name: String,
-    pub strict:bool,
+    pub strict: bool,
     pub schema: Value,
 }
 
@@ -47,7 +47,11 @@ impl ResponseFormat {
     pub fn json_schema(name: impl Into<String>, schema: Value) -> Self {
         ResponseFormat {
             r#type: "json_schema".into(),
-            json_schema: JsonSchemaSpec { name: name.into(),strict:true, schema },
+            json_schema: JsonSchemaSpec {
+                name: name.into(),
+                strict: true,
+                schema,
+            },
         }
     }
 }

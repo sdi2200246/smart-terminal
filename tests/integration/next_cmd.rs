@@ -1,13 +1,13 @@
+use smart_terminal::agent::archtectures::react::ReactLoop;
+use smart_terminal::agent::memory::FolderMemory;
+use smart_terminal::agent::workflows::next_cmd::{NextCmd, NextCommand, Reversibility};
+use smart_terminal::core::memory::{Interaction, Memory};
+use smart_terminal::groq::client::GroqClient;
 use std::env;
 use std::error::Error;
 use tempfile::TempDir;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
-use smart_terminal::agent::archtectures::react::ReactLoop;
-use smart_terminal::agent::memory::FolderMemory;
-use smart_terminal::agent::workflows::next_cmd::{NextCmd, NextCommand, Reversibility};
-use smart_terminal::core::memory::{Memory , Interaction};
-use smart_terminal::groq::client::GroqClient;
 
 fn init_test_tracing() {
     tracing_subscriber::registry()
@@ -53,7 +53,11 @@ async fn run_case(label: &str, input: &str) -> NextCommand {
 
     // Memory plumbing assertion — proves the workflow actually persisted the call.
     let conv = memory.current().expect("memory should be loaded");
-    assert_eq!(conv.interactions.len(), 1, "[{label}] interaction not persisted");
+    assert_eq!(
+        conv.interactions.len(),
+        1,
+        "[{label}] interaction not persisted"
+    );
     assert_eq!(conv.interactions[0].user_input, input);
     assert_eq!(conv.interactions[0].predicted_cmd, prediction.cmd);
 
@@ -79,14 +83,13 @@ async fn translates_natural_language_docker() {
 #[ignore = "requires GROQ_API_KEY"]
 async fn destructive_command_is_flagged() {
     let pred = run_case("destructive", "git switch").await;
-    assert!(matches!(pred.scale, Reversibility::Hard | Reversibility::Irreversible));
+    assert!(matches!(
+        pred.scale,
+        Reversibility::Hard | Reversibility::Irreversible
+    ));
 }
 
-async fn run_case_with_history(
-    label: &str,
-    seeded: &[(&str, &str)],
-    input: &str,
-) -> NextCommand {
+async fn run_case_with_history(label: &str, seeded: &[(&str, &str)], input: &str) -> NextCommand {
     init_test_tracing();
 
     let tmp = TempDir::new().expect("tempdir");
@@ -95,11 +98,13 @@ async fn run_case_with_history(
     memory.register(&cwd).expect("register cwd");
 
     for (user, cmd) in seeded {
-        memory.append(Interaction {
-            user_input: (*user).into(),
-            predicted_cmd: (*cmd).into(),
-            timestamp: 0,
-        }).expect("seed");
+        memory
+            .append(Interaction {
+                user_input: (*user).into(),
+                predicted_cmd: (*cmd).into(),
+                timestamp: 0,
+            })
+            .expect("seed");
     }
 
     let provider = GroqClient::pooled();
@@ -107,7 +112,9 @@ async fn run_case_with_history(
 
     let prediction = {
         let mut workflow = NextCmd::new(&mut runner, &mut memory);
-        workflow.run(input).await
+        workflow
+            .run(input)
+            .await
             .unwrap_or_else(|e| panic!("[{label}] workflow failed: {:?}", e.source()))
     };
 
@@ -128,7 +135,8 @@ async fn resolves_anaphora_to_prior_command() {
         "anaphora_undo",
         &[("whats the status ?", "git status'")],
         "git commit with appropiate meesage",
-    ).await;
+    )
+    .await;
 
     let cmd = pred.cmd.to_lowercase();
 }
@@ -138,7 +146,8 @@ async fn resolves_anaphora_to_prior_command() {
 async fn reuses_prior_tool_choice() {
     let pred = run_case_with_history(
         "tool_continuity_rg",
-        &[("search for fix", "rg fix" )],
+        &[("search for fix", "rg fix")],
         "search for smilar comment devs use  ",
-    ).await;
+    )
+    .await;
 }

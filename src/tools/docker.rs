@@ -1,9 +1,9 @@
-use serde_json::Value;
-use serde::{Deserialize, Serialize};
-use std::process::Command;
-use std::path::Path;
-use crate::core::capability::{Capability, ToolMetaData};
 use super::error::ToolError;
+use crate::core::capability::{Capability, ToolMetaData};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::path::Path;
+use std::process::Command;
 
 const MAX_CONTAINERS: usize = 30;
 
@@ -35,7 +35,8 @@ impl Capability for Docker {
             name: self.name().into(),
             description: "Get the current Docker state on this machine: running and stopped \
                 containers (name, image, status, ports), whether the docker daemon is up, \
-                and whether a docker-compose file exists in the current directory.".into(),
+                and whether a docker-compose file exists in the current directory."
+                .into(),
             parameters: serde_json::json!({
                 "type": "object",
                 "properties": {}
@@ -81,11 +82,15 @@ pub fn docker_status(_args: Value) -> Result<String, ToolError> {
 
     let ps_output = Command::new("docker")
         .args([
-            "ps", "-a",
-            "--format", "{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}",
+            "ps",
+            "-a",
+            "--format",
+            "{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}",
         ])
         .output()
-        .map_err(|e| ToolError::ToolExecution { source: anyhow::anyhow!("[ERROR] {}", e) })?;
+        .map_err(|e| ToolError::ToolExecution {
+            source: anyhow::anyhow!("[ERROR] {}", e),
+        })?;
 
     let containers = parse_ps_output(&String::from_utf8_lossy(&ps_output.stdout));
 
@@ -117,7 +122,6 @@ fn parse_ps_output(raw: &str) -> Vec<ContainerInfo> {
         })
         .collect()
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -176,7 +180,10 @@ mod tests {
         println!("compose_in_cwd:   {}", status.compose_in_cwd);
         println!("containers ({}):", status.containers.len());
         for c in &status.containers {
-            println!("  • {} [{}] — {} | ports: {}", c.name, c.image, c.status, c.ports);
+            println!(
+                "  • {} [{}] — {} | ports: {}",
+                c.name, c.image, c.status, c.ports
+            );
         }
     }
 

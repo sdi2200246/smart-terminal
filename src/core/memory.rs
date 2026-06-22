@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -55,7 +55,7 @@ impl Conversation {
         }
     }
 
-    pub fn clear(&mut self){
+    pub fn clear(&mut self) {
         self.interactions.clear();
     }
 }
@@ -127,7 +127,10 @@ mod tests {
     fn index_with(paths: &[&str]) -> MemoryIndex {
         let mut index = MemoryIndex::default();
         for p in paths {
-            index.folders.insert(PathBuf::from(p), format!("{}.json", p.trim_start_matches('/').replace('/', "-")));
+            index.folders.insert(
+                PathBuf::from(p),
+                format!("{}.json", p.trim_start_matches('/').replace('/', "-")),
+            );
         }
         index
     }
@@ -189,7 +192,10 @@ mod tests {
         descendants.sort();
         assert_eq!(
             descendants,
-            vec![PathBuf::from("/proj/foo/src"), PathBuf::from("/proj/foo/tests")]
+            vec![
+                PathBuf::from("/proj/foo/src"),
+                PathBuf::from("/proj/foo/tests")
+            ]
         );
     }
 

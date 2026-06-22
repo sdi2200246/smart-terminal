@@ -58,7 +58,7 @@ impl<'a, P: LLMProvider, M: Memory> NextCmd<'a, P, M> {
             let mut predictor = Agent::cmd_predictor(
                 &mut *self.runner,
                 Model::creative(ModelName::GptOss120B),
-       NextCommand::schema(),
+                NextCommand::schema(),
             );
             predictor.run(user_prompt).await?
         };
@@ -105,8 +105,6 @@ fn now_secs() -> u64 {
         .unwrap_or(0)
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -114,7 +112,7 @@ mod tests {
     use crate::core::error::ProviderError;
     use crate::core::llm_client::AgentRequest;
     use crate::core::session::{AgentSession, AgentToolCall, ConversationEvent};
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
     use std::sync::{Arc, Mutex};
     use tempfile::TempDir;
 
@@ -127,14 +125,20 @@ mod tests {
         fn new(cmd: impl Into<String>) -> (Self, Arc<Mutex<Vec<String>>>) {
             let captured = Arc::new(Mutex::new(Vec::new()));
             (
-                Self { captured: captured.clone(), canned_cmd: cmd.into() },
+                Self {
+                    captured: captured.clone(),
+                    canned_cmd: cmd.into(),
+                },
                 captured,
             )
         }
     }
 
     impl LLMProvider for MockProvider {
-        async fn complete(&mut self, request: AgentRequest<'_>) -> Result<AgentToolCall, ProviderError> {
+        async fn complete(
+            &mut self,
+            request: AgentRequest<'_>,
+        ) -> Result<AgentToolCall, ProviderError> {
             let last_user = request
                 .session
                 .events
@@ -146,7 +150,11 @@ mod tests {
                 })
                 .unwrap_or_default();
             self.captured.lock().unwrap().push(last_user);
-            Ok(AgentToolCall::new("stop".into(), "".into(), Value::String("done".into())))
+            Ok(AgentToolCall::new(
+                "stop".into(),
+                "".into(),
+                Value::String("done".into()),
+            ))
         }
 
         async fn complete_structured(
@@ -182,7 +190,10 @@ mod tests {
         let result = workflow.run("list files").await.unwrap();
 
         assert_eq!(result.cmd, "ls -la");
-        assert!(memory.current().is_none(), "unregistered cwd should not load a conversation");
+        assert!(
+            memory.current().is_none(),
+            "unregistered cwd should not load a conversation"
+        );
     }
 
     #[tokio::test]
@@ -212,7 +223,9 @@ mod tests {
         let mut memory = FolderMemory::new(tmp.path());
         let cwd = env::current_dir().unwrap();
         memory.register(&cwd).unwrap();
-        memory.append(seed_interaction("git st", "git status")).unwrap();
+        memory
+            .append(seed_interaction("git st", "git status"))
+            .unwrap();
 
         let (provider, captured) = MockProvider::new("git diff");
         let mut runner = ReactLoop::new(provider);
@@ -223,8 +236,14 @@ mod tests {
         }
 
         let prompt = captured.lock().unwrap()[0].clone();
-        assert!(prompt.contains("git status"), "prior cmd missing from prompt:\n{prompt}");
-        assert!(prompt.contains("git df"),     "current input missing from prompt:\n{prompt}");
+        assert!(
+            prompt.contains("git status"),
+            "prior cmd missing from prompt:\n{prompt}"
+        );
+        assert!(
+            prompt.contains("git df"),
+            "current input missing from prompt:\n{prompt}"
+        );
     }
 
     #[tokio::test]

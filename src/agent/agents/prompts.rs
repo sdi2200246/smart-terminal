@@ -84,7 +84,6 @@ RULES
 - If the plan is wrong or incomplete, do your best with what you have.
 - The report must answer the user — not describe what you did.";
 
-
 pub const ARCHITECT_SYS_PROMPT: &str = "You are an architect agent. The user wants a reusable shell script. Your job is to make every design decision — shell, arguments, dependencies, error handling, side effects, idempotency, and the concrete coding rules the implementer must follow — before any code is written.
 
 HOW TO RETURN YOUR ANSWER

@@ -1,9 +1,9 @@
-use serde_json::Value;
-use serde::Deserialize;
-use schemars::JsonSchema;
+use super::error::ToolError;
 use crate::core::capability::{Capability, ToolMetaData};
 use crate::utils::FlatSchema;
-use super::error::ToolError;
+use schemars::JsonSchema;
+use serde::Deserialize;
+use serde_json::Value;
 
 #[derive(JsonSchema, Deserialize, Debug)]
 struct ReadDirArgs {
@@ -28,7 +28,8 @@ impl Capability for ReadDir {
                 Set recursive to true to include all subdirectories. \
                 Automatically excludes target/ and .git/ directories. \
                 Only for reading directory structure — not for reading file contents. \
-                Returns an error if the path is a file;".into(),
+                Returns an error if the path is a file;"
+                .into(),
             parameters: ReadDirArgs::schema(),
         }
     }
@@ -37,10 +38,9 @@ impl Capability for ReadDir {
         let args: ReadDirArgs = serde_json::from_value(args)
             .map_err(|e| ToolError::ToolExecution { source: e.into() })?;
 
-        let metadata = std::fs::metadata(&args.path)
-            .map_err(|e| ToolError::ToolExecution {
-                source: anyhow::anyhow!("cannot access '{}': {}", args.path, e),
-            })?;
+        let metadata = std::fs::metadata(&args.path).map_err(|e| ToolError::ToolExecution {
+            source: anyhow::anyhow!("cannot access '{}': {}", args.path, e),
+        })?;
 
         if !metadata.is_dir() {
             return Err(ToolError::ToolExecution {
@@ -54,8 +54,12 @@ impl Capability for ReadDir {
         let output = if args.recursive {
             std::process::Command::new("find")
                 .arg(&args.path)
-                .arg("-not").arg("-path").arg("*/target/*")
-                .arg("-not").arg("-path").arg("*/.git/*")
+                .arg("-not")
+                .arg("-path")
+                .arg("*/target/*")
+                .arg("-not")
+                .arg("-path")
+                .arg("*/.git/*")
                 .output()
         } else {
             std::process::Command::new("ls")
@@ -102,7 +106,7 @@ mod tests {
         let tool = ReadDir;
         let result = tool.execute(json!({ "path": "./nonexistent", "recursive": false }));
 
-        print!("{:?}" , result);
+        print!("{:?}", result);
         assert!(result.is_err());
     }
 

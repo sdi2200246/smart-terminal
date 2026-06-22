@@ -1,10 +1,10 @@
-use std::error::Error;
 use smart_terminal::agent::archtectures::oneshot::OneShot;
-use tracing_subscriber::EnvFilter;
-use tracing_subscriber::prelude::*;
 use smart_terminal::agent::archtectures::react::ReactLoop;
 use smart_terminal::agent::workflows::script_gen::{Script, ScriptDesign, ScriptGenerator};
 use smart_terminal::groq::client::GroqClient;
+use std::error::Error;
+use tracing_subscriber::EnvFilter;
+use tracing_subscriber::prelude::*;
 
 fn init_test_tracing() {
     tracing_subscriber::registry()
@@ -25,7 +25,7 @@ async fn run_case(label: &str, prompt: &str) -> (ScriptDesign, Script) {
     let provider = GroqClient::pooled();
     let mut runner = ReactLoop::new(provider.clone());
     let mut one_shooter = OneShot::new(provider);
-    let mut workflow = ScriptGenerator::new(&mut runner , &mut one_shooter);
+    let mut workflow = ScriptGenerator::new(&mut runner, &mut one_shooter);
 
     let (design, script) = workflow
         .run(prompt)
@@ -53,11 +53,10 @@ async fn run_case(label: &str, prompt: &str) -> (ScriptDesign, Script) {
         println!("  • {}", s);
     }
 
-     println!("evidence:");
+    println!("evidence:");
     for s in &design.coding_decisions {
         println!("  • {:?}", s);
     }
-
 
     println!("\n═══ {label} — SCRIPT ═══");
     println!("filename:   {}", script.filename);
@@ -66,10 +65,16 @@ async fn run_case(label: &str, prompt: &str) -> (ScriptDesign, Script) {
     println!("{}", script.content);
 
     // Shape checks every script must pass — keeps the per-test asserts focused on semantics.
-    assert!(!design.purpose.is_empty(),     "[{label}] design.purpose empty");
-    assert!(!script.filename.is_empty(),    "[{label}] script.filename empty");
-    assert!(!script.content.is_empty(),     "[{label}] script.content empty");
-    assert!(script.content.starts_with("#!"), "[{label}] script must start with a shebang");
+    assert!(!design.purpose.is_empty(), "[{label}] design.purpose empty");
+    assert!(
+        !script.filename.is_empty(),
+        "[{label}] script.filename empty"
+    );
+    assert!(!script.content.is_empty(), "[{label}] script.content empty");
+    assert!(
+        script.content.starts_with("#!"),
+        "[{label}] script must start with a shebang"
+    );
 
     (design, script)
 }

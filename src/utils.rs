@@ -1,8 +1,8 @@
-use serde_json::{Value};
-use schemars::{JsonSchema};
+use schemars::JsonSchema;
 use schemars::generate::SchemaSettings;
+use serde_json::Value;
 
-pub trait FlatSchema : JsonSchema{
+pub trait FlatSchema: JsonSchema {
     fn schema() -> Value {
         let settings = SchemaSettings::draft07().with(|s| {
             s.inline_subschemas = true;
@@ -17,7 +17,7 @@ pub trait FlatSchema : JsonSchema{
 mod tests {
     use super::*;
     use schemars::JsonSchema;
-    use serde::{Serialize, Deserialize};
+    use serde::{Deserialize, Serialize};
 
     #[derive(Serialize, Deserialize, JsonSchema)]
     #[schemars(deny_unknown_fields)]

@@ -3,23 +3,26 @@ use serde_json::Value;
 
 const DEFAULT_STEPS: usize = 50;
 
-#[derive(Debug , PartialEq , Clone)]
-pub enum ModelName{
+#[derive(Debug, PartialEq, Clone)]
+pub enum ModelName {
     GptOss120B,
     GptOss20B,
     Llma3p18B,
     Llma3p370B,
 }
 
-#[derive(Debug , PartialEq , Clone)]
-pub struct Model{
+#[derive(Debug, PartialEq, Clone)]
+pub struct Model {
     name: ModelName,
-    temperature:f32,
+    temperature: f32,
 }
 
 impl Model {
     pub fn new(name: ModelName, temperature: f32) -> Self {
-        Self { name, temperature: temperature.clamp(0.0, 2.0) }
+        Self {
+            name,
+            temperature: temperature.clamp(0.0, 2.0),
+        }
     }
     pub fn with_default_temp(name: ModelName) -> Self {
         Self::new(name, 0.7)
@@ -51,15 +54,15 @@ impl Model {
             temperature: temperature.clamp(0.0, 2.0),
         }
     }
-    pub fn get_name(&self)->ModelName{
+    pub fn get_name(&self) -> ModelName {
         self.name.clone()
     }
-    pub fn get_temp(&self)->f32{
+    pub fn get_temp(&self) -> f32 {
         self.temperature
     }
 }
 
-#[derive(Debug , PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum ConversationEvent {
     System(String),
     User(String),
@@ -75,15 +78,19 @@ pub enum ConversationEvent {
     },
 }
 
-#[derive(Debug , Clone)]
- pub struct AgentToolCall{
+#[derive(Debug, Clone)]
+pub struct AgentToolCall {
     id: String,
     arguments: Value,
     name: String,
 }
 impl AgentToolCall {
     pub fn new(name: String, id: String, arguments: Value) -> Self {
-        Self { name, id, arguments }
+        Self {
+            name,
+            id,
+            arguments,
+        }
     }
     pub fn name(&self) -> &str {
         &self.name
@@ -108,7 +115,11 @@ pub struct AgentSession {
 
 impl AgentSession {
     pub fn new(steps: usize) -> Self {
-        Self { events: Vec::new(), steps , final_answer:None}
+        Self {
+            events: Vec::new(),
+            steps,
+            final_answer: None,
+        }
     }
 
     pub fn builder() -> SessionBuilder {
@@ -124,12 +135,18 @@ impl AgentSession {
     }
 
     pub fn add_reflection(&mut self, reflection: impl Into<String>) {
-        self.events.push(ConversationEvent::System(
-            format!("[REFLECTION] {}", reflection.into()),
-        ));
+        self.events.push(ConversationEvent::System(format!(
+            "[REFLECTION] {}",
+            reflection.into()
+        )));
     }
 
-    pub fn add_tool_call(&mut self, name: impl Into<String>, arguments: Value, id: impl Into<String>) {
+    pub fn add_tool_call(
+        &mut self,
+        name: impl Into<String>,
+        arguments: Value,
+        id: impl Into<String>,
+    ) {
         self.events.push(ConversationEvent::ToolCall {
             name: name.into(),
             arguments,
@@ -137,7 +154,12 @@ impl AgentSession {
         });
     }
 
-    pub fn add_tool_result(&mut self, name: impl Into<String>, result: impl Into<String>, id: impl Into<String>) {
+    pub fn add_tool_result(
+        &mut self,
+        name: impl Into<String>,
+        result: impl Into<String>,
+        id: impl Into<String>,
+    ) {
         self.events.push(ConversationEvent::ToolResult {
             name: name.into(),
             result: result.into(),
@@ -146,12 +168,15 @@ impl AgentSession {
     }
 
     pub fn add_error(&mut self, er: String) {
-        let error = format!("[ERROR]:{}" , er);
+        let error = format!("[ERROR]:{}", er);
         self.events.push(ConversationEvent::System(error));
     }
 
     pub fn current_steps(&self) -> usize {
-        self.events.iter().filter(|e| matches!(e, ConversationEvent::ToolCall { .. })).count()
+        self.events
+            .iter()
+            .filter(|e| matches!(e, ConversationEvent::ToolCall { .. }))
+            .count()
     }
 
     pub fn steps_exhausted(&self) -> bool {
@@ -203,7 +228,8 @@ impl SessionBuilder {
 
     pub fn context<T: Serialize>(mut self, ctx: &T) -> Self {
         let json = serde_json::to_string_pretty(ctx).unwrap();
-        self.events.push(ConversationEvent::System(format!("Context:\n{}", json)));
+        self.events
+            .push(ConversationEvent::System(format!("Context:\n{}", json)));
         self
     }
 
@@ -216,7 +242,7 @@ impl SessionBuilder {
         AgentSession {
             events: self.events,
             steps: self.steps,
-            final_answer:None
+            final_answer: None,
         }
     }
 }
