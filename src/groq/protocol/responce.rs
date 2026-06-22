@@ -229,7 +229,7 @@ mod tests {
         });
 
         let result = LlmToolCall::try_from(parse(raw));
-        assert!(matches!(result, Err(GroqError::InvalidToolCall { .. })));
+        assert!(matches!(result, Err(GroqError::MalformedResponse { .. })));
     }
 
     #[test]
@@ -248,6 +248,6 @@ mod tests {
         });
 
         let result = LlmToolCall::try_from(parse(raw));
-        assert!(matches!(result, Err(GroqError::InvalidToolCall { .. })));
+        assert!(matches!(result, Err(GroqError::MalformedResponse { .. })));
     }
 }
