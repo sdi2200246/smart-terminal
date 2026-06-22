@@ -5,6 +5,7 @@ use crate::cli::cli::NextCmdArgs;
 use crate::core::memory::Memory;
 use crate::groq::client::GroqClient;
 use std::env;
+use std::io::{self, Write};
 
 pub async fn run(args: NextCmdArgs) {
     let mut memory =
@@ -32,4 +33,6 @@ pub async fn run(args: NextCmdArgs) {
     println!("{}", prediction.cmd);
     println!("{}", prediction.man);
     println!("{:?}", prediction.scale);
+
+    io::stdout().flush().unwrap();
 }
