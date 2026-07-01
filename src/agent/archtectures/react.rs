@@ -55,17 +55,17 @@ impl<P: LLMProvider> ReactLoop<P> {
     where
         T: FlatSchema + DeserializeOwned,
     {
-        tracing::info!("Model Task Started");
+        tracing::info!(status = "started", "ReAct loop execution");
         let mut call: AgentToolCall;
         loop {
             if let Some(value) = session.take_final_answer() {
-                tracing::info!("agent exitting early");
+                tracing::info!(status = "success", "ReAct loop terminated: final answer provided");
                 return serde_json::from_value::<T>(value)
                     .map_err(|_| AgentError::ScheemaViolation);
             }
 
             if session.steps_exhausted() {
-                tracing::warn!("agent exhausted all steps");
+                tracing::error!(status = "exhausted", "ReAct loop terminated: step limit reached");
                 return Err(AgentError::StepsExhausted);
             }
 
@@ -74,7 +74,7 @@ impl<P: LLMProvider> ReactLoop<P> {
                 None => continue,
             };
 
-            tracing::info!(tool = %call.name(), args = %call.arguments(), "executing tool");
+            tracing::debug!(tool = %call.name(), status = "received", "LLM provided tool call");
             if call.name() == "stop" {
                 break;
             }
@@ -82,7 +82,7 @@ impl<P: LLMProvider> ReactLoop<P> {
 
             if let Some(hook) = &mut self.hook {
                 if matches!(hook.pre_call(session, &call)?, HookAction::Skip) {
-                    tracing::warn!(tool = %call.name(), "Skipping tool");
+                    tracing::warn!(tool = %call.name(), status = "skipped", "Hook requested tool skip");
                     continue;
                 }
             }
@@ -102,7 +102,7 @@ impl<P: LLMProvider> ReactLoop<P> {
         let result = match tools[call.name()].execute(call.arguments().clone()) {
             Ok(result) => result,
             Err(e) => {
-                tracing::warn!(tool = %call.name(), error = %e, "tool execution failed");
+                tracing::error!(tool = %call.name(), status = "failed", error = %e, "Tool execution failed");
                 session.add_error(format!("Tool '{}' failed: {}", call.name(), e));
                 return Err(());
             }
@@ -134,11 +134,14 @@ impl<P: LLMProvider> ReactLoop<P> {
         match self.provider.complete(request).await {
             Ok(call) => Ok(Some(call)),
             Err(ProviderError::InvalidToolCal { source }) => {
-                tracing::warn!(Error = %source.to_string(), "tool call failed");
+                tracing::warn!(status = "invalid_call", error = %source, "LLM returned malformed tool call");
                 session.add_error(format!("{}", source));
                 Ok(None)
             }
-            Err(e) => Err(e.into()),
+            Err(e) =>{
+                tracing::error!(status = "provider_error", error = %e, "LLM provider failure");
+                Err(e.into())
+            }
         }
     }
     async fn structure_output<T>(
@@ -153,13 +156,13 @@ impl<P: LLMProvider> ReactLoop<P> {
         session.add_system("Your one and ONLY job is to return the following text into the scheema provided to you");
         session.add_user(stop_args.to_string());
 
-        tracing::info!("Model structurring output");
+        tracing::info!(status = "structuring", "Initiating final output structure");
         let raw = self
             .provider
             .complete_structured(session, T::schema())
             .await?;
         let typed = serde_json::from_value::<T>(raw).expect("Type must always be right");
-        tracing::info!("Model finished structurred output");
+        tracing::info!(status = "complete", "Final output structure generated");
         Ok(typed)
     }
 }
