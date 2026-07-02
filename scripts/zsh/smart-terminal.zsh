@@ -92,7 +92,7 @@ zle -N _ai_redisplay_ghost
 ai_stop_ticker() {
   if [[ -n "$AI_TICK_FD" ]]; then
     zle -F $AI_TICK_FD 2>/dev/null
-    exec {AI_TICK_FD}<&-
+    exec {AI_TICK_FD}<&- 
     AI_TICK_FD=""
   fi
 }
@@ -104,11 +104,11 @@ ai_tick_handler() {
     return
   fi
   
-  AI_DOTS=$( (AI_DOTS + 1 ))
   dots=""
-  for ((i=0; i< $( (AI_DOTS % 3) ); i++)); do dots+=" ."; done
+  for ((i=0; i< AI_DOTS % 4; i++)); do dots+=" ."; done
   AI_LOADING="thinking${dots}"
-  
+  AI_DOTS=$(( AI_DOTS + 1 ))  
+
   # Trigger instant display refresh for the ticker
   zle _ai_redisplay_ghost
 }
