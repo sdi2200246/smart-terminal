@@ -92,7 +92,7 @@ zle -N _ai_redisplay_ghost
 ai_stop_ticker() {
   if [[ -n "$AI_TICK_FD" ]]; then
     zle -F $AI_TICK_FD 2>/dev/null
-    exec {AI_TICK_FD}<&- 2>/dev/null
+    exec {AI_TICK_FD}<&-
     AI_TICK_FD=""
   fi
 }
@@ -127,7 +127,7 @@ ai_start_ticker() {
 _ai_cleanup_fetch() {
   local fd=$1
   zle -F $fd 2>/dev/null
-  exec {fd}<&- 2>/dev/null
+  exec {fd}<&- 
   AI_FETCH_FD=""
   
   [[ -n "$AI_FETCH_BUFFER" ]] && AI_FETCH_LINES+=("$AI_FETCH_BUFFER")
@@ -167,7 +167,7 @@ ai_fetch_handler() {
   # When all 3 flushed rows from Rust cross the pipe, process them immediately
   if (( ${#AI_FETCH_LINES} >= 3 )); then
     zle -F $fd 2>/dev/null
-    exec {fd}<&- 2>/dev/null
+    exec {fd}<&- 
     AI_FETCH_FD=""
     
     AI_LAST_SUGGESTION="${AI_FETCH_LINES[1]}"
