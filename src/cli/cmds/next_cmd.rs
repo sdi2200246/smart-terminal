@@ -23,9 +23,10 @@ pub async fn run(args: NextCmdArgs) {
         match workflow.run(args.buffer).await {
             Ok(p) => p,
             Err(e) => {
-                println!();
+                println!("< agent failed >");
                 println!("{e}");
                 println!("{:?}", Reversibility::Irreversible);
+                io::stdout().flush().unwrap();
                 return;
             }
         }
