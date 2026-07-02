@@ -31,9 +31,7 @@ Notice how suggestions stay context-aware while remaining fast enough to feel na
 <!-- TODO: replace with uploaded video -->
 <p align="center">
 
-
-https://github.com/user-attachments/assets/eeaf6ddf-c746-493a-a106-3639c9605ea0
-
+https://github.com/user-attachments/assets/3d984007-d8ac-477c-a0d3-5c22b70f3240
 
 Press `^G` to fetch a suggestion, `^F` to accept, `^B` to clear.
 
