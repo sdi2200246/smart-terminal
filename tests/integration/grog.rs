@@ -2,7 +2,8 @@
 mod integration {
     use smart_terminal::core::capability::ToolMetaData;
     use smart_terminal::core::llm_client::{AgentRequest, LLMProvider};
-    use smart_terminal::core::session::{AgentSession, Model, ModelName};
+    use smart_terminal::core::model::{Model, ModelName};
+    use smart_terminal::core::session::AgentSession;
     use smart_terminal::groq::client::GroqClient;
 
     fn simple_session() -> AgentSession {
