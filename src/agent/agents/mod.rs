@@ -6,11 +6,13 @@ use crate::agent::archtectures::react::ReactLoop;
 use crate::agent::error::AgentError;
 use crate::core::capability::{Capability, ToolMetaData, ToolRegistry};
 use crate::core::llm_client::LLMProvider;
-use crate::core::session::{AgentSession, Model};
+use crate::core::model::Model;
+use crate::core::session::AgentSession;
 use crate::tools::bash::Bash;
 use crate::tools::docker::Docker;
 use crate::tools::git_diff::GitDiffStaged;
 use crate::tools::json::Json;
+use crate::tools::last_error::ReadLastError;
 use crate::tools::read_dir::ReadDir;
 use crate::tools::read_file::ReadFile;
 use crate::utils::FlatSchema;
@@ -117,13 +119,20 @@ impl<'a, P: LLMProvider> Agent<'a, P> {
         let json = Box::new(Json {
             properties: scheema,
         }) as Box<dyn Capability>;
+        let last_error = Box::new(ReadLastError) as Box<dyn Capability>;
 
-        let tools_metadata = vec![git_diff.metadata(), docker.metadata(), json.metadata()];
+        let tools_metadata = vec![
+            git_diff.metadata(),
+            docker.metadata(),
+            json.metadata(),
+            last_error.metadata(),
+        ];
 
         let mut registry = ToolRegistry::new();
         registry.insert(git_diff.name(), git_diff);
         registry.insert(docker.name(), docker);
         registry.insert(json.name(), json);
+        registry.insert(last_error.name(), last_error);
 
         Self::new(
             runner,
@@ -141,7 +150,7 @@ impl<'a, P: LLMProvider> Agent<'a, P> {
     {
         let mut builder = AgentSession::builder().system(self.system_prompt);
         if let Some(ctx) = &self.context {
-            builder = builder.system(format!("Context:\n{}", ctx));
+            builder = builder.context(ctx);
         }
         let mut session = builder.user(user_prompt).build();
 

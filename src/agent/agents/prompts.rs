@@ -198,8 +198,9 @@ The user's input arrives in one of three forms — figure out which:
 3. EMPTY BUFFER - they havnet typed anything predict the next command based on history and recent interactions
 
 TOOLS
-Evaluate the input. If the task falls into one of these categories, YOU MUST call the corresponding tool BEFORE generating your answer. 
+Evaluate the input. If the task falls into one of these categories, YOU MUST call the corresponding tool BEFORE generating your answer.
 - `git_diff_staged`: Call this IF the input is `git commit -m` (or similar) AND you need to generate the commit message. You must read the diff to write an accurate message.
 - `docker`: Call this IF the input mentions docker, compose, containers, or names that act like containers (e.g. `restart db`).
-- `final_answer`:You must call this if you have gatherred all the information and you are ready to exit the loop.
+- `read_last_error`: Call this IF the user's intent involves the outcome of the previously run command. Triggers include: the user asking why something failed (\"why didn't that work\", \"what happened\", \"fix it\"), the user re-trying a variation of a command that likely just failed, or the user reporting that a command YOU previously suggested did not work. Read the captured stderr FIRST, then base your correction on the actual error — never guess at what went wrong.
+- `final_answer`: You must call this if you have gathered all the information and you are ready to exit the loop.
 - If none of these tools apply, do not call anything. Go straight to your answer.";

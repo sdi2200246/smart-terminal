@@ -2,7 +2,8 @@ use super::protocol::message::Message;
 use super::protocol::request::GroqRequest;
 use super::protocol::tool::{self, Tool};
 use crate::core::llm_client::AgentRequest;
-use crate::core::session::{ConversationEvent, ModelName};
+use crate::core::model::ModelName;
+use crate::core::session::ConversationEvent;
 
 impl From<&ConversationEvent> for Message {
     fn from(event: &ConversationEvent) -> Message {
@@ -27,7 +28,6 @@ impl From<ModelName> for String {
             ModelName::GptOss120B => "openai/gpt-oss-120b".into(),
             ModelName::GptOss20B => "openai/gpt-oss-20b".into(),
             ModelName::Llma3p18B => "llama-3.1-8b-instant".into(),
-            ModelName::Llma3p370B => "llama-3.3-70b-versatile".into(),
         }
     }
 }
@@ -67,8 +67,8 @@ impl From<&AgentRequest<'_>> for GroqRequest {
 mod tests {
     use super::*;
     use crate::core::capability::ToolMetaData;
+    use crate::core::model::Model;
     use crate::core::session::AgentSession;
-    use crate::core::session::Model;
     use serde_json::json;
 
     // ---------- SYSTEM ----------

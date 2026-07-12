@@ -2,7 +2,8 @@ use crate::agent::error::AgentError;
 use crate::core::capability::{ToolMetaData, ToolRegistry};
 use crate::core::error::ProviderError;
 use crate::core::llm_client::{AgentRequest, LLMProvider};
-use crate::core::session::{AgentSession, AgentToolCall, Model};
+use crate::core::model::Model;
+use crate::core::session::{AgentSession, AgentToolCall};
 use crate::utils::FlatSchema;
 
 use super::hook::{HookAction, LoopHook};
@@ -59,13 +60,19 @@ impl<P: LLMProvider> ReactLoop<P> {
         let mut call: AgentToolCall;
         loop {
             if let Some(value) = session.take_final_answer() {
-                tracing::info!(status = "success", "ReAct loop terminated: final answer provided");
+                tracing::info!(
+                    status = "success",
+                    "ReAct loop terminated: final answer provided"
+                );
                 return serde_json::from_value::<T>(value)
                     .map_err(|_| AgentError::ScheemaViolation);
             }
 
             if session.steps_exhausted() {
-                tracing::error!(status = "exhausted", "ReAct loop terminated: step limit reached");
+                tracing::error!(
+                    status = "exhausted",
+                    "ReAct loop terminated: step limit reached"
+                );
                 return Err(AgentError::StepsExhausted);
             }
 
@@ -138,7 +145,7 @@ impl<P: LLMProvider> ReactLoop<P> {
                 session.add_error(format!("{}", source));
                 Ok(None)
             }
-            Err(e) =>{
+            Err(e) => {
                 tracing::error!(status = "provider_error", error = %e, "LLM provider failure");
                 Err(e.into())
             }

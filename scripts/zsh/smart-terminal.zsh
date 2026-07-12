@@ -256,3 +256,20 @@ add-zle-hook-widget line-pre-redraw ai_ghost
 bindkey '^G' ai_fetch_suggestion  # Ctrl + G to request suggestions
 bindkey '^F' ai_accept_suggestion # Ctrl + F to accept suggestions
 bindkey '^B' ai_clear_suggestion  # Ctrl + B to dismiss suggestions
+
+export ERR_STREAM="/tmp/err_stream_$$.log"
+export ERR_LAST="/tmp/last_err_$$.log"
+touch "$ERR_STREAM" "$ERR_LAST"
+
+exec 2> >(tee -a "$ERR_STREAM" >&2)
+
+_snapshot_err() {
+  sleep 0.05
+  cp "$ERR_STREAM" "$ERR_LAST" 2>/dev/null
+  : > "$ERR_STREAM"
+}
+
+zshexit() { rm -f "$ERR_STREAM" "$ERR_LAST" }
+
+add-zsh-hook precmd _snapshot_err
+autoload -Uz add-zsh-hook

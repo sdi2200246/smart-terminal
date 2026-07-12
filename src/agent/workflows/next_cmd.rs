@@ -10,7 +10,7 @@ use crate::agent::archtectures::react::ReactLoop;
 use crate::agent::error::AgentError;
 use crate::core::llm_client::LLMProvider;
 use crate::core::memory::{Conversation, Interaction, Memory};
-use crate::core::session::{Model, ModelName};
+use crate::core::model::{Model, ModelName};
 use crate::utils::FlatSchema;
 
 #[derive(JsonSchema, Deserialize, Serialize, Debug)]

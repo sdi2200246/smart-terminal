@@ -151,3 +151,81 @@ async fn reuses_prior_tool_choice() {
     )
     .await;
 }
+
+#[tokio::test]
+#[ignore = "requires GROQ_API_KEY"]
+async fn reads_last_error_and_corrects_command() {
+    // Same failing command ("git push") has two common errors with DIFFERENT fixes:
+    //   - no upstream        -> git push --set-upstream origin <branch>
+    //   - rejected non-ff    -> git pull --rebase
+    // The model can only choose correctly by actually reading stderr.
+    let err_file = tempfile::NamedTempFile::new().expect("err file");
+    std::fs::write(
+        err_file.path(),
+        "fatal: The current branch feature/token-usage has no upstream branch.\n\
+         To push the current branch and set the remote as upstream, use\n\n\
+         \tgit push --set-upstream origin feature/token-usage\n",
+    )
+    .expect("write err");
+
+    unsafe {
+        env::set_var("ERR_LAST", err_file.path());
+    }
+
+    let pred = run_case_with_history(
+        "last_error_push_upstream",
+        &[("push my changes", "git push")],
+        "it failed",
+    )
+    .await;
+
+    let cmd = pred.cmd.to_lowercase();
+    assert!(
+        cmd.contains("set-upstream") || cmd.contains("-u "),
+        "expected upstream fix, got: {}",
+        pred.cmd
+    );
+    assert!(
+        cmd.contains("feature/token-usage"),
+        "branch name only exists in stderr — model didn't read the error. got: {}",
+        pred.cmd
+    );
+}
+
+#[tokio::test]
+#[ignore = "requires GROQ_API_KEY"]
+async fn corrects_command_when_docker_daemon_down() {
+    let err_file = tempfile::NamedTempFile::new().expect("err file");
+    std::fs::write(
+        err_file.path(),
+        "Cannot connect to the Docker daemon at unix:///var/run/docker.sock. \
+         Is the docker daemon running?\n",
+    )
+    .expect("write err");
+
+    unsafe {
+        env::set_var("ERR_LAST", err_file.path());
+    }
+
+    let pred = run_case_with_history(
+        "last_error_daemon_down",
+        &[("show my containers", "docker ps")],
+        "soemthing went wrong",
+    )
+    .await;
+
+    let cmd = pred.cmd.to_lowercase();
+    assert!(
+        cmd.contains("colima start")
+            || cmd.contains("open -a docker")
+            || cmd.contains("systemctl start docker")
+            || cmd.contains("dockerd"),
+        "expected a daemon-start command, got: {}",
+        pred.cmd
+    );
+    assert!(
+        !cmd.trim_start().starts_with("docker ps"),
+        "model just re-ran the failing command without reading the error: {}",
+        pred.cmd
+    );
+}
