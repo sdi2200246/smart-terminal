@@ -82,6 +82,7 @@ The planner uses `read_dir` to orient and emits a structured plan as JSON. The e
 Useful for anything you'd normally answer by poking around — what does this codebase do, where is X implemented, what's installed on this machine, what's the git state, why is this test failing, what changed between two branches.
  
 > Under active development. The planner sometimes over- or under-scopes, the executor occasionally repeats steps. Both will sharpen.
+> **Groq free tier limits**: the free API key has rate limits that can throttle `investigate` (which chains multiple LLM calls across planner + executor) and some `next-cmd` flows that inspect git diffs or docker state before predicting. `next-cmd` on simple completions stays fast. If you hit rate limits, wait a few seconds and retry — or upgrade your Groq plan.
 
 ## Architecture Overview
 
@@ -154,20 +155,7 @@ cargo install --path .
  
 This builds and installs `smart-terminal` into `~/.cargo/bin`, which `rustup` already added to your `$PATH`.
  
-**4. Configure zsh**
- 
-Still inside the cloned directory, append the integration to your `.zshrc`:
- 
-```bash
-cat <<EOF >> ~/.zshrc
- 
-# smart-terminal
-export GROQ_API_KEY="paste-your-key-here"
-source "$(pwd)/scripts/zsh/smart-terminal.zsh"
-EOF
-```
- 
-Then open `~/.zshrc` and replace `paste-your-key-here` with the key from step 2.
+
  
 **5. Apply and verify**
  
@@ -177,9 +165,25 @@ smart-terminal next-cmd "list files"
 ```
  
 You should see a command suggestion printed. Now open a fresh zsh session and press `^G` on an empty prompt — a ghost suggestion should appear inline. If it does, you're done.
- 
-> **Groq free tier limits**: the free API key has rate limits that can throttle `investigate` (which chains multiple LLM calls across planner + executor) and some `next-cmd` flows that inspect git diffs or docker state before predicting. `next-cmd` on simple completions stays fast. If you hit rate limits, wait a few seconds and retry — or upgrade your Groq plan.
 
+## Updating
+
+Pull the latest, rebuild the binary, and reload the shell integration:
+
+```bash
+cd /path/to/where/you/cloned/smart-terminal
+git pull
+cargo install --path . --force
+reload
+```
+
+`--force` overwrites the existing binary in `~/.cargo/bin`, and `reload`
+(added to your `.zshrc` during setup) re-sources the integration so zsh
+picks up any changes to the plugin script.
+
+> Other open terminal tabs keep the old integration until you run `reload`
+> in them or open a fresh session.
+ 
 ## Planned Improvements
 
 - **More reliable planning** — improve the investigation planner so it scopes tasks more precisely.
