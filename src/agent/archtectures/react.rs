@@ -42,15 +42,11 @@ impl<P: LLMProvider> ReactLoop<P> {
         self
     }
 
-    #[tracing::instrument(
-        skip(self, session, tools, tools_meta, model),
-        fields(loop_kind = "React")
-    )]
+    #[tracing::instrument(skip(self, session, tools, model), fields(loop_kind = "React"))]
     pub async fn run<T>(
         &mut self,
         session: &mut AgentSession,
         tools: &ToolRegistry,
-        tools_meta: &[ToolMetaData],
         model: &Model,
     ) -> Result<T, AgentError>
     where
@@ -76,7 +72,7 @@ impl<P: LLMProvider> ReactLoop<P> {
                 return Err(AgentError::StepsExhausted);
             }
 
-            call = match self.call_llm(session, tools_meta, model).await? {
+            call = match self.call_llm(session, tools.metadata(), model).await? {
                 Some(c) => c,
                 None => continue,
             };
@@ -106,7 +102,11 @@ impl<P: LLMProvider> ReactLoop<P> {
         tools: &ToolRegistry,
         call: &AgentToolCall,
     ) -> Result<(), ()> {
-        let result = match tools[call.name()].execute(call.arguments().clone()) {
+        let result = match tools
+            .get(call.name())
+            .expect("correct_tool_name")
+            .execute(call.arguments().clone())
+        {
             Ok(result) => result,
             Err(e) => {
                 tracing::error!(tool = %call.name(), status = "failed", error = %e, "Tool execution failed");

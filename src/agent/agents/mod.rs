@@ -1,10 +1,12 @@
 mod contexts;
 pub mod hooks;
 mod prompts;
+use std::vec;
+
 use crate::agent::archtectures::oneshot::OneShot;
 use crate::agent::archtectures::react::ReactLoop;
 use crate::agent::error::AgentError;
-use crate::core::capability::{Capability, ToolMetaData, ToolRegistry};
+use crate::core::capability::{Capability, ToolRegistry};
 use crate::core::llm_client::LLMProvider;
 use crate::core::model::Model;
 use crate::core::session::AgentSession;
@@ -23,28 +25,26 @@ use serde_json::Value;
 pub struct Agent<'a, P: LLMProvider> {
     runner: &'a mut ReactLoop<P>,
     registry: ToolRegistry,
-    tools_metadata: Vec<ToolMetaData>,
     system_prompt: &'static str,
     model: Model,
     context: Option<String>,
 }
 
 impl<'a, P: LLMProvider> Agent<'a, P> {
-    pub fn new(
-        runner: &'a mut ReactLoop<P>,
-        registry: ToolRegistry,
-        tools_metadata: Vec<ToolMetaData>,
-        system_prompt: &'static str,
-        model: Model,
-    ) -> Self {
+    // base constructor: empty registry, filled in by with_tools
+    fn base(runner: &'a mut ReactLoop<P>, system_prompt: &'static str, model: Model) -> Self {
         Self {
             runner,
-            registry,
-            tools_metadata,
+            registry: ToolRegistry::new(vec![]),
             system_prompt,
             model,
             context: None,
         }
+    }
+
+    pub fn with_tools(mut self, tools: Vec<Box<dyn Capability>>) -> Self {
+        self.registry = ToolRegistry::new(tools);
+        self
     }
 
     pub fn with_context<C: Serialize>(mut self, ctx: &C) -> Self {
@@ -53,95 +53,34 @@ impl<'a, P: LLMProvider> Agent<'a, P> {
     }
 
     pub fn planner(runner: &'a mut ReactLoop<P>, model: Model) -> Self {
-        let read_dir = Box::new(ReadDir) as Box<dyn Capability>;
-        let tools_metadata = vec![read_dir.metadata()];
-
-        let mut registry = ToolRegistry::new();
-        registry.insert(read_dir.name(), read_dir);
-
-        Self::new(
-            runner,
-            registry,
-            tools_metadata,
-            prompts::PLANNER_SYS_PROMPT,
-            model,
-        )
-        .with_context(&contexts::ShellEnv::gather())
+        Self::base(runner, prompts::PLANNER_SYS_PROMPT, model)
+            .with_tools(vec![Box::new(ReadDir)])
+            .with_context(&contexts::ShellEnv::gather())
     }
 
     pub fn executor(runner: &'a mut ReactLoop<P>, model: Model) -> Self {
-        let read_dir = Box::new(ReadDir) as Box<dyn Capability>;
-        let bash = Box::new(Bash) as Box<dyn Capability>;
-        let read_file = Box::new(ReadFile) as Box<dyn Capability>;
-
-        let tools_metadata = vec![read_dir.metadata(), bash.metadata(), read_file.metadata()];
-
-        let mut registry = ToolRegistry::new();
-        registry.insert(read_dir.name(), read_dir);
-        registry.insert(bash.name(), bash);
-        registry.insert(read_file.name(), read_file);
-
-        Self::new(
-            runner,
-            registry,
-            tools_metadata,
-            prompts::EXECUTOR_SYS_PROMPT,
-            model,
-        )
-        .with_context(&contexts::ShellEnv::gather())
+        Self::base(runner, prompts::EXECUTOR_SYS_PROMPT, model)
+            .with_tools(vec![Box::new(ReadDir), Box::new(Bash), Box::new(ReadFile)])
+            .with_context(&contexts::ShellEnv::gather())
     }
 
     pub fn architect(runner: &'a mut ReactLoop<P>, model: Model) -> Self {
-        let read_dir = Box::new(ReadDir) as Box<dyn Capability>;
-        let bash = Box::new(Bash) as Box<dyn Capability>;
-        let read_file = Box::new(ReadFile) as Box<dyn Capability>;
-
-        let tools_metadata = vec![read_dir.metadata(), bash.metadata(), read_file.metadata()];
-
-        let mut registry = ToolRegistry::new();
-        registry.insert(read_dir.name(), read_dir);
-        registry.insert(bash.name(), bash);
-        registry.insert(read_file.name(), read_file);
-
-        Self::new(
-            runner,
-            registry,
-            tools_metadata,
-            prompts::ARCHITECT_SYS_PROMPT,
-            model,
-        )
-        .with_context(&contexts::ShellEnv::gather())
+        Self::base(runner, prompts::ARCHITECT_SYS_PROMPT, model)
+            .with_tools(vec![Box::new(ReadDir), Box::new(Bash), Box::new(ReadFile)])
+            .with_context(&contexts::ShellEnv::gather())
     }
 
     pub fn cmd_predictor(runner: &'a mut ReactLoop<P>, model: Model, scheema: Value) -> Self {
-        let git_diff = Box::new(GitDiffStaged) as Box<dyn Capability>;
-        let docker = Box::new(Docker) as Box<dyn Capability>;
-        let json = Box::new(Json {
-            properties: scheema,
-        }) as Box<dyn Capability>;
-        let last_error = Box::new(ReadLastError) as Box<dyn Capability>;
-
-        let tools_metadata = vec![
-            git_diff.metadata(),
-            docker.metadata(),
-            json.metadata(),
-            last_error.metadata(),
-        ];
-
-        let mut registry = ToolRegistry::new();
-        registry.insert(git_diff.name(), git_diff);
-        registry.insert(docker.name(), docker);
-        registry.insert(json.name(), json);
-        registry.insert(last_error.name(), last_error);
-
-        Self::new(
-            runner,
-            registry,
-            tools_metadata,
-            prompts::CMD_PREDICTOR_SYS_PROMPT,
-            model,
-        )
-        .with_context(&contexts::ShellEnv::gather())
+        Self::base(runner, prompts::CMD_PREDICTOR_SYS_PROMPT, model)
+            .with_tools(vec![
+                Box::new(GitDiffStaged),
+                Box::new(Docker),
+                Box::new(Json {
+                    properties: scheema,
+                }),
+                Box::new(ReadLastError),
+            ])
+            .with_context(&contexts::ShellEnv::gather())
     }
 
     pub async fn run<T>(&mut self, user_prompt: impl Into<String>) -> Result<T, AgentError>
@@ -155,12 +94,7 @@ impl<'a, P: LLMProvider> Agent<'a, P> {
         let mut session = builder.user(user_prompt).build();
 
         self.runner
-            .run::<T>(
-                &mut session,
-                &self.registry,
-                &self.tools_metadata,
-                &self.model,
-            )
+            .run::<T>(&mut session, &self.registry, &self.model)
             .await
     }
 }
