@@ -21,14 +21,11 @@ impl From<&ConversationEvent> for Message {
         }
     }
 }
-
-impl From<ModelName> for String {
-    fn from(model: ModelName) -> String {
+pub fn to_groq_model_string(model:ModelName) -> String {
         match model {
             ModelName::GptOss120B => "openai/gpt-oss-120b".into(),
-            ModelName::GptOss20B => "openai/gpt-oss-20b".into(),
             ModelName::Llma3p18B => "llama-3.1-8b-instant".into(),
-        }
+            _ => "openai/gpt-oss-120b".into(),
     }
 }
 
@@ -50,7 +47,7 @@ impl From<&AgentRequest<'_>> for GroqRequest {
             })
             .collect();
 
-        let model: String = request.model.get_name().into();
+        let model: String = to_groq_model_string(request.model.get_name());
 
         GroqRequest {
             model,

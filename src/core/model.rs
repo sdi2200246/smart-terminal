@@ -1,8 +1,12 @@
 #[derive(Debug, PartialEq, Clone)]
-pub enum ModelName {
+pub enum    ModelName {
     GptOss120B,
     GptOss20B,
     Llma3p18B,
+    // Google Gemini models
+    Gemini1_5Pro,
+    Gemini1_5Flash,
+    Gemini2_5Flash,
 }
 
 #[derive(Debug, PartialEq, Clone)]
