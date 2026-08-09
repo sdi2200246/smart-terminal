@@ -3,7 +3,6 @@ use std::error::Error;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
 
-use smart_terminal::agent::agents::hooks::ToolsRegulator;
 use smart_terminal::agent::archtectures::react::ReactLoop;
 use smart_terminal::agent::workflows::investigator::{Investigator, Plan, Report};
 use smart_terminal::groq::client::GroqClient;
@@ -25,7 +24,7 @@ async fn run_case(label: &str, question: &str) -> (Plan, Report) {
     init_test_tracing();
 
     let provider = GroqClient::pooled();
-    let mut runner = ReactLoop::new(provider).with_hook(Box::new(ToolsRegulator::new()));
+    let mut runner = ReactLoop::new(provider);
     let mut workflow = Investigator::new(&mut runner);
 
     let (plan, report) = workflow
