@@ -12,8 +12,8 @@ pub async fn run(args: InvestigateArgs) {
 
     let provider = GroqClient::pooled();
     let mut runner = ReactLoop::new(provider)
-        .with_events_streaming(tx)
-        .with_hook(Box::new(ToolsRegulator::new()));
+        .with_events_streaming(tx);
+        // .with_hook(Box::new(ToolsRegulator::new()));
     let mut workflow = Investigator::new(&mut runner);
 
     match workflow.run(args.question).await {
