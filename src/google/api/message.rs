@@ -54,7 +54,7 @@ impl Message {
 
    pub fn tool_responce(content: Option<String>, tool_name: String) -> Message {
         Message {
-            role: Some("function".into()),
+            role: Some("user".into()),
             parts: vec![Part {
                 text: None,
                 function_call: None,
