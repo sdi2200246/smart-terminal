@@ -1,6 +1,6 @@
 use super::error::GoogleError;
 use super::api::request::GeminiRequest;
-use super::api::responce::{GeminiResponse , LlmToolCall};
+use super::api::responce::{GeminiResponse , LlmToolCall , LlmStructuredOutput};
 use crate::core::error::ProviderError;
 use crate::core::llm_client::{AgentRequest, LLMProvider};
 use crate::core::session::{AgentSession, AgentToolCall};
@@ -122,13 +122,19 @@ impl LLMProvider for GoogleClient {
             tool_call.args,
         ))
     }
-
     async fn complete_structured(
         &mut self,
         session: &AgentSession,
         schema: Value,
     ) -> Result<Value, ProviderError> {
-        Ok(Value::Null)
+        let req = GeminiRequest::structured(
+            session,
+            schema,
+            "gemini-flash-latest".into(),
+        );
+        let res = self.call_llm(req).await.map_err(ProviderError::from)?;
+        let out = LlmStructuredOutput::try_from(res).map_err(ProviderError::from)?;
+        Ok(out.value)
     }
 }
 
