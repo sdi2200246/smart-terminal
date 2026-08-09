@@ -3,6 +3,7 @@ use smart_terminal::agent::memory::FolderMemory;
 use smart_terminal::agent::workflows::next_cmd::{NextCmd, NextCommand, Reversibility};
 use smart_terminal::core::memory::{Interaction, Memory};
 use smart_terminal::groq::client::GroqClient;
+use smart_terminal::google::client::GoogleClient;
 use std::env;
 use std::error::Error;
 use tempfile::TempDir;
@@ -21,6 +22,15 @@ fn init_test_tracing() {
         .try_init()
         .ok();
 }
+fn google_client() -> GoogleClient {
+    dotenv::dotenv().ok();
+    GoogleClient {
+        client: reqwest::Client::new(),
+        api_key: std::env::var("GOOGLE_API_KEY").expect("GOOGLE_API_KEY must be set"),
+        completions_url: "https://generativelanguage.googleapis.com/v1beta/models/".into(),
+    }
+}
+
 
 async fn run_case(label: &str, input: &str) -> NextCommand {
     init_test_tracing();
@@ -228,4 +238,39 @@ async fn corrects_command_when_docker_daemon_down() {
         "model just re-ran the failing command without reading the error: {}",
         pred.cmd
     );
+}
+
+
+#[tokio::test]
+#[ignore = "requires GOOGLE_API_KEY"]
+async fn google_provider_completes_next_cmd_via_react_loop() {
+    init_test_tracing();
+
+    let tmp = TempDir::new().expect("tempdir");
+    let mut memory = FolderMemory::new(tmp.path());
+    let cwd = env::current_dir().expect("cwd");
+    memory.register(&cwd).expect("register cwd");
+
+    let provider = google_client();
+    let mut runner = ReactLoop::new(provider);
+
+    let prediction: NextCommand = {
+        let mut workflow = NextCmd::new(&mut runner, &mut memory);
+        workflow
+            .run("git commit -m \" ")
+            .await
+            .unwrap_or_else(|e| panic!("workflow failed: {:?}", e.source()))
+    };
+
+    println!("cmd:   {}", prediction.cmd);
+    println!("man:   {}", prediction.man);
+    println!("scale: {:?}", prediction.scale);
+
+    assert!(!prediction.cmd.is_empty(), "cmd empty");
+    assert!(!prediction.man.is_empty(), "man empty");
+
+    let conv = memory.current().expect("memory should be loaded");
+    assert_eq!(conv.interactions.len(), 1, "interaction not persisted");
+
+    drop(tmp);
 }
