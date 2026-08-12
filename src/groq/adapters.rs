@@ -21,11 +21,11 @@ impl From<&ConversationEvent> for Message {
         }
     }
 }
-pub fn to_groq_model_string(model:ModelName) -> String {
-        match model {
-            ModelName::GptOss120B => "openai/gpt-oss-120b".into(),
-            ModelName::Llma3p18B => "llama-3.1-8b-instant".into(),
-            _ => "openai/gpt-oss-120b".into(),
+pub fn to_groq_model_string(model: ModelName) -> String {
+    match model {
+        ModelName::GptOss120B => "openai/gpt-oss-120b".into(),
+        ModelName::Llma3p18B => "llama-3.1-8b-instant".into(),
+        _ => "openai/gpt-oss-120b".into(),
     }
 }
 

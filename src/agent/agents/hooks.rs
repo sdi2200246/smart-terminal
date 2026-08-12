@@ -3,10 +3,9 @@ use crate::agent::error::AgentError;
 use crate::core::session::{AgentSession, AgentToolCall};
 use std::collections::HashMap;
 
-
 pub struct DefaultAgentHook;
 
-impl AgentLoopHook for DefaultAgentHook{}
+impl AgentLoopHook for DefaultAgentHook {}
 
 pub struct ToolsRegulator {
     seen_tools: HashMap<String, AgentToolCall>,
@@ -106,7 +105,7 @@ mod tests {
             return matches!(
                 e,
                 ConversationEvent::System(s) if s.contains("already called")
-            )
+            );
         });
         assert!(has_error, "should inject error message on duplicate");
     }

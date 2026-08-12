@@ -14,9 +14,9 @@ impl From<&ConversationEvent> for Message {
             ConversationEvent::ToolResult { name, result, .. } => {
                 Message::tool_responce(Some(result.clone()), name.clone())
             }
-            ConversationEvent::ToolCall { name, arguments, .. } => {
-                Message::tool_call(name.clone(), arguments.clone())
-            }
+            ConversationEvent::ToolCall {
+                name, arguments, ..
+            } => Message::tool_call(name.clone(), arguments.clone()),
         }
     }
 }
@@ -78,10 +78,12 @@ impl From<&AgentRequest<'_>> for GeminiRequest {
             .collect();
 
         GeminiRequest {
-            model:to_google_model_string(request.model.get_name()),
+            model: to_google_model_string(request.model.get_name()),
             system_instruction,
             contents,
-            tools:vec![Tool { function_declarations }],
+            tools: vec![Tool {
+                function_declarations,
+            }],
             generation_config: Some(GenerationConfig {
                 temperature: Some(request.model.get_temp()),
                 response_mime_type: None,

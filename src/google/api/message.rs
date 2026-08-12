@@ -52,7 +52,7 @@ impl Message {
         Message::system(Some(content))
     }
 
-   pub fn tool_responce(content: Option<String>, tool_name: String) -> Message {
+    pub fn tool_responce(content: Option<String>, tool_name: String) -> Message {
         Message {
             role: Some("function".into()),
             parts: vec![Part {

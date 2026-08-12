@@ -7,17 +7,22 @@ pub enum HookAction {
 }
 
 pub trait AgentLoopHook: Send + Sync {
-    
     fn on_loop_start(&mut self) {
         tracing::info!(status = "started", "ReAct loop execution");
     }
 
     fn on_loop_exhausted(&mut self) {
-        tracing::error!(status = "exhausted", "ReAct loop terminated: step limit reached");
+        tracing::error!(
+            status = "exhausted",
+            "ReAct loop terminated: step limit reached"
+        );
     }
 
     fn on_final_answer(&mut self) {
-        tracing::info!(status = "success", "ReAct loop terminated: final answer provided");
+        tracing::info!(
+            status = "success",
+            "ReAct loop terminated: final answer provided"
+        );
     }
     fn on_llm_call(&mut self) {
         tracing::debug!(status = "requesting", "Calling LLM provider");

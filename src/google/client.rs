@@ -1,6 +1,6 @@
-use super::error::GoogleError;
 use super::api::request::GeminiRequest;
-use super::api::responce::{GeminiResponse , LlmToolCall};
+use super::api::responce::{GeminiResponse, LlmToolCall};
+use super::error::GoogleError;
 use crate::core::error::ProviderError;
 use crate::core::llm_client::{AgentRequest, LLMProvider};
 use crate::core::session::{AgentSession, AgentToolCall};
@@ -74,8 +74,7 @@ impl GoogleClient {
             };
         }
 
-        if status == StatusCode::BAD_REQUEST
-            && (body.contains("tool") || body.contains("function"))
+        if status == StatusCode::BAD_REQUEST && (body.contains("tool") || body.contains("function"))
         {
             return GoogleError::InvalidToolCall {
                 source: anyhow::anyhow!("{} {}", status, body),
@@ -138,7 +137,11 @@ mod unit {
     use crate::google::api::responce::{GeminiResponse, LlmToolCall};
     use serde_json::json;
 
-    fn google_response(tool_name: &str, tool_id: &str, arguments: serde_json::Value) -> GeminiResponse {
+    fn google_response(
+        tool_name: &str,
+        tool_id: &str,
+        arguments: serde_json::Value,
+    ) -> GeminiResponse {
         serde_json::from_value(json!({
             "candidates": [{
                 "finishReason": "STOP",

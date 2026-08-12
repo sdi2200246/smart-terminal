@@ -4,7 +4,7 @@ use serde_json::Value;
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, JsonSchema, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct  Tool {
+pub struct Tool {
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub function_declarations: Vec<FunctionDeclaration>,
 }

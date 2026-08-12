@@ -7,7 +7,7 @@ use serde_json::Value;
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct GeminiRequest {
-    pub model:String,
+    pub model: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub system_instruction: Option<Message>,
     pub contents: Vec<Message>,

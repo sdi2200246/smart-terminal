@@ -3,11 +3,11 @@ pub mod hooks;
 mod prompts;
 use std::vec;
 
+use crate::agent::agents::hooks::{DefaultAgentHook, ToolsRegulator};
+use crate::agent::archtectures::hook::AgentLoopHook;
 use crate::agent::archtectures::oneshot::OneShot;
 use crate::agent::archtectures::react::ReactLoop;
 use crate::agent::error::AgentError;
-use crate::agent::archtectures::hook::AgentLoopHook;
-use crate::agent::agents::hooks::{DefaultAgentHook , ToolsRegulator};
 use crate::core::capability::{Capability, ToolRegistry};
 use crate::core::llm_client::LLMProvider;
 use crate::core::model::Model;
@@ -41,7 +41,7 @@ impl<'a, P: LLMProvider> Agent<'a, P> {
             registry: ToolRegistry::new(vec![]),
             system_prompt,
             model,
-            hooks:Box::new(DefaultAgentHook),
+            hooks: Box::new(DefaultAgentHook),
             context: None,
         }
     }
@@ -56,10 +56,9 @@ impl<'a, P: LLMProvider> Agent<'a, P> {
         self
     }
 
-    pub fn with_hook(mut self , hook:Box<dyn AgentLoopHook>) ->Self{
+    pub fn with_hook(mut self, hook: Box<dyn AgentLoopHook>) -> Self {
         self.hooks = hook;
         self
-
     }
     pub fn planner(runner: &'a mut ReactLoop<P>, model: Model) -> Self {
         Self::base(runner, prompts::PLANNER_SYS_PROMPT, model)
@@ -105,7 +104,7 @@ impl<'a, P: LLMProvider> Agent<'a, P> {
         let mut session = builder.user(user_prompt).build();
 
         self.runner
-            .run::<T>(&mut session, &self.registry, &self.model , &mut self.hooks)
+            .run::<T>(&mut session, &self.registry, &self.model, &mut self.hooks)
             .await
     }
 }

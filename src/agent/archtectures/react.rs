@@ -29,7 +29,7 @@ impl<P: LLMProvider> ReactLoop<P> {
         self
     }
 
-    #[tracing::instrument(skip(self, session, tools, model , hooks), fields(loop_kind = "React"))]
+    #[tracing::instrument(skip(self, session, tools, model, hooks), fields(loop_kind = "React"))]
     pub async fn run<T>(
         &mut self,
         session: &mut AgentSession,
@@ -54,7 +54,10 @@ impl<P: LLMProvider> ReactLoop<P> {
                 return Err(AgentError::StepsExhausted);
             }
 
-            call = match self.call_llm(session, tools.metadata(), model , hooks).await? {
+            call = match self
+                .call_llm(session, tools.metadata(), model, hooks)
+                .await?
+            {
                 Some(c) => c,
                 None => continue,
             };
@@ -64,11 +67,15 @@ impl<P: LLMProvider> ReactLoop<P> {
                 break;
             }
             session.add_tool_call(call.name(), call.arguments().clone(), call.id());
-            if self.dispatch_tool_step(session, tools, &call , hooks).is_err() {
+            if self
+                .dispatch_tool_step(session, tools, &call, hooks)
+                .is_err()
+            {
                 continue;
             }
         }
-        self.structure_output::<T>(session, call.arguments() , hooks).await
+        self.structure_output::<T>(session, call.arguments(), hooks)
+            .await
     }
 
     fn dispatch_tool_step(
@@ -107,7 +114,7 @@ impl<P: LLMProvider> ReactLoop<P> {
         session: &mut AgentSession,
         tools_meta: &[ToolMetaData],
         model: &Model,
-        hooks: &mut Box<dyn AgentLoopHook>
+        hooks: &mut Box<dyn AgentLoopHook>,
     ) -> Result<Option<AgentToolCall>, AgentError> {
         let request = AgentRequest {
             model,
@@ -132,7 +139,7 @@ impl<P: LLMProvider> ReactLoop<P> {
         &mut self,
         session: &mut AgentSession,
         stop_args: &Value,
-        hooks: &mut Box<dyn AgentLoopHook>
+        hooks: &mut Box<dyn AgentLoopHook>,
     ) -> Result<T, AgentError>
     where
         T: FlatSchema + DeserializeOwned,
