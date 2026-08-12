@@ -124,7 +124,7 @@ impl<P: LLMProvider> ReactLoop<P> {
 
         match self.provider.complete(request).await {
             Ok(call) => Ok(Some(call)),
-            Err(ProviderError::InvalidToolCal { source }) => {
+            Err(ProviderError::InvalidToolCall { source }) => {
                 hooks.on_invalid_tool_call(&source.to_string());
                 session.add_error(format!("{}", source));
                 Ok(None)
