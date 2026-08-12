@@ -34,8 +34,8 @@ impl TryFrom<GroqResponse> for LlmToolCall {
                 .choices
                 .into_iter()
                 .next()
-                .ok_or_else(|| GroqError::MalformedResponse {
-                    source: anyhow::anyhow!("No choices in response"),
+                .ok_or_else(|| GroqError::UnexpectedOutput {
+                    body: "No choices in response".to_string(),
                 })?;
 
         if choice.finish_reason == Some("stop".to_string()) {
@@ -43,11 +43,8 @@ impl TryFrom<GroqResponse> for LlmToolCall {
                 .message
                 .content
                 .filter(|s| !s.trim().is_empty())
-                .ok_or(GroqError::MalformedResponse {
-                    source: anyhow::anyhow!(
-                        "Model stopped without producing a conclusion. \
-                         Expected non-empty content alongside finish_reason=stop."
-                    ),
+                .ok_or_else(|| GroqError::UnexpectedOutput {
+                    body: "Model stopped without producing a conclusion. Expected non-empty content alongside finish_reason=stop.".to_string(),
                 })?;
 
             return Ok(LlmToolCall {
@@ -57,25 +54,26 @@ impl TryFrom<GroqResponse> for LlmToolCall {
             });
         }
 
-        let tool =
-            choice
-                .message
-                .tool_calls
-                .into_iter()
-                .next()
-                .ok_or(GroqError::MalformedResponse {
-                    source: anyhow::anyhow!(
-                        "Model stopped without producing a conclusion. \
-                         Expected non-empty content alongside finish_reason=stop."
-                    ),
-                })?;
+        let tool = choice
+            .message
+            .tool_calls
+            .into_iter()
+            .next()
+            .ok_or_else(|| GroqError::UnexpectedOutput {
+                body: "Expected a tool call but none were found.".to_string(),
+            })?;
 
-        let args_str = tool.function.arguments.ok_or(GroqError::InvalidToolCall {
-            source: anyhow::anyhow!("No arguments where found"),
-        })?;
+        let args_str = tool
+            .function
+            .arguments
+            .ok_or_else(|| GroqError::UnexpectedOutput {
+                body: "No arguments were found in the tool call.".to_string(),
+            })?;
 
-        let parsed_args: Value = serde_json::from_str(&args_str)
-            .map_err(|e| GroqError::MalformedResponse { source: e.into() })?;
+        let parsed_args: Value =
+            serde_json::from_str(&args_str).map_err(|e| GroqError::InvalidToolCall {
+                body: e.to_string(),
+            })?;
 
         Ok(LlmToolCall {
             name: tool.function.name,
@@ -93,23 +91,25 @@ impl TryFrom<GroqResponse> for LlmStructuredOutput {
     type Error = GroqError;
 
     fn try_from(res: GroqResponse) -> Result<Self, Self::Error> {
-        let choice =
-            res.choices
-                .into_iter()
-                .next()
-                .ok_or_else(|| GroqError::MalformedResponse {
-                    source: anyhow::anyhow!("No choices in response"),
-                })?;
+        let choice = res
+            .choices
+            .into_iter()
+            .next()
+            .ok_or_else(|| GroqError::UnexpectedOutput {
+                body: "No choices in response".to_string(),
+            })?;
 
         let content = choice
             .message
             .content
-            .ok_or_else(|| GroqError::MalformedResponse {
-                source: anyhow::anyhow!("Expected content field, got none"),
+            .ok_or_else(|| GroqError::UnexpectedOutput {
+                body: "Expected content field, got none".to_string(),
             })?;
 
-        let value: Value = serde_json::from_str(&content)
-            .map_err(|e| GroqError::MalformedResponse { source: e.into() })?;
+        let value: Value =
+            serde_json::from_str(&content).map_err(|e| GroqError::UnexpectedOutput {
+                body: e.to_string(),
+            })?;
 
         Ok(LlmStructuredOutput { value })
     }
@@ -172,7 +172,7 @@ mod tests {
     }
 
     #[test]
-    fn stop_without_content_is_malformed() {
+    fn stop_without_content_is_unexpected_output() {
         let raw = json!({
             "choices": [{
                 "index": 0,
@@ -186,11 +186,11 @@ mod tests {
         });
 
         let result = LlmToolCall::try_from(parse(raw));
-        assert!(matches!(result, Err(GroqError::MalformedResponse { .. })));
+        assert!(matches!(result, Err(GroqError::UnexpectedOutput { .. })));
     }
 
     #[test]
-    fn stop_with_empty_content_is_malformed() {
+    fn stop_with_empty_content_is_unexpected_output() {
         let raw = json!({
             "choices": [{
                 "index": 0,
@@ -204,14 +204,14 @@ mod tests {
         });
 
         let result = LlmToolCall::try_from(parse(raw));
-        assert!(matches!(result, Err(GroqError::MalformedResponse { .. })));
+        assert!(matches!(result, Err(GroqError::UnexpectedOutput { .. })));
     }
 
     #[test]
     fn fails_when_no_choices() {
         let raw = json!({ "choices": [] });
         let result = LlmToolCall::try_from(parse(raw));
-        assert!(matches!(result, Err(GroqError::MalformedResponse { .. })));
+        assert!(matches!(result, Err(GroqError::UnexpectedOutput { .. })));
     }
 
     #[test]
@@ -229,7 +229,7 @@ mod tests {
         });
 
         let result = LlmToolCall::try_from(parse(raw));
-        assert!(matches!(result, Err(GroqError::MalformedResponse { .. })));
+        assert!(matches!(result, Err(GroqError::UnexpectedOutput { .. })));
     }
 
     #[test]
@@ -248,6 +248,6 @@ mod tests {
         });
 
         let result = LlmToolCall::try_from(parse(raw));
-        assert!(matches!(result, Err(GroqError::MalformedResponse { .. })));
+        assert!(matches!(result, Err(GroqError::UnexpectedOutput { .. })));
     }
 }
