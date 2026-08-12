@@ -38,7 +38,7 @@ impl From<GoogleError> for ProviderError {
     fn from(e: GoogleError) -> Self {
         match e {
             GoogleError::TokenLimit { source } => ProviderError::TokenLimit { source },
-            GoogleError::InvalidToolCall { source } => ProviderError::InvalidToolCal { source },
+            GoogleError::InvalidToolCall { source } => ProviderError::InvalidToolCall { source },
             GoogleError::MalformedResponse { source } => {
                 ProviderError::MalformedResponse { source }
             }
