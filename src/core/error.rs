@@ -9,7 +9,7 @@ pub enum ProviderError {
     },
 
     #[error("Invalid tool call from model")]
-    InvalidToolCal {
+    InvalidToolCall {
         #[source]
         source: anyhow::Error,
     },

@@ -6,6 +6,7 @@ use crate::core::llm_client::{AgentRequest, LLMProvider};
 use crate::core::session::{AgentSession, AgentToolCall};
 use reqwest::{Client, StatusCode};
 use serde_json::Value;
+use std::time::Duration;
 
 #[derive(Clone)]
 pub struct GroqClient {
@@ -24,9 +25,9 @@ impl GroqClient {
 
     fn build(max_idle: usize) -> Self {
         let client = Client::builder()
-            .pool_idle_timeout(std::time::Duration::from_secs(10))
+            .pool_idle_timeout(Duration::from_secs(10))
             .pool_max_idle_per_host(max_idle)
-            .tcp_keepalive(std::time::Duration::from_secs(30))
+            .tcp_keepalive(Duration::from_secs(30))
             .build()
             .unwrap();
 
@@ -42,10 +43,17 @@ impl GroqClient {
             .client
             .post(&self.completions_url)
             .header("Authorization", format!("Bearer {}", &self.api_key))
+            .timeout(Duration::from_secs(7))
             .json(&req)
             .send()
             .await
-            .map_err(|e| GroqError::Http { source: e.into() })?;
+            .map_err(|e| {
+                if e.is_timeout() {
+                    GroqError::Timeout { source: e }
+                } else {
+                    GroqError::Network { source: e }
+                }
+            })?;
 
         let status = res.status();
 
@@ -56,35 +64,28 @@ impl GroqClient {
 
         res.json::<GroqResponse>()
             .await
-            .map_err(|e| GroqError::MalformedResponse { source: e.into() })
+            .map_err(|e| GroqError::MalformedResponse { source: e })
     }
 
     fn map_status(status: StatusCode, body: String) -> GroqError {
         if status == StatusCode::PAYLOAD_TOO_LARGE {
-            return GroqError::TokenLimit {
-                source: anyhow::anyhow!("{} {}", status, body),
-            };
+            return GroqError::TokenLimit { body };
         }
 
         if status == StatusCode::BAD_REQUEST
             && (body.contains("tool_use_failed") || body.contains("output_parse_failed"))
         {
-            return GroqError::InvalidToolCall {
-                source: anyhow::anyhow!("{} {}", status, body),
-            };
+            return GroqError::InvalidToolCall { body };
         }
-
-        GroqError::Protocol {
-            source: anyhow::anyhow!("{} {}", status, body),
-        }
+        GroqError::Protocol { status, body }
     }
 }
 impl Default for GroqClient {
     fn default() -> GroqClient {
         let client = Client::builder()
-            .pool_idle_timeout(std::time::Duration::from_secs(10))
+            .pool_idle_timeout(Duration::from_secs(10))
             .pool_max_idle_per_host(0)
-            .tcp_keepalive(std::time::Duration::from_secs(30))
+            .tcp_keepalive(Duration::from_secs(30))
             .build()
             .unwrap();
 
