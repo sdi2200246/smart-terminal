@@ -47,6 +47,8 @@ impl From<GroqError> for ProviderError {
             GroqError::MalformedResponse { .. } => ProviderError::MalformedResponse {
                 source: anyhow::anyhow!(e),
             },
+            GroqError::UnexpectedOutput { .. } => ProviderError::MalformedResponse { source: anyhow::anyhow!(e) },
+
             _ => ProviderError::Protocol {
                 source: anyhow::anyhow!(e),
             },

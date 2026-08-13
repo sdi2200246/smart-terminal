@@ -128,6 +128,11 @@ impl<P: LLMProvider> ReactLoop<P> {
                 hooks.on_invalid_tool_call(&source.to_string());
                 session.add_error(format!("{}", source));
                 Ok(None)
+            },
+            Err(ProviderError::MalformedResponse { source })=>{
+                hooks.on_provider_error(&source.to_string());
+                session.add_error(format!("{}", source));
+                Ok(None)
             }
             Err(e) => {
                 hooks.on_provider_error(&e.to_string());
