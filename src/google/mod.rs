@@ -1,4 +1,4 @@
-pub mod api;
-pub mod error;
-pub mod client;
 pub mod adapters;
+pub mod api;
+pub mod client;
+pub mod error;

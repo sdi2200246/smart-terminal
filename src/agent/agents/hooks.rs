@@ -1,7 +1,11 @@
-use crate::agent::archtectures::hook::{HookAction, LoopHook};
+use crate::agent::archtectures::hook::{AgentLoopHook, HookAction};
 use crate::agent::error::AgentError;
 use crate::core::session::{AgentSession, AgentToolCall};
 use std::collections::HashMap;
+
+pub struct DefaultAgentHook;
+
+impl AgentLoopHook for DefaultAgentHook {}
 
 pub struct ToolsRegulator {
     seen_tools: HashMap<String, AgentToolCall>,
@@ -20,7 +24,7 @@ impl ToolsRegulator {
     }
 }
 
-impl LoopHook for ToolsRegulator {
+impl AgentLoopHook for ToolsRegulator {
     fn pre_call(
         &mut self,
         session: &mut AgentSession,
@@ -38,11 +42,6 @@ impl LoopHook for ToolsRegulator {
             self.mark_as_seen(call.clone(), key);
             Ok(HookAction::Continue)
         }
-    }
-
-    fn clear_state(&mut self) {
-        self.seen_tools.clear();
-        self.errors.clear();
     }
 }
 
@@ -103,10 +102,10 @@ mod tests {
         hook.pre_call(&mut session, &call).unwrap();
 
         let has_error = session.events().iter().any(|e| {
-            matches!(
+            return matches!(
                 e,
                 ConversationEvent::System(s) if s.contains("already called")
-            )
+            );
         });
         assert!(has_error, "should inject error message on duplicate");
     }

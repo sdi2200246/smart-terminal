@@ -93,7 +93,9 @@ impl TryFrom<GeminiResponse> for LlmStructuredOutput {
             .into_iter()
             .find_map(|p| p.text)
             .ok_or_else(|| GoogleError::MalformedResponse {
-                source: anyhow::anyhow!("Expected text content field for structured output, got none"),
+                source: anyhow::anyhow!(
+                    "Expected text content field for structured output, got none"
+                ),
             })?;
 
         let value: Value = serde_json::from_str(&text)
