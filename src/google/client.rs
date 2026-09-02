@@ -1,11 +1,12 @@
 use super::api::request::GeminiRequest;
-use super::api::responce::{GeminiResponse, LlmToolCall , LlmStructuredOutput};
+use super::api::responce::{GeminiResponse, LlmStructuredOutput, LlmToolCall};
 use super::error::GoogleError;
 use crate::core::error::ProviderError;
 use crate::core::llm_client::{AgentRequest, LLMProvider};
 use crate::core::session::{AgentSession, AgentToolCall};
 use reqwest::{Client, StatusCode};
 use serde_json::Value;
+use std::time::Duration;
 
 #[derive(Clone)]
 pub struct GoogleClient {
@@ -25,9 +26,9 @@ impl GoogleClient {
 
     fn build(max_idle: usize) -> Self {
         let client = Client::builder()
-            .pool_idle_timeout(std::time::Duration::from_secs(10))
+            .pool_idle_timeout(Duration::from_secs(10))
             .pool_max_idle_per_host(max_idle)
-            .tcp_keepalive(std::time::Duration::from_secs(30))
+            .tcp_keepalive(Duration::from_secs(30))
             .build()
             .unwrap();
 
@@ -50,10 +51,17 @@ impl GoogleClient {
             .client
             .post(url)
             .header("x-goog-api-key", &self.api_key)
+            .timeout(Duration::from_secs(40))
             .json(&req)
             .send()
             .await
-            .map_err(|e| GoogleError::Http { source: e.into() })?;
+            .map_err(|e| {
+                if e.is_timeout() {
+                    GoogleError::Timeout { source: e }
+                } else {
+                    GoogleError::Network { source: e }
+                }
+            })?;
 
         let status = res.status();
 
@@ -64,35 +72,29 @@ impl GoogleClient {
 
         res.json::<GeminiResponse>()
             .await
-            .map_err(|e| GoogleError::MalformedResponse { source: e.into() })
+            .map_err(|e| GoogleError::MalformedResponse { source: e })
     }
 
     fn map_status(status: StatusCode, body: String) -> GoogleError {
         if status == StatusCode::PAYLOAD_TOO_LARGE {
-            return GoogleError::TokenLimit {
-                source: anyhow::anyhow!("{} {}", status, body),
-            };
+            return GoogleError::TokenLimit { body };
         }
 
         if status == StatusCode::BAD_REQUEST && (body.contains("tool") || body.contains("function"))
         {
-            return GoogleError::InvalidToolCall {
-                source: anyhow::anyhow!("{} {}", status, body),
-            };
+            return GoogleError::InvalidToolCall { body };
         }
 
-        GoogleError::Protocol {
-            source: anyhow::anyhow!("{} {}", status, body),
-        }
+        GoogleError::Protocol { status, body }
     }
 }
 
 impl Default for GoogleClient {
     fn default() -> GoogleClient {
         let client = Client::builder()
-            .pool_idle_timeout(std::time::Duration::from_secs(10))
+            .pool_idle_timeout(Duration::from_secs(10))
             .pool_max_idle_per_host(0)
-            .tcp_keepalive(std::time::Duration::from_secs(30))
+            .tcp_keepalive(Duration::from_secs(30))
             .build()
             .unwrap();
 
@@ -119,8 +121,10 @@ impl LLMProvider for GoogleClient {
             tool_call.name,
             "".into(),
             tool_call.args,
+            Some(tool_call.thinking_state),
         ))
     }
+
     async fn complete_structured(
         &mut self,
         session: &AgentSession,
@@ -186,7 +190,7 @@ mod unit {
     fn llm_tool_call_converts_to_agent_tool_call() {
         let resp = google_response("final_answer", "call_test", json!({"result":"42"}));
         let llm_call = LlmToolCall::try_from(resp).unwrap();
-        let agent_call = AgentToolCall::new(llm_call.name, "".into(), llm_call.args);
+        let agent_call = AgentToolCall::new(llm_call.name, "".into(), llm_call.args, None);
         assert_eq!(agent_call.name(), "final_answer");
         assert_eq!(agent_call.arguments().clone(), json!({"result": "42"}));
     }
