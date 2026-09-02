@@ -7,6 +7,7 @@ use serde_json::Value;
 pub struct LlmToolCall {
     pub name: String,
     pub args: Value,
+    pub thinking_state: String,
 }
 
 #[derive(Deserialize, Debug)]
@@ -32,15 +33,17 @@ impl TryFrom<GeminiResponse> for LlmToolCall {
                 .candidates
                 .into_iter()
                 .next()
-                .ok_or_else(|| GoogleError::MalformedResponse {
-                    source: anyhow::anyhow!("No candidates in response"),
+                .ok_or_else(|| GoogleError::UnexpectedOutput {
+                    body: "No candidates in response".to_string(),
                 })?;
 
         for part in &candidate.content.parts {
             if let Some(fc) = &part.function_call {
+                let thinking = part.thought_signature.clone().unwrap_or("".to_string());
                 return Ok(LlmToolCall {
                     name: fc.name.clone(),
                     args: fc.args.clone(),
+                    thinking_state: thinking,
                 });
             }
         }
@@ -52,21 +55,19 @@ impl TryFrom<GeminiResponse> for LlmToolCall {
                 .into_iter()
                 .find_map(|p| p.text)
                 .filter(|s| !s.trim().is_empty())
-                .ok_or(GoogleError::MalformedResponse {
-                    source: anyhow::anyhow!(
-                        "Model stopped without producing a conclusion. \
-                        Expected non-empty text content alongside finish_reason=STOP."
-                    ),
+                .ok_or_else(|| GoogleError::UnexpectedOutput {
+                    body: "Model stopped without producing a conclusion. Expected non-empty text content alongside finish_reason=STOP.".to_string(),
                 })?;
 
             return Ok(LlmToolCall {
                 name: "stop".into(),
                 args: Value::String(text),
+                thinking_state: "".to_string(),
             });
         }
 
-        Err(GoogleError::MalformedResponse {
-            source: anyhow::anyhow!("Neither function call nor valid stop text was found"),
+        Err(GoogleError::UnexpectedOutput {
+            body: "Neither function call nor valid stop text was found".to_string(),
         })
     }
 }
@@ -83,8 +84,8 @@ impl TryFrom<GeminiResponse> for LlmStructuredOutput {
             res.candidates
                 .into_iter()
                 .next()
-                .ok_or_else(|| GoogleError::MalformedResponse {
-                    source: anyhow::anyhow!("No candidates in response"),
+                .ok_or_else(|| GoogleError::UnexpectedOutput {
+                    body: "No candidates in response".to_string(),
                 })?;
 
         let text = candidate
@@ -92,14 +93,14 @@ impl TryFrom<GeminiResponse> for LlmStructuredOutput {
             .parts
             .into_iter()
             .find_map(|p| p.text)
-            .ok_or_else(|| GoogleError::MalformedResponse {
-                source: anyhow::anyhow!(
-                    "Expected text content field for structured output, got none"
-                ),
+            .ok_or_else(|| GoogleError::UnexpectedOutput {
+                body: "Expected text content field for structured output, got none".to_string(),
             })?;
 
         let value: Value = serde_json::from_str(&text)
-            .map_err(|e| GoogleError::MalformedResponse { source: e.into() })?;
+            .map_err(|e| GoogleError::UnexpectedOutput {
+                body: e.to_string(),
+            })?;
 
         Ok(LlmStructuredOutput { value })
     }
@@ -168,13 +169,13 @@ mod tests {
         });
 
         let result = LlmToolCall::try_from(parse(raw));
-        assert!(matches!(result, Err(GoogleError::MalformedResponse { .. })));
+        assert!(matches!(result, Err(GoogleError::UnexpectedOutput { .. })));
     }
 
     #[test]
     fn fails_when_no_candidates() {
         let raw = json!({ "candidates": [] });
         let result = LlmToolCall::try_from(parse(raw));
-        assert!(matches!(result, Err(GoogleError::MalformedResponse { .. })));
+        assert!(matches!(result, Err(GoogleError::UnexpectedOutput { .. })));
     }
 }

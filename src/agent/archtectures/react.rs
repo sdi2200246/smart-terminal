@@ -66,7 +66,7 @@ impl<P: LLMProvider> ReactLoop<P> {
             if call.name() == "stop" {
                 break;
             }
-            session.add_tool_call(call.name(), call.arguments().clone(), call.id());
+            session.add_tool_call(call.name(), call.arguments().clone(), call.id() , call.thinking_state() );
             if self
                 .dispatch_tool_step(session, tools, &call, hooks)
                 .is_err()
@@ -74,7 +74,7 @@ impl<P: LLMProvider> ReactLoop<P> {
                 continue;
             }
         }
-        self.structure_output::<T>(session, call.arguments(), hooks)
+        self.structure_output::<T>(session, &call.arguments(), hooks)
             .await
     }
 
@@ -101,7 +101,7 @@ impl<P: LLMProvider> ReactLoop<P> {
         if call.name() == "final_answer" {
             session.set_final_answer(call.arguments().clone());
         } else {
-            session.add_tool_result(call.name(), result, call.id());
+            session.add_tool_result(call.name(), result, call.id() , call.thinking_state());
             if let Some(stream) = &self.events_stream {
                 let _ = stream.send(call.clone());
             }

@@ -8,8 +8,8 @@ const GREEN: &str = "\x1b[32m";
 
 pub(super) fn format_call(call: &AgentToolCall) -> String {
     let name = call.name();
-    let args = summarize_args(call.arguments());
-    format!("{GREEN}●{RESET} {BOLD}{name}{RESET}{DIM}({args}){RESET}")
+    let args = summarize_args(&call.arguments());
+    return format!("{GREEN}●{RESET} {BOLD}{name}{RESET}{DIM}({args}){RESET}")
 }
 
 fn summarize_args(args: &Value) -> String {

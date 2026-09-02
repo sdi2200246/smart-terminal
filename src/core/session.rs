@@ -11,11 +11,13 @@ pub enum ConversationEvent {
         name: String,
         arguments: Value,
         id: String,
+        thinking_state:Option<String>,
     },
     ToolResult {
         name: String,
         result: String,
         id: String,
+        thinking_state:Option<String>,
     },
 }
 
@@ -24,13 +26,15 @@ pub struct AgentToolCall {
     id: String,
     arguments: Value,
     name: String,
+    thinking_state:Option<String>,
 }
 impl AgentToolCall {
-    pub fn new(name: String, id: String, arguments: Value) -> Self {
+    pub fn new(name: String, id: String, arguments: Value , thinking_state:Option<String>) -> Self {
         Self {
             name,
             id,
             arguments,
+            thinking_state,
         }
     }
     pub fn name(&self) -> &str {
@@ -39,11 +43,14 @@ impl AgentToolCall {
     pub fn id(&self) -> &str {
         &self.id
     }
-    pub fn arguments(&self) -> &Value {
-        &self.arguments
+    pub fn arguments(&self) -> Value {
+        self.arguments.clone()
     }
     pub fn into_arguments(self) -> Value {
         self.arguments
+    }
+    pub fn thinking_state(&self) ->Option<String>{
+        self.thinking_state.clone()
     }
 }
 
@@ -87,11 +94,13 @@ impl AgentSession {
         name: impl Into<String>,
         arguments: Value,
         id: impl Into<String>,
+        thinking_state: Option<String>
     ) {
         self.events.push(ConversationEvent::ToolCall {
             name: name.into(),
             arguments,
             id: id.into(),
+            thinking_state:thinking_state,
         });
     }
 
@@ -100,11 +109,13 @@ impl AgentSession {
         name: impl Into<String>,
         result: impl Into<String>,
         id: impl Into<String>,
+        thinking_state: Option<String>,
     ) {
         self.events.push(ConversationEvent::ToolResult {
             name: name.into(),
             result: result.into(),
             id: id.into(),
+            thinking_state
         });
     }
 

@@ -111,4 +111,80 @@ mod integration {
         assert_eq!(call.name(), "get_weather");
         assert!(call.arguments().get("city").is_some());
     }
+
+
+    #[cfg(test)]
+    mod integration_structured_responces {
+        use schemars::JsonSchema;
+        use serde::Deserialize;
+        use smart_terminal::core::llm_client::LLMProvider;
+        use smart_terminal::core::session::AgentSession;
+        use smart_terminal::google::client::GoogleClient;
+        use smart_terminal::utils::FlatSchema;
+
+        fn client() -> GoogleClient {
+            dotenv::dotenv().ok();
+            GoogleClient {
+                client: reqwest::Client::new(),
+                api_key: std::env::var("GOOGLE_API_KEY").expect("GOOGLE_API_KEY must be set"),
+                completions_url: "https://generativelanguage.googleapis.com/v1beta/models/".into(),
+            }
+        }
+
+        fn session(user: &str) -> AgentSession {
+            let mut s = AgentSession::new(5);
+            s.add_system("You are a helpful assistant. Respond only with valid JSON matching the requested schema.");
+            s.add_user(user.to_string());
+            s
+        }
+
+        #[derive(JsonSchema, Deserialize, Debug)]
+        #[schemars(deny_unknown_fields)]
+        pub enum Reversibility {
+            Full,
+            Mostly,
+            Partial,
+            Hard,
+            Irreversible,
+        }
+
+        #[derive(JsonSchema, Deserialize)]
+        #[schemars(deny_unknown_fields)]
+        pub struct NextCommand {
+            /// Shell executable command.
+            pub cmd: String,
+            /// Very compressed description of the shell command
+            pub man: String,
+            /// How reversible the command is given the current environment.
+            pub scale: Reversibility,
+        }
+        impl FlatSchema for NextCommand {}
+
+        #[tokio::test]
+        #[ignore = "requires GOOGLE_API_KEY"]
+        async fn structured_returns_valid_next_command() {
+            let mut client = client();
+            let session = session("give me an appropiriate commit message uisng your tools");
+            let result = client
+                .complete_structured(&session, NextCommand::schema())
+                .await;
+
+            assert!(
+                result.is_ok(),
+                "complete_structured failed: {:?}",
+                result.err()
+            );
+            let value = result.unwrap();
+            println!("raw value: {value}");
+
+            let parsed: NextCommand = serde_json::from_value(value).expect("schema mismatch");
+            assert!(!parsed.cmd.is_empty());
+            assert!(!parsed.man.is_empty());
+            println!(
+                "cmd: {}\nman: {}\nscale: {:?}",
+                parsed.cmd, parsed.man, parsed.scale
+            );
+        }
+    }
+
 }

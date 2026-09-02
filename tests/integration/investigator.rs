@@ -6,6 +6,16 @@ use tracing_subscriber::prelude::*;
 use smart_terminal::agent::archtectures::react::ReactLoop;
 use smart_terminal::agent::workflows::investigator::{Investigator, Plan, Report};
 use smart_terminal::groq::client::GroqClient;
+use smart_terminal::google::client::GoogleClient;
+
+fn google_client() -> GoogleClient {
+    dotenv::dotenv().ok();
+    GoogleClient {
+        client: reqwest::Client::new(),
+        api_key: std::env::var("GOOGLE_API_KEY").expect("GOOGLE_API_KEY must be set"),
+        completions_url: "https://generativelanguage.googleapis.com/v1beta/models/".into(),
+    }
+}
 
 fn init_test_tracing() {
     tracing_subscriber::registry()
@@ -23,7 +33,7 @@ fn init_test_tracing() {
 async fn run_case(label: &str, question: &str) -> (Plan, Report) {
     init_test_tracing();
 
-    let provider = GroqClient::pooled();
+    let provider = google_client();
     let mut runner = ReactLoop::new(provider);
     let mut workflow = Investigator::new(&mut runner);
 
@@ -52,9 +62,9 @@ async fn run_case(label: &str, question: &str) -> (Plan, Report) {
 
 // ── Case 1: broad project overview — planner must orient, executor must synthesize ──
 #[tokio::test]
-#[ignore = "requires GROQ_API_KEY"]
+#[ignore = "requires GOOGLE_API_KEY"]
 async fn project_overview() {
-    let question = "can you search google for any news about agents? or hacks? ";
+    let question = "read project structure and explain the main features of the porject";
 
     let (_plan, report) = run_case("overview", question).await;
 }
