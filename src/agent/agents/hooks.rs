@@ -52,7 +52,7 @@ mod tests {
     use serde_json::json;
 
     fn fake_call(name: &str, args: serde_json::Value) -> AgentToolCall {
-        AgentToolCall::new(name.into(), "call_1".into(), args)
+        AgentToolCall::new(name.into(), "call_1".into(), args , None)
     }
 
     #[test]

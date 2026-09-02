@@ -154,6 +154,7 @@ mod tests {
                 "stop".into(),
                 "".into(),
                 Value::String("done".into()),
+                None
             ))
         }
 
