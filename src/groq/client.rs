@@ -110,6 +110,7 @@ impl LLMProvider for GroqClient {
             tool_call.name,
             tool_call.id,
             tool_call.args,
+            None
         ))
     }
 
@@ -175,7 +176,7 @@ mod unit {
     fn llm_tool_call_converts_to_agent_tool_call() {
         let resp = groq_response("final_answer", r#"{"result":"42"}"#);
         let llm_call = LlmToolCall::try_from(resp).unwrap();
-        let agent_call = AgentToolCall::new(llm_call.name, llm_call.id, llm_call.args);
+        let agent_call = AgentToolCall::new(llm_call.name, llm_call.id, llm_call.args , None);
         assert_eq!(agent_call.name(), "final_answer");
         assert_eq!(agent_call.id(), "call_test");
         assert_eq!(agent_call.arguments().clone(), json!({"result": "42"}));

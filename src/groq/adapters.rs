@@ -10,13 +10,14 @@ impl From<&ConversationEvent> for Message {
         match event {
             ConversationEvent::System(message) => Message::system(Some(message.clone())),
             ConversationEvent::User(message) => Message::user(Some(message.clone())),
-            ConversationEvent::ToolResult { name, result, id } => {
+            ConversationEvent::ToolResult { name, result, id ,..} => {
                 Message::tool_responce(Some(result.clone()), id.clone(), name.clone())
             }
             ConversationEvent::ToolCall {
                 name,
                 arguments,
                 id,
+                ..
             } => Message::tool_call(name.clone(), id.clone(), arguments.clone()),
         }
     }
@@ -112,6 +113,7 @@ mod tests {
             name: "get_weather".into(),
             arguments: args.clone(),
             id: "call_abc123".into(),
+            thinking_state:None,
         };
 
         let msg: Message = (&event).into();
@@ -138,6 +140,7 @@ mod tests {
             name: "get_weather".into(),
             result: "72°F".into(),
             id: "call_abc123".into(),
+            thinking_state:None,
         };
 
         let msg: Message = (&event).into();
@@ -164,6 +167,7 @@ mod tests {
                     name: "get_weather".into(),
                     arguments: json!({"a": 1}),
                     id: "123".into(),
+                    thinking_state:None
                 },
             ],
             steps: 5,
