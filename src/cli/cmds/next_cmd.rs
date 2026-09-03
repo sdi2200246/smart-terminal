@@ -1,9 +1,9 @@
-use crate::agent::archtectures::react::ReactLoop;
+use crate::agent::patterns::react::ReactLoop;
 use crate::agent::memory::FolderMemory;
 use crate::agent::workflows::next_cmd::{NextCmd, Reversibility};
 use crate::cli::cli::NextCmdArgs;
 use crate::core::memory::Memory;
-use crate::groq::client::GroqClient;
+use crate::providers::groq::client::GroqClient;
 use std::env;
 use std::io::{self, Write};
 
