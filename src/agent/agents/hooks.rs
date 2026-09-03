@@ -1,4 +1,4 @@
-use crate::agent::archtectures::hook::{AgentLoopHook, HookAction};
+use crate::agent::patterns::hook::{AgentLoopHook, HookAction};
 use crate::agent::error::AgentError;
 use crate::core::session::{AgentSession, AgentToolCall};
 use std::collections::HashMap;

@@ -1,18 +1,15 @@
 use std::error::Error;
-
-use crate::agent::agents::hooks::ToolsRegulator;
-use crate::agent::archtectures::react::ReactLoop;
+use crate::agent::patterns::react::ReactLoop;
 use crate::agent::workflows::investigator::Investigator;
 use crate::cli::cli::InvestigateArgs;
 use crate::cli::presenters::Presenter;
-use crate::groq::client::GroqClient;
+use crate::providers::groq::client::GroqClient;
 pub async fn run(args: InvestigateArgs) {
     let (presenter, tx) = Presenter::new();
     let handle = presenter.spawn();
 
     let provider = GroqClient::pooled();
     let mut runner = ReactLoop::new(provider).with_events_streaming(tx);
-    // .with_hook(Box::new(ToolsRegulator::new()));
     let mut workflow = Investigator::new(&mut runner);
 
     match workflow.run(args.question).await {

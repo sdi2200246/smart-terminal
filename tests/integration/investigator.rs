@@ -1,21 +1,10 @@
-use std::error::Error;
-
+use smart_terminal::agent::patterns::react::ReactLoop;
+use smart_terminal::agent::workflows::investigator::{Investigator, Plan, Report};
+use smart_terminal::core::llm_client::LLMProvider;
+use smart_terminal::providers::google::client::GoogleClient;
+use smart_terminal::providers::groq::client::GroqClient;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
-
-use smart_terminal::agent::archtectures::react::ReactLoop;
-use smart_terminal::agent::workflows::investigator::{Investigator, Plan, Report};
-use smart_terminal::groq::client::GroqClient;
-use smart_terminal::google::client::GoogleClient;
-
-fn google_client() -> GoogleClient {
-    dotenv::dotenv().ok();
-    GoogleClient {
-        client: reqwest::Client::new(),
-        api_key: std::env::var("GOOGLE_API_KEY").expect("GOOGLE_API_KEY must be set"),
-        completions_url: "https://generativelanguage.googleapis.com/v1beta/models/".into(),
-    }
-}
 
 fn init_test_tracing() {
     tracing_subscriber::registry()
@@ -30,17 +19,18 @@ fn init_test_tracing() {
         .ok();
 }
 
-async fn run_case(label: &str, question: &str) -> (Plan, Report) {
+// Accepts any LLMProvider so we can inject Groq or Google dynamically
+async fn run_case<P: LLMProvider>(label: &str, question: &str, provider: P) -> (Plan, Report) {
     init_test_tracing();
+    dotenv::dotenv().ok();
 
-    let provider = google_client();
     let mut runner = ReactLoop::new(provider);
     let mut workflow = Investigator::new(&mut runner);
 
     let (plan, report) = workflow
         .run(question)
         .await
-        .unwrap_or_else(|e| panic!("[{label}] workflow failed: {:?}", e.source()));
+        .unwrap_or_else(|e| panic!("[{label}] workflow failed: {:?}", e));
 
     println!("\n═══ {label} — PLAN ═══");
     println!("goal: {}", plan.goal);
@@ -52,7 +42,6 @@ async fn run_case(label: &str, question: &str) -> (Plan, Report) {
     println!("\n═══ {label} — REPORT ═══");
     println!("report: {}", report.report);
 
-    // Shape checks every investigation must pass — keeps the per-test asserts focused on semantics.
     assert!(!plan.goal.is_empty(), "[{label}] plan.goal empty");
     assert!(!plan.steps.is_empty(), "[{label}] plan.steps empty");
     assert!(!report.report.is_empty(), "[{label}] report.summary empty");
@@ -60,11 +49,18 @@ async fn run_case(label: &str, question: &str) -> (Plan, Report) {
     (plan, report)
 }
 
-// ── Case 1: broad project overview — planner must orient, executor must synthesize ──
 #[tokio::test]
 #[ignore = "requires GOOGLE_API_KEY"]
-async fn project_overview() {
-    let question = "read project structure and explain the main features of the porject";
+async fn project_overview_google() {
+    let question = "i want you to run git status see what files changes and give me a script that makes clusters commits with correct messages";
+    let provider = GoogleClient::pooled();
+    let (_plan, _report) = run_case("overview_google", question, provider).await;
+}
 
-    let (_plan, report) = run_case("overview", question).await;
+#[tokio::test]
+#[ignore = "requires GROQ_API_KEY"]
+async fn project_overview_groq() {
+    let question = "read project structure and explain the main features of the porject";
+    let provider = GroqClient::pooled();
+    let (_plan, _report) = run_case("overview_groq", question, provider).await;
 }

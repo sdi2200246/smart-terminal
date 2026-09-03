@@ -4,9 +4,9 @@ mod prompts;
 use std::vec;
 
 use crate::agent::agents::hooks::{DefaultAgentHook, ToolsRegulator};
-use crate::agent::archtectures::hook::AgentLoopHook;
-use crate::agent::archtectures::oneshot::OneShot;
-use crate::agent::archtectures::react::ReactLoop;
+use crate::agent::patterns::hook::AgentLoopHook;
+use crate::agent::patterns::oneshot::OneShot;
+use crate::agent::patterns::react::ReactLoop;
 use crate::agent::error::AgentError;
 use crate::core::capability::{Capability, ToolRegistry};
 use crate::core::llm_client::LLMProvider;
