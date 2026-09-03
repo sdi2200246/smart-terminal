@@ -4,7 +4,7 @@ use crate::core::session::AgentSession;
 use serde::Serialize;
 use serde_json::Value;
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug , Default)]
 pub struct GroqRequest {
     pub model: String,
     pub messages: Vec<Message>,

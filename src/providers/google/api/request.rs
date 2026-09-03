@@ -1,12 +1,12 @@
 use super::message::Message;
 use super::tool::Tool;
-use crate::google::adapters::to_gemini_schema;
+use crate::providers::google::adapters::to_gemini_schema;
 use crate::core::session::{AgentSession , ConversationEvent};
 
 use serde::Serialize;
 use serde_json::Value;
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug , Default)]
 #[serde(rename_all = "camelCase")]
 pub struct GeminiRequest {
     #[serde(skip)]
