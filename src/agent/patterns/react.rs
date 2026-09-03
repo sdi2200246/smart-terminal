@@ -1,4 +1,4 @@
-use crate::agent::archtectures::hook::AgentLoopHook;
+use crate::agent::patterns::hook::AgentLoopHook;
 use crate::agent::error::AgentError;
 use crate::core::capability::{ToolMetaData, ToolRegistry};
 use crate::core::error::ProviderError;
