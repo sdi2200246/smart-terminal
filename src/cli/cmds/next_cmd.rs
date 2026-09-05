@@ -4,6 +4,7 @@ use crate::agent::workflows::next_cmd::{NextCmd, Reversibility};
 use crate::cli::cli::NextCmdArgs;
 use crate::core::memory::Memory;
 use crate::providers::groq::client::GroqClient;
+use crate::cli::agent_setup::CliToolProvider;
 use std::env;
 use std::io::{self, Write};
 
@@ -19,7 +20,7 @@ pub async fn run(args: NextCmdArgs) {
     let mut runner = ReactLoop::new(provider);
 
     let prediction = {
-        let mut workflow = NextCmd::new(&mut runner, &mut memory);
+        let mut workflow = NextCmd::new(&mut runner, &mut memory , CliToolProvider);
         match workflow.run(args.buffer).await {
             Ok(p) => p,
             Err(e) => {

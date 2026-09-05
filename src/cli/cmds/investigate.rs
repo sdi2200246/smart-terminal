@@ -3,14 +3,15 @@ use crate::agent::patterns::react::ReactLoop;
 use crate::agent::workflows::investigator::Investigator;
 use crate::cli::cli::InvestigateArgs;
 use crate::cli::presenters::Presenter;
-use crate::providers::groq::client::GroqClient;
+use crate::cli::agent_setup::CliToolProvider;
+use crate::providers::google::client::GoogleClient;
 pub async fn run(args: InvestigateArgs) {
     let (presenter, tx) = Presenter::new();
     let handle = presenter.spawn();
 
-    let provider = GroqClient::pooled();
+    let provider = GoogleClient::pooled();
     let mut runner = ReactLoop::new(provider).with_events_streaming(tx);
-    let mut workflow = Investigator::new(&mut runner);
+    let mut workflow = Investigator::new(&mut runner , CliToolProvider);
 
     match workflow.run(args.question).await {
         Ok((plan, report)) => {
