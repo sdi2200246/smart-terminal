@@ -87,23 +87,21 @@ Useful for anything you'd normally answer by poking around — what does this co
 ## Architecture Overview
 
 <p align="center">
-<img height="500" alt="smart_terminal_architecture_straight_deps" src="https://github.com/user-attachments/assets/967a8ce7-3205-4ff7-b1dc-69d2d06750d6" />
-
+<img width="680" height="540" alt="smart_terminal_dependency_graph_v4" src="https://github.com/user-attachments/assets/9c5cfc28-c376-4fa0-882f-1890f519d46c" />
 </p>
 
-`smart-terminal` is organized into a modular, layered architecture that separates terminal interaction, reasoning workflows, LLM integration, and system tooling.
+`smart-terminal` is organized into a modular, layered architecture that separates terminal interaction, reasoning workflows, LLM integration, and system tooling. `src/cli` is the sole composition root — the only layer that wires concrete providers, tools, and memory together.
 
 ### Core Layers
 
 | Layer | Responsibility |
 |---|---|
-| `src/cli` | Parses commands and exposes the terminal interface (`investigate`, `next_cmd`, `memory`, etc.). |
-| `src/core` | Handles sessions, memory, capabilities, errors, and provider-agnostic LLM abstractions. |
-| `src/agent` | Implements reasoning architectures (`OneShot`, `ReAct`) and workflows like investigation and script generation. |
-| `src/groq` | Groq-specific API client, protocol models, and adapters. |
-| `src/tools` | Safe utilities for shell execution, Git diffs, Docker, file reading, and JSON handling. |
-| `memory/` | Persistent JSON-based session and memory storage. |
-| `tests/` | End-to-end integration tests covering workflows and provider interaction. |
+| `src/cli` | Parses commands (`investigate`, `next_cmd`, `memory`) and streams tool-call output via `cli::presenters`. |
+| `src/core` | Provider-agnostic contracts: `LLMProvider`, `Capability`, `AgentSession`, `Model`, `Memory`, error types. Never imports `agent`, `tools`, or `providers`. |
+| `src/agent` | `agent::workflows` (NextCmd, Investigator), `agent::agents` (planner/executor/architect/cmd_predictor), `agent::patterns` (ReactLoop, OneShot, hooks), `agent::memory` (FolderMemory). |
+| `src/providers` | `groq` and `google` clients, both built on the shared `providers::client::GenericLlmClient<ProviderCodec>` codec layer. |
+| `src/tools` | Bash, ReadDir, ReadFile, Docker, GitDiff/GitLog, AskUser, ReadLastError, Json — all implement `core::Capability`. |
+| `memory/` | Persistent JSON session storage, keyed by project folder. |
 
 ### High-Level Code Flow
 Every command follows the same call stack. `cli` is the composition root — it constructs `GroqClient` and hands it to the workflow. The workflow spins up one or more agents, each agent assembles a tool registry and delegates to a loop. The loop drives everything: it calls the provider, dispatches tool results, and repeats until the model signals completion, at which point it makes a final structured output call and unwinds back up the stack.
