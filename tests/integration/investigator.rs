@@ -3,6 +3,7 @@ use smart_terminal::agent::workflows::investigator::{Investigator, Plan, Report}
 use smart_terminal::core::llm_client::LLMProvider;
 use smart_terminal::providers::google::client::GoogleClient;
 use smart_terminal::providers::groq::client::GroqClient;
+use super::TestToolProvider;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
 
@@ -25,7 +26,7 @@ async fn run_case<P: LLMProvider>(label: &str, question: &str, provider: P) -> (
     dotenv::dotenv().ok();
 
     let mut runner = ReactLoop::new(provider);
-    let mut workflow = Investigator::new(&mut runner);
+    let mut workflow = Investigator::new(&mut runner ,TestToolProvider);
 
     let (plan, report) = workflow
         .run(question)
@@ -52,7 +53,7 @@ async fn run_case<P: LLMProvider>(label: &str, question: &str, provider: P) -> (
 #[tokio::test]
 #[ignore = "requires GOOGLE_API_KEY"]
 async fn project_overview_google() {
-    let question = "i want you to run git status see what files changes and give me a script that makes clusters commits with correct messages";
+    let question = "i want you to check weather the factory for tools is a defenseble decision ";
     let provider = GoogleClient::pooled();
     let (_plan, _report) = run_case("overview_google", question, provider).await;
 }
