@@ -5,6 +5,7 @@ use smart_terminal::core::llm_client::LLMProvider;
 use smart_terminal::core::memory::{Interaction, Memory};
 use smart_terminal::providers::google::client::GoogleClient;
 use smart_terminal::providers::groq::client::GroqClient;
+use super::TestToolProvider;
 use std::env;
 use tempfile::TempDir;
 use tracing_subscriber::EnvFilter;
@@ -35,7 +36,7 @@ async fn run_case<P: LLMProvider>(label: &str, input: &str, provider: P) -> Next
     let mut runner = ReactLoop::new(provider);
 
     let prediction = {
-        let mut workflow = NextCmd::new(&mut runner, &mut memory);
+        let mut workflow = NextCmd::new(&mut runner, &mut memory , TestToolProvider);
         workflow
             .run(input)
             .await
@@ -82,7 +83,7 @@ async fn run_case_with_history<P: LLMProvider>(
     let mut runner = ReactLoop::new(provider);
 
     let prediction = {
-        let mut workflow = NextCmd::new(&mut runner, &mut memory);
+        let mut workflow = NextCmd::new(&mut runner, &mut memory , TestToolProvider);
         workflow
             .run(input)
             .await
