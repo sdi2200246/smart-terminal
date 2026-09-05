@@ -12,17 +12,9 @@ use crate::core::capability::{Capability, ToolRegistry};
 use crate::core::llm_client::LLMProvider;
 use crate::core::model::Model;
 use crate::core::session::AgentSession;
-use crate::tools::bash::Bash;
-use crate::tools::docker::Docker;
-use crate::tools::git_diff::GitDiffStaged;
-use crate::tools::json::Json;
-use crate::tools::last_error::ReadLastError;
-use crate::tools::read_dir::ReadDir;
-use crate::tools::read_file::ReadFile;
 use crate::utils::FlatSchema;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
-use serde_json::Value;
 
 pub struct Agent<'a, P: LLMProvider> {
     runner: &'a mut ReactLoop<P>,
@@ -60,36 +52,30 @@ impl<'a, P: LLMProvider> Agent<'a, P> {
         self.hooks = hook;
         self
     }
-    pub fn planner(runner: &'a mut ReactLoop<P>, model: Model) -> Self {
-        Self::base(runner, prompts::PLANNER_SYS_PROMPT, model)
-            .with_tools(vec![Box::new(ReadDir)])
-            .with_context(&contexts::ShellEnv::gather())
-            .with_hook(Box::new(ToolsRegulator::new()))
-    }
 
-    pub fn executor(runner: &'a mut ReactLoop<P>, model: Model) -> Self {
+    pub fn planner(runner: &'a mut ReactLoop<P>, model: Model, tools: Vec<Box<dyn Capability>>) -> Self {
+            Self::base(runner, prompts::PLANNER_SYS_PROMPT, model)
+                .with_tools(tools)
+                .with_context(&contexts::ShellEnv::gather())
+                .with_hook(Box::new(ToolsRegulator::new()))
+        }
+
+    pub fn executor(runner: &'a mut ReactLoop<P>, model: Model, tools: Vec<Box<dyn Capability>>) -> Self {
         Self::base(runner, prompts::EXECUTOR_SYS_PROMPT, model)
-            .with_tools(vec![Box::new(ReadDir), Box::new(Bash), Box::new(ReadFile)])
+            .with_tools(tools)
             .with_context(&contexts::ShellEnv::gather())
             .with_hook(Box::new(ToolsRegulator::new()))
     }
 
-    pub fn architect(runner: &'a mut ReactLoop<P>, model: Model) -> Self {
+    pub fn architect(runner: &'a mut ReactLoop<P>, model: Model, tools: Vec<Box<dyn Capability>>) -> Self {
         Self::base(runner, prompts::ARCHITECT_SYS_PROMPT, model)
-            .with_tools(vec![Box::new(ReadDir), Box::new(Bash), Box::new(ReadFile)])
+            .with_tools(tools)
             .with_context(&contexts::ShellEnv::gather())
     }
 
-    pub fn cmd_predictor(runner: &'a mut ReactLoop<P>, model: Model, scheema: Value) -> Self {
+    pub fn cmd_predictor(runner: &'a mut ReactLoop<P>, model: Model, tools: Vec<Box<dyn Capability>>) -> Self {
         Self::base(runner, prompts::CMD_PREDICTOR_SYS_PROMPT, model)
-            .with_tools(vec![
-                Box::new(GitDiffStaged),
-                Box::new(Docker),
-                Box::new(Json {
-                    properties: scheema,
-                }),
-                Box::new(ReadLastError),
-            ])
+            .with_tools(tools)
             .with_context(&contexts::ShellEnv::gather())
     }
 

@@ -6,7 +6,13 @@ use crate::agent::patterns::react::ReactLoop;
 use crate::agent::error::AgentError;
 use crate::core::llm_client::LLMProvider;
 use crate::core::model::{Model, ModelName};
+use crate::core::capability::Capability;
 use crate::utils::FlatSchema;
+
+pub trait InvestigatorToolFactory {
+    fn planner_tools(&self) -> Vec<Box<dyn Capability>>;
+    fn executor_tools(&self) -> Vec<Box<dyn Capability>>;
+}
 
 #[derive(JsonSchema, Deserialize, Serialize, Debug)]
 #[schemars(deny_unknown_fields)]
@@ -34,14 +40,16 @@ pub struct Report {
     pub report: String,
 }
 impl FlatSchema for Report {}
-pub struct Investigator<'a, P: LLMProvider> {
+pub struct Investigator<'a, P: LLMProvider, F: InvestigatorToolFactory> {
     runner: &'a mut ReactLoop<P>,
+    factory: F,
 }
 
-impl<'a, P: LLMProvider> Investigator<'a, P> {
-    pub fn new(runner: &'a mut ReactLoop<P>) -> Self {
-        Self { runner }
+impl<'a, P: LLMProvider, F: InvestigatorToolFactory> Investigator<'a, P, F> {
+    pub fn new(runner: &'a mut ReactLoop<P>, factory: F) -> Self {
+        Self { runner, factory }
     }
+
     pub async fn run(&mut self, question: impl Into<String>) -> Result<(Plan, Report), AgentError> {
         let question = question.into();
 
@@ -49,6 +57,7 @@ impl<'a, P: LLMProvider> Investigator<'a, P> {
             let mut planner = Agent::planner(
                 &mut *self.runner,
                 Model::with_default_temp(ModelName::GptOss120B),
+                self.factory.planner_tools(),
             );
             planner.run(format!("Question:\n{}", question)).await?
         };
@@ -58,11 +67,16 @@ impl<'a, P: LLMProvider> Investigator<'a, P> {
             "Question: {}\n\nInvestigation plan:\n{}",
             question, plan_json
         );
+
         let report: Report = {
-            let mut executor =
-                Agent::executor(&mut *self.runner, Model::creative(ModelName::GptOss120B));
+            let mut executor = Agent::executor(
+                &mut *self.runner, 
+                Model::creative(ModelName::GptOss120B),
+                self.factory.executor_tools(),
+            );
             executor.run(user_prompt).await?
         };
+
         Ok((plan, report))
     }
 }
