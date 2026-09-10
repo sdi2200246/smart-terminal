@@ -4,10 +4,10 @@ mod prompts;
 use std::vec;
 
 use crate::agent::agents::hooks::{DefaultAgentHook, ToolsRegulator};
+use crate::agent::error::AgentError;
 use crate::agent::patterns::hook::AgentLoopHook;
 use crate::agent::patterns::oneshot::OneShot;
 use crate::agent::patterns::react::ReactLoop;
-use crate::agent::error::AgentError;
 use crate::core::capability::{Capability, ToolRegistry};
 use crate::core::llm_client::LLMProvider;
 use crate::core::model::Model;
@@ -16,7 +16,7 @@ use crate::utils::FlatSchema;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-pub struct Agent< P: LLMProvider> {
+pub struct Agent<P: LLMProvider> {
     runner: ReactLoop<P>,
     registry: ToolRegistry,
     system_prompt: &'static str,
@@ -54,11 +54,11 @@ impl<P: LLMProvider> Agent<P> {
     }
 
     pub fn planner(runner: ReactLoop<P>, model: Model, tools: Vec<Box<dyn Capability>>) -> Self {
-            Self::base(runner, prompts::PLANNER_SYS_PROMPT, model)
-                .with_tools(tools)
-                .with_context(&contexts::ShellEnv::gather())
-                .with_hook(Box::new(ToolsRegulator::new()))
-        }
+        Self::base(runner, prompts::PLANNER_SYS_PROMPT, model)
+            .with_tools(tools)
+            .with_context(&contexts::ShellEnv::gather())
+            .with_hook(Box::new(ToolsRegulator::new()))
+    }
 
     pub fn executor(runner: ReactLoop<P>, model: Model, tools: Vec<Box<dyn Capability>>) -> Self {
         Self::base(runner, prompts::EXECUTOR_SYS_PROMPT, model)
@@ -73,7 +73,11 @@ impl<P: LLMProvider> Agent<P> {
             .with_context(&contexts::ShellEnv::gather())
     }
 
-    pub fn cmd_predictor(runner: ReactLoop<P>, model: Model, tools: Vec<Box<dyn Capability>>) -> Self {
+    pub fn cmd_predictor(
+        runner: ReactLoop<P>,
+        model: Model,
+        tools: Vec<Box<dyn Capability>>,
+    ) -> Self {
         Self::base(runner, prompts::CMD_PREDICTOR_SYS_PROMPT, model)
             .with_tools(tools)
             .with_context(&contexts::ShellEnv::gather())

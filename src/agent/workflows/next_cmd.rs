@@ -7,12 +7,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::agent::agents::Agent;
-use crate::agent::patterns::react::ReactLoop;
 use crate::agent::error::AgentError;
+use crate::agent::patterns::react::ReactLoop;
+use crate::core::capability::Capability;
 use crate::core::llm_client::LLMProvider;
 use crate::core::memory::{Conversation, Interaction, Memory};
 use crate::core::model::{Model, ModelName};
-use crate::core::capability::Capability;
 use crate::utils::FlatSchema;
 
 pub trait NextCmdToolFactory {
@@ -41,7 +41,7 @@ pub struct NextCommand {
 }
 impl FlatSchema for NextCommand {}
 
-pub struct NextCmd<'a, P: LLMProvider+Clone, M: Memory, F:NextCmdToolFactory> {
+pub struct NextCmd<'a, P: LLMProvider + Clone, M: Memory, F: NextCmdToolFactory> {
     runner: ReactLoop<P>,
     memory: &'a mut M,
     factory: F,
@@ -49,7 +49,11 @@ pub struct NextCmd<'a, P: LLMProvider+Clone, M: Memory, F:NextCmdToolFactory> {
 
 impl<'a, P: LLMProvider + Clone, M: Memory, F: NextCmdToolFactory> NextCmd<'a, P, M, F> {
     pub fn new(runner: ReactLoop<P>, memory: &'a mut M, factory: F) -> Self {
-        Self { runner, memory, factory }
+        Self {
+            runner,
+            memory,
+            factory,
+        }
     }
 
     pub async fn run(&mut self, input: impl Into<String>) -> Result<NextCommand, AgentError> {
@@ -60,13 +64,14 @@ impl<'a, P: LLMProvider + Clone, M: Memory, F: NextCmdToolFactory> NextCmd<'a, P
         let history = if loaded { self.memory.current() } else { None };
 
         let user_prompt = build_user_prompt(&input, history);
-        
+
         let prediction: NextCommand = Agent::cmd_predictor(
             self.runner.clone(),
             Model::creative(ModelName::GptOss120B),
             self.factory.cmd_predictor_tools(NextCommand::schema()),
-        ).run(user_prompt).await?;
-       
+        )
+        .run(user_prompt)
+        .await?;
 
         if loaded {
             let entry = Interaction {
@@ -114,7 +119,7 @@ fn now_secs() -> u64 {
 mod tests {
     use super::*;
     use crate::agent::memory::FolderMemory;
-    use crate::core::capability::{Capability}; // <-- added import
+    use crate::core::capability::Capability; // <-- added import
     use crate::core::error::ProviderError;
     use crate::core::llm_client::AgentRequest;
     use crate::core::session::{AgentSession, AgentToolCall, ConversationEvent};
@@ -127,7 +132,9 @@ mod tests {
     struct MockToolFactory;
 
     impl NextCmdToolFactory for MockToolFactory {
-        fn cmd_predictor_tools(&self, _schema: Value) -> Vec<Box<dyn Capability>> { return vec![] }
+        fn cmd_predictor_tools(&self, _schema: Value) -> Vec<Box<dyn Capability>> {
+            return vec![];
+        }
     }
 
     #[derive(Clone)]
@@ -169,7 +176,7 @@ mod tests {
                 "stop".into(),
                 "".into(),
                 Value::String("done".into()),
-                None
+                None,
             ))
         }
 
@@ -276,7 +283,7 @@ mod tests {
             memory.register(&cwd).unwrap();
             let (provider, _) = MockProvider::new("ls");
             let runner = ReactLoop::new(provider);
-            
+
             let mut workflow = NextCmd::new(runner, &mut memory, MockToolFactory);
             workflow.run("show files").await.unwrap();
         }

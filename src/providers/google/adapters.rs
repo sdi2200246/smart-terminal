@@ -11,12 +11,18 @@ impl From<&ConversationEvent> for Message {
         match event {
             ConversationEvent::System(message) => Message::user(Some(message.clone())),
             ConversationEvent::User(message) => Message::user(Some(message.clone())),
-            ConversationEvent::ToolResult { name, result, id:_d,thinking_state } => {
-                Message::tool_responce(Some(result.clone()), name.clone() , thinking_state.clone())
-            }
+            ConversationEvent::ToolResult {
+                name,
+                result,
+                id: _d,
+                thinking_state,
+            } => Message::tool_responce(Some(result.clone()), name.clone(), thinking_state.clone()),
             ConversationEvent::ToolCall {
-                name, arguments, id:_ , thinking_state
-            } => Message::tool_call(name.clone(), arguments.clone() , thinking_state.clone()),
+                name,
+                arguments,
+                id: _,
+                thinking_state,
+            } => Message::tool_call(name.clone(), arguments.clone(), thinking_state.clone()),
         }
     }
 }
@@ -42,7 +48,9 @@ pub fn to_gemini_schema(schema: &Value) -> Value {
                 if k == "type" {
                     match v {
                         Value::String(t) => {
-                            let valid_types = ["string", "number", "integer", "boolean", "array", "object", "null"];
+                            let valid_types = [
+                                "string", "number", "integer", "boolean", "array", "object", "null",
+                            ];
                             if valid_types.contains(&t.as_str()) {
                                 out.insert(k.clone(), Value::String(t.to_uppercase()));
                             } else {
@@ -51,9 +59,10 @@ pub fn to_gemini_schema(schema: &Value) -> Value {
                             continue;
                         }
                         Value::Array(arr) => {
-                            if let Some(Value::String(t)) = arr.iter().find(|x| {
-                                x.as_str().map_or(false, |s| s != "null")
-                            }) {
+                            if let Some(Value::String(t)) = arr
+                                .iter()
+                                .find(|x| x.as_str().map_or(false, |s| s != "null"))
+                            {
                                 out.insert(k.clone(), Value::String(t.to_uppercase()));
                                 continue;
                             }
@@ -111,8 +120,6 @@ impl From<&AgentRequest<'_>> for GeminiRequest {
         }
     }
 }
-
-
 
 #[cfg(test)]
 mod tests {

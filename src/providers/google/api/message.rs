@@ -15,7 +15,7 @@ pub struct Part {
     pub function_response: Option<FunctionResponse>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub thought_signature:Option<String>
+    pub thought_signature: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -33,7 +33,7 @@ impl Message {
                 text: content,
                 function_call: None,
                 function_response: None,
-                thought_signature:None,
+                thought_signature: None,
             }],
         }
     }
@@ -45,7 +45,7 @@ impl Message {
                 text: content,
                 function_call: None,
                 function_response: None,
-                thought_signature:None,
+                thought_signature: None,
             }],
         }
     }
@@ -57,7 +57,11 @@ impl Message {
         Message::system(Some(content))
     }
 
-    pub fn tool_responce(content: Option<String>, tool_name: String , thinking:Option<String>) -> Message {
+    pub fn tool_responce(
+        content: Option<String>,
+        tool_name: String,
+        thinking: Option<String>,
+    ) -> Message {
         Message {
             role: Some("user".into()),
             parts: vec![Part {
@@ -67,20 +71,19 @@ impl Message {
                     name: tool_name,
                     response: content.map(|c| serde_json::json!({ "content": c })),
                 }),
-                thought_signature:thinking,
+                thought_signature: thinking,
             }],
         }
     }
 
-    pub fn tool_call(name: String, args: Value , thinking:Option<String>) -> Message {
+    pub fn tool_call(name: String, args: Value, thinking: Option<String>) -> Message {
         Message {
             role: Some("model".into()),
             parts: vec![Part {
                 text: None,
                 function_call: Some(FunctionCall { name, args }),
                 function_response: None,
-                thought_signature:thinking,
-
+                thought_signature: thinking,
             }],
         }
     }

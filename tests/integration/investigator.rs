@@ -1,9 +1,9 @@
+use super::TestToolProvider;
 use smart_terminal::agent::patterns::react::ReactLoop;
 use smart_terminal::agent::workflows::investigator::{Investigator, Plan, Report};
 use smart_terminal::core::llm_client::LLMProvider;
 use smart_terminal::providers::google::client::GoogleClient;
 use smart_terminal::providers::groq::client::GroqClient;
-use super::TestToolProvider;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
 
@@ -21,12 +21,16 @@ fn init_test_tracing() {
 }
 
 // Accepts any LLMProvider so we can inject Groq or Google dynamically
-async fn run_case<P: LLMProvider+Clone>(label: &str, question: &str, provider: P) -> (Plan, Report) {
+async fn run_case<P: LLMProvider + Clone>(
+    label: &str,
+    question: &str,
+    provider: P,
+) -> (Plan, Report) {
     init_test_tracing();
     dotenv::dotenv().ok();
 
     let runner = ReactLoop::new(provider);
-    let mut workflow = Investigator::new(runner ,TestToolProvider);
+    let mut workflow = Investigator::new(runner, TestToolProvider);
 
     let (plan, report) = workflow
         .run(question)

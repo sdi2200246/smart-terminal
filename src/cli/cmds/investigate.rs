@@ -1,17 +1,17 @@
-use std::error::Error;
 use crate::agent::patterns::react::ReactLoop;
 use crate::agent::workflows::investigator::Investigator;
+use crate::cli::agent_setup::CliToolProvider;
 use crate::cli::cli::InvestigateArgs;
 use crate::cli::presenters::Presenter;
-use crate::cli::agent_setup::CliToolProvider;
 use crate::providers::google::client::GoogleClient;
+use std::error::Error;
 pub async fn run(args: InvestigateArgs) {
     let (presenter, tx) = Presenter::new();
     let handle = presenter.spawn();
 
     let provider = GoogleClient::pooled();
     let runner = ReactLoop::new(provider).with_events_streaming(tx);
-    let mut workflow = Investigator::new(runner , CliToolProvider);
+    let mut workflow = Investigator::new(runner, CliToolProvider);
 
     match workflow.run(args.question).await {
         Ok((plan, report)) => {

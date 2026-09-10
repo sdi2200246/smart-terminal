@@ -1,5 +1,5 @@
-use crate::agent::patterns::hook::{AgentLoopHook, HookAction};
 use crate::agent::error::AgentError;
+use crate::agent::patterns::hook::{AgentLoopHook, HookAction};
 use crate::core::session::{AgentSession, AgentToolCall};
 use std::collections::HashMap;
 
@@ -52,7 +52,7 @@ mod tests {
     use serde_json::json;
 
     fn fake_call(name: &str, args: serde_json::Value) -> AgentToolCall {
-        AgentToolCall::new(name.into(), "call_1".into(), args , None)
+        AgentToolCall::new(name.into(), "call_1".into(), args, None)
     }
 
     #[test]

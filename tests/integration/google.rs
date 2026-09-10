@@ -95,7 +95,13 @@ mod integration {
 
         #[derive(JsonSchema, Deserialize, Debug)]
         #[schemars(deny_unknown_fields)]
-        pub enum Reversibility { Full, Mostly, Partial, Hard, Irreversible }
+        pub enum Reversibility {
+            Full,
+            Mostly,
+            Partial,
+            Hard,
+            Irreversible,
+        }
 
         #[derive(JsonSchema, Deserialize)]
         #[schemars(deny_unknown_fields)]
@@ -111,13 +117,17 @@ mod integration {
         async fn structured_returns_valid_next_command() {
             dotenv::dotenv().ok();
             let mut client = GoogleClient::default();
-            
+
             let session = session("give me an appropiriate commit message uisng your tools");
             let result = client
                 .complete_structured(&session, NextCommand::schema())
                 .await;
 
-            assert!(result.is_ok(), "complete_structured failed: {:?}", result.err());
+            assert!(
+                result.is_ok(),
+                "complete_structured failed: {:?}",
+                result.err()
+            );
             let value = result.unwrap();
             let parsed: NextCommand = serde_json::from_value(value).expect("schema mismatch");
             assert!(!parsed.cmd.is_empty());

@@ -56,7 +56,13 @@ mod integration_structured_responces {
 
     #[derive(JsonSchema, Deserialize, Debug)]
     #[schemars(deny_unknown_fields)]
-    pub enum Reversibility { Full, Mostly, Partial, Hard, Irreversible }
+    pub enum Reversibility {
+        Full,
+        Mostly,
+        Partial,
+        Hard,
+        Irreversible,
+    }
 
     #[derive(JsonSchema, Deserialize)]
     #[schemars(deny_unknown_fields)]
@@ -78,7 +84,11 @@ mod integration_structured_responces {
             .complete_structured(&session, NextCommand::schema())
             .await;
 
-        assert!(result.is_ok(), "complete_structured failed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "complete_structured failed: {:?}",
+            result.err()
+        );
         let value = result.unwrap();
         let parsed: NextCommand = serde_json::from_value(value).expect("schema mismatch");
         assert!(!parsed.cmd.is_empty());

@@ -4,7 +4,7 @@ use super::error::GoogleError;
 use crate::core::error::ProviderError;
 use crate::core::llm_client::{AgentRequest, LLMProvider};
 use crate::core::session::{AgentSession, AgentToolCall};
-use crate::providers::client::{GenericLlmClient, ProviderCodec , ClientConfig};
+use crate::providers::client::{ClientConfig, GenericLlmClient, ProviderCodec};
 use reqwest::StatusCode;
 use serde_json::Value;
 
@@ -14,7 +14,7 @@ pub struct GoogleProtocol;
 impl ProviderCodec for GoogleProtocol {
     type Request = GeminiRequest;
     type Response = GeminiResponse;
-    type Error = GoogleError; 
+    type Error = GoogleError;
 
     fn endpoint_path(&self, req: &Self::Request) -> String {
         return format!("/models/{}:generateContent", req.model);
@@ -46,7 +46,8 @@ impl ProviderCodec for GoogleProtocol {
         if status == StatusCode::PAYLOAD_TOO_LARGE {
             return GoogleError::TokenLimit { body };
         }
-        if status == StatusCode::BAD_REQUEST && (body.contains("tool") || body.contains("function")) {
+        if status == StatusCode::BAD_REQUEST && (body.contains("tool") || body.contains("function"))
+        {
             return GoogleError::InvalidToolCall { body };
         }
         GoogleError::Protocol { status, body }
@@ -70,8 +71,12 @@ use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use std::time::Duration;
 
 impl GoogleClient {
-    pub fn pooled() -> Self { Self::build(2) }
-    pub fn no_pool() -> Self { Self::build(0) }
+    pub fn pooled() -> Self {
+        Self::build(2)
+    }
+    pub fn no_pool() -> Self {
+        Self::build(0)
+    }
 
     fn build(_max_idle: usize) -> Self {
         let api_key = std::env::var("GEMINI_API_KEY")
@@ -91,7 +96,7 @@ impl GoogleClient {
         };
 
         Self {
-            inner: GenericLlmClient::new(config, GoogleProtocol{}),
+            inner: GenericLlmClient::new(config, GoogleProtocol {}),
         }
     }
 }
@@ -106,16 +111,20 @@ impl LLMProvider for GoogleClient {
         self.inner.run_complete(&request).await
     }
 
-    async fn complete_structured(&self, session: &AgentSession, schema: Value) -> Result<Value, ProviderError> {
+    async fn complete_structured(
+        &self,
+        session: &AgentSession,
+        schema: Value,
+    ) -> Result<Value, ProviderError> {
         self.inner.run_complete_structured(session, schema).await
     }
 }
 #[cfg(test)]
 mod unit {
-    use crate::core::session::AgentToolCall;
-    use crate::providers::google::api::responce::{GeminiResponse, LlmToolCall};
-    use crate::providers::google::api::request::{GeminiRequest};
     use super::*;
+    use crate::core::session::AgentToolCall;
+    use crate::providers::google::api::request::GeminiRequest;
+    use crate::providers::google::api::responce::{GeminiResponse, LlmToolCall};
     use serde_json::json;
 
     fn google_response(
@@ -169,34 +178,38 @@ mod unit {
     #[test]
     fn protocol_generates_correct_endpoint_path() {
         let protocol = GoogleProtocol;
-        
+
         let req = GeminiRequest {
             model: "gemini-1.5-flash".into(),
-            ..Default::default() 
+            ..Default::default()
         };
-        
+
         let path = protocol.endpoint_path(&req);
-        
+
         // This guarantees we don't accidentally duplicate /models/ or miss the suffix
         assert_eq!(path, "/models/gemini-1.5-flash:generateContent");
     }
 
     #[test]
     fn google_client_initializes_with_correct_base_url_and_headers() {
-        unsafe {std::env::set_var("GEMINI_API_KEY", "test_gemini_key_123");}
+        unsafe {
+            std::env::set_var("GEMINI_API_KEY", "test_gemini_key_123");
+        }
         let client = GoogleClient::no_pool();
         assert_eq!(
-            client.inner.config.base_url, 
+            client.inner.config.base_url,
             "https://generativelanguage.googleapis.com/v1beta"
         );
-        
-        assert_eq!(
-            client.inner.config.timeout, 
-            Duration::from_secs(30)
-        );
-        
+
+        assert_eq!(client.inner.config.timeout, Duration::from_secs(30));
+
         // Ensure the header was constructed and assigned to the correct name
-        let auth_header = client.inner.config.headers.get("x-goog-api-key").expect("Missing API key header");
+        let auth_header = client
+            .inner
+            .config
+            .headers
+            .get("x-goog-api-key")
+            .expect("Missing API key header");
         assert_eq!(auth_header.to_str().unwrap(), "test_gemini_key_123");
     }
 
@@ -206,12 +219,14 @@ mod unit {
     fn maps_payload_too_large_error() {
         let protocol = GoogleProtocol;
         let err = protocol.map_status_error(
-            StatusCode::PAYLOAD_TOO_LARGE, 
-            "Request payload size exceeds the limit".into()
+            StatusCode::PAYLOAD_TOO_LARGE,
+            "Request payload size exceeds the limit".into(),
         );
-        
+
         match err {
-            GoogleError::TokenLimit { body } => assert_eq!(body, "Request payload size exceeds the limit"),
+            GoogleError::TokenLimit { body } => {
+                assert_eq!(body, "Request payload size exceeds the limit")
+            }
             _ => panic!("Expected GoogleError::TokenLimit, got {:?}", err),
         }
     }
@@ -220,12 +235,14 @@ mod unit {
     fn maps_invalid_tool_call_error() {
         let protocol = GoogleProtocol;
         let err = protocol.map_status_error(
-            StatusCode::BAD_REQUEST, 
-            "invalid function call formatting".into()
+            StatusCode::BAD_REQUEST,
+            "invalid function call formatting".into(),
         );
-        
+
         match err {
-            GoogleError::InvalidToolCall { body } => assert_eq!(body, "invalid function call formatting"),
+            GoogleError::InvalidToolCall { body } => {
+                assert_eq!(body, "invalid function call formatting")
+            }
             _ => panic!("Expected GoogleError::InvalidToolCall, got {:?}", err),
         }
     }
@@ -235,10 +252,10 @@ mod unit {
         let protocol = GoogleProtocol;
         // Notice there is no "tool" or "function" keyword in this body
         let err = protocol.map_status_error(
-            StatusCode::BAD_REQUEST, 
-            "missing required field 'contents'".into()
+            StatusCode::BAD_REQUEST,
+            "missing required field 'contents'".into(),
         );
-        
+
         match err {
             GoogleError::Protocol { status, body } => {
                 assert_eq!(status, StatusCode::BAD_REQUEST);

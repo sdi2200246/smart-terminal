@@ -1,11 +1,11 @@
 use crate::core::error::ProviderError;
-use crate::core::llm_client::{AgentRequest};
+use crate::core::llm_client::AgentRequest;
 use crate::core::session::{AgentSession, AgentToolCall};
+use reqwest::header::HeaderMap;
 use reqwest::{Client, StatusCode};
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use serde_json::Value;
 use std::time::Duration;
-use reqwest::header::HeaderMap;
 
 pub trait ProviderCodec: Clone + Send + Sync + 'static {
     type Request: Serialize + Send + Sync;
@@ -29,11 +29,11 @@ pub struct ClientConfig {
     pub base_url: String,
     pub headers: HeaderMap,
     pub timeout: Duration,
-}   
+}
 
 #[derive(Clone)]
 pub struct GenericLlmClient<P: ProviderCodec> {
-    http_client:Client,
+    http_client: Client,
     pub config: ClientConfig,
     protocol: P,
 }
@@ -54,7 +54,11 @@ impl<P: ProviderCodec> GenericLlmClient<P> {
     }
 
     async fn call_llm(&self, req: &P::Request) -> Result<P::Response, P::Error> {
-        let url = format!("{}{}", self.config.base_url, self.protocol.endpoint_path(req));
+        let url = format!(
+            "{}{}",
+            self.config.base_url,
+            self.protocol.endpoint_path(req)
+        );
         let res = self
             .http_client
             .post(url)
@@ -74,13 +78,20 @@ impl<P: ProviderCodec> GenericLlmClient<P> {
             .map_err(|e| self.protocol.map_network_error(e))
     }
 
-    pub async fn run_complete(&self, request: &AgentRequest<'_>) -> Result<AgentToolCall, ProviderError> {
+    pub async fn run_complete(
+        &self,
+        request: &AgentRequest<'_>,
+    ) -> Result<AgentToolCall, ProviderError> {
         let req = self.protocol.build_complete_request(request);
         let res = self.call_llm(&req).await.map_err(Into::into)?;
         self.protocol.parse_tool_call(res).map_err(Into::into)
     }
 
-    pub async fn run_complete_structured(&self, session: &AgentSession, schema: Value) -> Result<Value, ProviderError> {
+    pub async fn run_complete_structured(
+        &self,
+        session: &AgentSession,
+        schema: Value,
+    ) -> Result<Value, ProviderError> {
         let req = self.protocol.build_structured_request(session, schema);
         let res = self.call_llm(&req).await.map_err(Into::into)?;
         self.protocol.parse_structured(res).map_err(Into::into)

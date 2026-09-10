@@ -1,10 +1,10 @@
-use crate::agent::patterns::react::ReactLoop;
 use crate::agent::memory::FolderMemory;
+use crate::agent::patterns::react::ReactLoop;
 use crate::agent::workflows::next_cmd::{NextCmd, Reversibility};
+use crate::cli::agent_setup::CliToolProvider;
 use crate::cli::cli::NextCmdArgs;
 use crate::core::memory::Memory;
 use crate::providers::groq::client::GroqClient;
-use crate::cli::agent_setup::CliToolProvider;
 use std::env;
 use std::io::{self, Write};
 
@@ -20,7 +20,7 @@ pub async fn run(args: NextCmdArgs) {
     let runner = ReactLoop::new(provider);
 
     let prediction = {
-        let mut workflow = NextCmd::new(runner, &mut memory , CliToolProvider);
+        let mut workflow = NextCmd::new(runner, &mut memory, CliToolProvider);
         match workflow.run(args.buffer).await {
             Ok(p) => p,
             Err(e) => {

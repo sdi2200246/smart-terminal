@@ -1,16 +1,16 @@
 use super::message::Message;
 use super::tool::Tool;
+use crate::core::session::{AgentSession, ConversationEvent};
 use crate::providers::google::adapters::to_gemini_schema;
-use crate::core::session::{AgentSession , ConversationEvent};
 
 use serde::Serialize;
 use serde_json::Value;
 
-#[derive(Serialize, Debug , Default)]
+#[derive(Serialize, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct GeminiRequest {
     #[serde(skip)]
-    pub model:String,
+    pub model: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub system_instruction: Option<Message>,
     pub contents: Vec<Message>,
@@ -87,7 +87,10 @@ mod tests {
         );
 
         let sys = req.system_instruction.expect("system_instruction present");
-        assert_eq!(sys.parts[0].text, Some("You are a helpful assistant.".into()));
+        assert_eq!(
+            sys.parts[0].text,
+            Some("You are a helpful assistant.".into())
+        );
         assert_eq!(req.contents.len(), 1);
         assert_eq!(req.contents[0].role.as_deref(), Some("user"));
     }

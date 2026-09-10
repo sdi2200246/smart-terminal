@@ -1,3 +1,4 @@
+use super::TestToolProvider;
 use smart_terminal::agent::memory::FolderMemory;
 use smart_terminal::agent::patterns::react::ReactLoop;
 use smart_terminal::agent::workflows::next_cmd::{NextCmd, NextCommand};
@@ -5,7 +6,6 @@ use smart_terminal::core::llm_client::LLMProvider;
 use smart_terminal::core::memory::{Interaction, Memory};
 use smart_terminal::providers::google::client::GoogleClient;
 use smart_terminal::providers::groq::client::GroqClient;
-use super::TestToolProvider;
 use std::env;
 use tempfile::TempDir;
 use tracing_subscriber::EnvFilter;
@@ -23,7 +23,7 @@ fn init_test_tracing() {
         .try_init()
         .ok();
 }
-async fn run_case<P: LLMProvider+Clone >(label: &str, input: &str, provider: P) -> NextCommand {
+async fn run_case<P: LLMProvider + Clone>(label: &str, input: &str, provider: P) -> NextCommand {
     init_test_tracing();
     dotenv::dotenv().ok();
 
@@ -35,7 +35,7 @@ async fn run_case<P: LLMProvider+Clone >(label: &str, input: &str, provider: P) 
     let runner = ReactLoop::new(provider);
 
     let prediction = {
-        let mut workflow = NextCmd::new(runner, &mut memory , TestToolProvider);
+        let mut workflow = NextCmd::new(runner, &mut memory, TestToolProvider);
         workflow
             .run(input)
             .await
@@ -55,7 +55,7 @@ async fn run_case<P: LLMProvider+Clone >(label: &str, input: &str, provider: P) 
     prediction
 }
 
-async fn run_case_with_history<P: LLMProvider+Clone>(
+async fn run_case_with_history<P: LLMProvider + Clone>(
     label: &str,
     seeded: &[(&str, &str)],
     input: &str,
@@ -82,7 +82,7 @@ async fn run_case_with_history<P: LLMProvider+Clone>(
     let mut runner = ReactLoop::new(provider);
 
     let prediction = {
-        let mut workflow = NextCmd::new(runner, &mut memory , TestToolProvider);
+        let mut workflow = NextCmd::new(runner, &mut memory, TestToolProvider);
         workflow
             .run(input)
             .await
@@ -109,21 +109,36 @@ async fn completes_partial_git_commit_groq() {
 #[tokio::test]
 #[ignore = "requires GOOGLE_API_KEY"]
 async fn completes_partial_git_commit_google() {
-    let _ = run_case("partial_commit_google", "git commit ", GoogleClient::pooled()).await;
+    let _ = run_case(
+        "partial_commit_google",
+        "git commit ",
+        GoogleClient::pooled(),
+    )
+    .await;
 }
 
 // ── Natural Language Translation ──
 #[tokio::test]
 #[ignore = "requires GROQ_API_KEY"]
 async fn translates_natural_language_docker_groq() {
-    let pred = run_case("natural_docker_groq", "restart my db container", GroqClient::pooled()).await;
+    let pred = run_case(
+        "natural_docker_groq",
+        "restart my db container",
+        GroqClient::pooled(),
+    )
+    .await;
     assert!(pred.cmd.contains("docker"));
 }
 
 #[tokio::test]
 #[ignore = "requires GOOGLE_API_KEY"]
 async fn translates_natural_language_docker_google() {
-    let pred = run_case("natural_docker_google", "restart my db container", GoogleClient::pooled()).await;
+    let pred = run_case(
+        "natural_docker_google",
+        "restart my db container",
+        GoogleClient::pooled(),
+    )
+    .await;
     assert!(pred.cmd.contains("docker"));
 }
 
@@ -140,13 +155,15 @@ async fn reads_last_error_push_upstream_groq() {
     )
     .expect("write err");
 
-    unsafe { env::set_var("ERR_LAST", err_file.path()); }
+    unsafe {
+        env::set_var("ERR_LAST", err_file.path());
+    }
 
     let pred = run_case_with_history(
         "last_error_push_upstream_groq",
         &[("push my changes", "git push")],
         "it failed",
-        GroqClient::pooled()
+        GroqClient::pooled(),
     )
     .await;
 
@@ -166,13 +183,15 @@ async fn reads_last_error_push_upstream_google() {
     )
     .expect("write err");
 
-    unsafe { env::set_var("ERR_LAST", err_file.path()); }
+    unsafe {
+        env::set_var("ERR_LAST", err_file.path());
+    }
 
     let pred = run_case_with_history(
         "last_error_push_upstream_google",
         &[("push my changes", "git push")],
         "it failed",
-        GoogleClient::pooled()
+        GoogleClient::pooled(),
     )
     .await;
 

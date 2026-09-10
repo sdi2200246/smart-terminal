@@ -4,9 +4,9 @@ use super::protocol::responce::{GroqResponse, LlmStructuredOutput, LlmToolCall};
 use crate::core::error::ProviderError;
 use crate::core::llm_client::{AgentRequest, LLMProvider};
 use crate::core::session::{AgentSession, AgentToolCall};
-use crate::providers::client::{GenericLlmClient, ProviderCodec , ClientConfig };
+use crate::providers::client::{ClientConfig, GenericLlmClient, ProviderCodec};
 use reqwest::StatusCode;
-use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
+use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
 use serde_json::Value;
 use std::time::Duration;
 
@@ -62,33 +62,39 @@ pub struct GroqClient {
     inner: GenericLlmClient<GroqProtocol>,
 }
 
-    impl GroqClient {
-        pub fn pooled() -> Self { Self::build(2) }
-        pub fn no_pool() -> Self { Self::build(0) }
-
-        fn build(_max_idle: usize) -> Self {
-            let api_key = std::env::var("GROQ_API_KEY").expect("Missing GROQ_API_KEY");
-
-            let mut headers = HeaderMap::new();
-            headers.insert(
-                AUTHORIZATION,
-                HeaderValue::from_str(&format!("Bearer {api_key}")).expect("Invalid header value"),
-            );
-
-            let config = ClientConfig {
-                base_url: "https://api.groq.com/openai/v1/chat/completions".into(),
-                headers,
-                timeout: Duration::from_secs(30),
-            };
-
-            Self {
-                inner: GenericLlmClient::new(config, GroqProtocol{}),
-            }
-        }
+impl GroqClient {
+    pub fn pooled() -> Self {
+        Self::build(2)
+    }
+    pub fn no_pool() -> Self {
+        Self::build(0)
     }
 
+    fn build(_max_idle: usize) -> Self {
+        let api_key = std::env::var("GROQ_API_KEY").expect("Missing GROQ_API_KEY");
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            AUTHORIZATION,
+            HeaderValue::from_str(&format!("Bearer {api_key}")).expect("Invalid header value"),
+        );
+
+        let config = ClientConfig {
+            base_url: "https://api.groq.com/openai/v1/chat/completions".into(),
+            headers,
+            timeout: Duration::from_secs(30),
+        };
+
+        Self {
+            inner: GenericLlmClient::new(config, GroqProtocol {}),
+        }
+    }
+}
+
 impl Default for GroqClient {
-    fn default() -> Self { Self::no_pool() }
+    fn default() -> Self {
+        Self::no_pool()
+    }
 }
 
 impl LLMProvider for GroqClient {
@@ -96,7 +102,11 @@ impl LLMProvider for GroqClient {
         self.inner.run_complete(&request).await
     }
 
-    async fn complete_structured(&self, session: &AgentSession, schema: Value) -> Result<Value, ProviderError> {
+    async fn complete_structured(
+        &self,
+        session: &AgentSession,
+        schema: Value,
+    ) -> Result<Value, ProviderError> {
         self.inner.run_complete_structured(session, schema).await
     }
 }
@@ -104,18 +114,14 @@ impl LLMProvider for GroqClient {
 #[cfg(test)]
 mod unit {
     use super::*;
+    use crate::core::session::AgentToolCall;
     use crate::providers::groq::protocol::request::GroqRequest;
     use crate::providers::groq::protocol::responce::{GroqResponse, LlmToolCall};
-    use crate::core::session::AgentToolCall;
-    use reqwest::header::AUTHORIZATION;
     use reqwest::StatusCode;
+    use reqwest::header::AUTHORIZATION;
     use serde_json::json;
 
-    fn groq_response(
-        tool_name: &str,
-        tool_id: &str,
-        arguments: serde_json::Value,
-    ) -> GroqResponse {
+    fn groq_response(tool_name: &str, tool_id: &str, arguments: serde_json::Value) -> GroqResponse {
         serde_json::from_value(json!({
             "choices": [{
                 "index": 0,
@@ -173,7 +179,9 @@ mod unit {
 
     #[test]
     fn groq_client_initializes_with_correct_base_url_and_headers() {
-        unsafe { std::env::set_var("GROQ_API_KEY", "test_groq_key_123"); }
+        unsafe {
+            std::env::set_var("GROQ_API_KEY", "test_groq_key_123");
+        }
 
         let client = GroqClient::no_pool();
 
@@ -182,10 +190,7 @@ mod unit {
             "https://api.groq.com/openai/v1/chat/completions"
         );
 
-        assert_eq!(
-            client.inner.config.timeout,
-            Duration::from_secs(30)
-        );
+        assert_eq!(client.inner.config.timeout, Duration::from_secs(30));
 
         let auth_header = client
             .inner
@@ -248,10 +253,8 @@ mod unit {
     #[test]
     fn maps_generic_protocol_error_on_standard_bad_request() {
         let protocol = GroqProtocol;
-        let err = protocol.map_status_error(
-            StatusCode::BAD_REQUEST,
-            "invalid request parameters".into(),
-        );
+        let err =
+            protocol.map_status_error(StatusCode::BAD_REQUEST, "invalid request parameters".into());
 
         match err {
             GroqError::Protocol { status, body } => {

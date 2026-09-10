@@ -2,11 +2,11 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::agent::agents::Agent;
-use crate::agent::patterns::react::ReactLoop;
 use crate::agent::error::AgentError;
+use crate::agent::patterns::react::ReactLoop;
+use crate::core::capability::Capability;
 use crate::core::llm_client::LLMProvider;
 use crate::core::model::{Model, ModelName};
-use crate::core::capability::Capability;
 use crate::utils::FlatSchema;
 
 pub trait InvestigatorToolFactory {
@@ -40,13 +40,13 @@ pub struct Report {
     pub report: String,
 }
 impl FlatSchema for Report {}
-pub struct Investigator<P: LLMProvider+Clone, F: InvestigatorToolFactory> {
+pub struct Investigator<P: LLMProvider + Clone, F: InvestigatorToolFactory> {
     runner: ReactLoop<P>,
     factory: F,
 }
 
-impl<'a, P: LLMProvider+Clone, F: InvestigatorToolFactory> Investigator< P , F> {
-    pub fn new(runner:ReactLoop<P>, factory: F) -> Self {
+impl<'a, P: LLMProvider + Clone, F: InvestigatorToolFactory> Investigator<P, F> {
+    pub fn new(runner: ReactLoop<P>, factory: F) -> Self {
         Self { runner, factory }
     }
 
@@ -57,7 +57,9 @@ impl<'a, P: LLMProvider+Clone, F: InvestigatorToolFactory> Investigator< P , F> 
             self.runner.clone(),
             Model::with_default_temp(ModelName::GptOss120B),
             self.factory.planner_tools(),
-        ).run(format!("Question:\n{}", question)).await?;
+        )
+        .run(format!("Question:\n{}", question))
+        .await?;
 
         let plan_json = serde_json::to_string_pretty(&plan).expect("plan serializes");
         let user_prompt = format!(
@@ -69,7 +71,9 @@ impl<'a, P: LLMProvider+Clone, F: InvestigatorToolFactory> Investigator< P , F> 
             self.runner.clone(),
             Model::creative(ModelName::GptOss120B),
             self.factory.executor_tools(),
-        ).run(user_prompt).await?;
+        )
+        .run(user_prompt)
+        .await?;
 
         Ok((plan, report))
     }

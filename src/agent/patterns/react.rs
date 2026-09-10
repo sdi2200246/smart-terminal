@@ -1,5 +1,5 @@
-use crate::agent::patterns::hook::AgentLoopHook;
 use crate::agent::error::AgentError;
+use crate::agent::patterns::hook::AgentLoopHook;
 use crate::core::capability::{ToolMetaData, ToolRegistry};
 use crate::core::error::ProviderError;
 use crate::core::llm_client::{AgentRequest, LLMProvider};
@@ -10,7 +10,6 @@ use crate::utils::FlatSchema;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use tokio::sync::mpsc::UnboundedSender;
-
 
 #[derive(Clone)]
 pub struct ReactLoop<P: LLMProvider> {
@@ -68,7 +67,12 @@ impl<P: LLMProvider> ReactLoop<P> {
             if call.name() == "stop" {
                 break;
             }
-            session.add_tool_call(call.name(), call.arguments().clone(), call.id() , call.thinking_state() );
+            session.add_tool_call(
+                call.name(),
+                call.arguments().clone(),
+                call.id(),
+                call.thinking_state(),
+            );
             if self
                 .dispatch_tool_step(session, tools, &call, hooks)
                 .is_err()
@@ -103,7 +107,7 @@ impl<P: LLMProvider> ReactLoop<P> {
         if call.name() == "final_answer" {
             session.set_final_answer(call.arguments().clone());
         } else {
-            session.add_tool_result(call.name(), result, call.id() , call.thinking_state());
+            session.add_tool_result(call.name(), result, call.id(), call.thinking_state());
             if let Some(stream) = &self.events_stream {
                 let _ = stream.send(call.clone());
             }
@@ -130,8 +134,8 @@ impl<P: LLMProvider> ReactLoop<P> {
                 hooks.on_invalid_tool_call(&source.to_string());
                 session.add_error(format!("{}", source));
                 Ok(None)
-            },
-            Err(ProviderError::MalformedResponse { source })=>{
+            }
+            Err(ProviderError::MalformedResponse { source }) => {
                 hooks.on_provider_error(&source.to_string());
                 session.add_error(format!("{}", source));
                 Ok(None)

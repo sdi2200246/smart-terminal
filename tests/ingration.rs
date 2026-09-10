@@ -19,11 +19,11 @@ mod integration {
 
     impl InvestigatorToolFactory for TestToolProvider {
         fn planner_tools(&self) -> Vec<Box<dyn Capability>> {
-            return vec![Box::new(ReadDir)]
+            return vec![Box::new(ReadDir)];
         }
 
         fn executor_tools(&self) -> Vec<Box<dyn Capability>> {
-            return vec![Box::new(ReadDir), Box::new(Bash), Box::new(ReadFile)]
+            return vec![Box::new(ReadDir), Box::new(Bash), Box::new(ReadFile)];
         }
     }
 
@@ -34,7 +34,7 @@ mod integration {
                 Box::new(Docker),
                 Box::new(Json { properties: schema }),
                 Box::new(ReadLastError),
-            ]
+            ];
         }
     }
 }

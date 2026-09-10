@@ -97,8 +97,8 @@ impl TryFrom<GeminiResponse> for LlmStructuredOutput {
                 body: "Expected text content field for structured output, got none".to_string(),
             })?;
 
-        let value: Value = serde_json::from_str(&text)
-            .map_err(|e| GoogleError::UnexpectedOutput {
+        let value: Value =
+            serde_json::from_str(&text).map_err(|e| GoogleError::UnexpectedOutput {
                 body: e.to_string(),
             })?;
 
