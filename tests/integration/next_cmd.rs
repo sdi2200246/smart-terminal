@@ -23,8 +23,7 @@ fn init_test_tracing() {
         .try_init()
         .ok();
 }
-
-async fn run_case<P: LLMProvider>(label: &str, input: &str, provider: P) -> NextCommand {
+async fn run_case<P: LLMProvider+Clone >(label: &str, input: &str, provider: P) -> NextCommand {
     init_test_tracing();
     dotenv::dotenv().ok();
 
@@ -33,10 +32,10 @@ async fn run_case<P: LLMProvider>(label: &str, input: &str, provider: P) -> Next
     let cwd = env::current_dir().expect("cwd");
     memory.register(&cwd).expect("register cwd");
 
-    let mut runner = ReactLoop::new(provider);
+    let runner = ReactLoop::new(provider);
 
     let prediction = {
-        let mut workflow = NextCmd::new(&mut runner, &mut memory , TestToolProvider);
+        let mut workflow = NextCmd::new(runner, &mut memory , TestToolProvider);
         workflow
             .run(input)
             .await
@@ -56,7 +55,7 @@ async fn run_case<P: LLMProvider>(label: &str, input: &str, provider: P) -> Next
     prediction
 }
 
-async fn run_case_with_history<P: LLMProvider>(
+async fn run_case_with_history<P: LLMProvider+Clone>(
     label: &str,
     seeded: &[(&str, &str)],
     input: &str,
@@ -83,7 +82,7 @@ async fn run_case_with_history<P: LLMProvider>(
     let mut runner = ReactLoop::new(provider);
 
     let prediction = {
-        let mut workflow = NextCmd::new(&mut runner, &mut memory , TestToolProvider);
+        let mut workflow = NextCmd::new(runner, &mut memory , TestToolProvider);
         workflow
             .run(input)
             .await

@@ -16,8 +16,8 @@ use crate::utils::FlatSchema;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-pub struct Agent<'a, P: LLMProvider> {
-    runner: &'a mut ReactLoop<P>,
+pub struct Agent< P: LLMProvider> {
+    runner: ReactLoop<P>,
     registry: ToolRegistry,
     system_prompt: &'static str,
     model: Model,
@@ -25,9 +25,9 @@ pub struct Agent<'a, P: LLMProvider> {
     context: Option<String>,
 }
 
-impl<'a, P: LLMProvider> Agent<'a, P> {
+impl<P: LLMProvider> Agent<P> {
     // base constructor: empty registry, filled in by with_tools
-    fn base(runner: &'a mut ReactLoop<P>, system_prompt: &'static str, model: Model) -> Self {
+    fn base(runner: ReactLoop<P>, system_prompt: &'static str, model: Model) -> Self {
         Self {
             runner,
             registry: ToolRegistry::new(vec![]),
@@ -53,27 +53,27 @@ impl<'a, P: LLMProvider> Agent<'a, P> {
         self
     }
 
-    pub fn planner(runner: &'a mut ReactLoop<P>, model: Model, tools: Vec<Box<dyn Capability>>) -> Self {
+    pub fn planner(runner: ReactLoop<P>, model: Model, tools: Vec<Box<dyn Capability>>) -> Self {
             Self::base(runner, prompts::PLANNER_SYS_PROMPT, model)
                 .with_tools(tools)
                 .with_context(&contexts::ShellEnv::gather())
                 .with_hook(Box::new(ToolsRegulator::new()))
         }
 
-    pub fn executor(runner: &'a mut ReactLoop<P>, model: Model, tools: Vec<Box<dyn Capability>>) -> Self {
+    pub fn executor(runner: ReactLoop<P>, model: Model, tools: Vec<Box<dyn Capability>>) -> Self {
         Self::base(runner, prompts::EXECUTOR_SYS_PROMPT, model)
             .with_tools(tools)
             .with_context(&contexts::ShellEnv::gather())
             .with_hook(Box::new(ToolsRegulator::new()))
     }
 
-    pub fn architect(runner: &'a mut ReactLoop<P>, model: Model, tools: Vec<Box<dyn Capability>>) -> Self {
+    pub fn architect(runner: ReactLoop<P>, model: Model, tools: Vec<Box<dyn Capability>>) -> Self {
         Self::base(runner, prompts::ARCHITECT_SYS_PROMPT, model)
             .with_tools(tools)
             .with_context(&contexts::ShellEnv::gather())
     }
 
-    pub fn cmd_predictor(runner: &'a mut ReactLoop<P>, model: Model, tools: Vec<Box<dyn Capability>>) -> Self {
+    pub fn cmd_predictor(runner: ReactLoop<P>, model: Model, tools: Vec<Box<dyn Capability>>) -> Self {
         Self::base(runner, prompts::CMD_PREDICTOR_SYS_PROMPT, model)
             .with_tools(tools)
             .with_context(&contexts::ShellEnv::gather())

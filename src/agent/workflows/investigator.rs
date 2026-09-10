@@ -40,27 +40,24 @@ pub struct Report {
     pub report: String,
 }
 impl FlatSchema for Report {}
-pub struct Investigator<'a, P: LLMProvider, F: InvestigatorToolFactory> {
-    runner: &'a mut ReactLoop<P>,
+pub struct Investigator<P: LLMProvider+Clone, F: InvestigatorToolFactory> {
+    runner: ReactLoop<P>,
     factory: F,
 }
 
-impl<'a, P: LLMProvider, F: InvestigatorToolFactory> Investigator<'a, P, F> {
-    pub fn new(runner: &'a mut ReactLoop<P>, factory: F) -> Self {
+impl<'a, P: LLMProvider+Clone, F: InvestigatorToolFactory> Investigator< P , F> {
+    pub fn new(runner:ReactLoop<P>, factory: F) -> Self {
         Self { runner, factory }
     }
 
     pub async fn run(&mut self, question: impl Into<String>) -> Result<(Plan, Report), AgentError> {
         let question = question.into();
 
-        let plan: Plan = {
-            let mut planner = Agent::planner(
-                &mut *self.runner,
-                Model::with_default_temp(ModelName::GptOss120B),
-                self.factory.planner_tools(),
-            );
-            planner.run(format!("Question:\n{}", question)).await?
-        };
+        let plan: Plan = Agent::planner(
+            self.runner.clone(),
+            Model::with_default_temp(ModelName::GptOss120B),
+            self.factory.planner_tools(),
+        ).run(format!("Question:\n{}", question)).await?;
 
         let plan_json = serde_json::to_string_pretty(&plan).expect("plan serializes");
         let user_prompt = format!(
@@ -68,14 +65,11 @@ impl<'a, P: LLMProvider, F: InvestigatorToolFactory> Investigator<'a, P, F> {
             question, plan_json
         );
 
-        let report: Report = {
-            let mut executor = Agent::executor(
-                &mut *self.runner, 
-                Model::creative(ModelName::GptOss120B),
-                self.factory.executor_tools(),
-            );
-            executor.run(user_prompt).await?
-        };
+        let report: Report = Agent::executor(
+            self.runner.clone(),
+            Model::creative(ModelName::GptOss120B),
+            self.factory.executor_tools(),
+        ).run(user_prompt).await?;
 
         Ok((plan, report))
     }
