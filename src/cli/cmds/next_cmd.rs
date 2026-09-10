@@ -17,10 +17,10 @@ pub async fn run(args: NextCmdArgs) {
     }
 
     let provider = GroqClient::pooled();
-    let mut runner = ReactLoop::new(provider);
+    let runner = ReactLoop::new(provider);
 
     let prediction = {
-        let mut workflow = NextCmd::new(&mut runner, &mut memory , CliToolProvider);
+        let mut workflow = NextCmd::new(runner, &mut memory , CliToolProvider);
         match workflow.run(args.buffer).await {
             Ok(p) => p,
             Err(e) => {

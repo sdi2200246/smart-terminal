@@ -10,12 +10,11 @@ pub async fn run(args: InvestigateArgs) {
     let handle = presenter.spawn();
 
     let provider = GoogleClient::pooled();
-    let mut runner = ReactLoop::new(provider).with_events_streaming(tx);
-    let mut workflow = Investigator::new(&mut runner , CliToolProvider);
+    let runner = ReactLoop::new(provider).with_events_streaming(tx);
+    let mut workflow = Investigator::new(runner , CliToolProvider);
 
     match workflow.run(args.question).await {
         Ok((plan, report)) => {
-            drop(runner);
             handle.await.ok();
             println!("─── Plan ───");
             println!("Goal: {}\n", plan.goal);
