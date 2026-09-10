@@ -41,14 +41,14 @@ pub struct NextCommand {
 }
 impl FlatSchema for NextCommand {}
 
-pub struct NextCmd<'a, P: LLMProvider, M: Memory, F:NextCmdToolFactory> {
-    runner: &'a mut ReactLoop<P>,
+pub struct NextCmd<'a, P: LLMProvider+Clone, M: Memory, F:NextCmdToolFactory> {
+    runner: ReactLoop<P>,
     memory: &'a mut M,
     factory: F,
 }
 
-impl<'a, P: LLMProvider, M: Memory, F: NextCmdToolFactory> NextCmd<'a, P, M, F> {
-    pub fn new(runner: &'a mut ReactLoop<P>, memory: &'a mut M, factory: F) -> Self {
+impl<'a, P: LLMProvider + Clone, M: Memory, F: NextCmdToolFactory> NextCmd<'a, P, M, F> {
+    pub fn new(runner: ReactLoop<P>, memory: &'a mut M, factory: F) -> Self {
         Self { runner, memory, factory }
     }
 
@@ -60,16 +60,13 @@ impl<'a, P: LLMProvider, M: Memory, F: NextCmdToolFactory> NextCmd<'a, P, M, F> 
         let history = if loaded { self.memory.current() } else { None };
 
         let user_prompt = build_user_prompt(&input, history);
-
-        let prediction: NextCommand = {
-            let tools = self.factory.cmd_predictor_tools(NextCommand::schema());
-            let mut predictor = Agent::cmd_predictor(
-                &mut *self.runner,
-                Model::creative(ModelName::GptOss120B),
-                tools,
-            );
-            predictor.run(user_prompt).await?
-        };
+        
+        let prediction: NextCommand = Agent::cmd_predictor(
+            self.runner.clone(),
+            Model::creative(ModelName::GptOss120B),
+            self.factory.cmd_predictor_tools(NextCommand::schema()),
+        ).run(user_prompt).await?;
+       
 
         if loaded {
             let entry = Interaction {
@@ -133,6 +130,7 @@ mod tests {
         fn cmd_predictor_tools(&self, _schema: Value) -> Vec<Box<dyn Capability>> { return vec![] }
     }
 
+    #[derive(Clone)]
     struct MockProvider {
         captured: Arc<Mutex<Vec<String>>>,
         canned_cmd: String,
@@ -153,7 +151,7 @@ mod tests {
 
     impl LLMProvider for MockProvider {
         async fn complete(
-            &mut self,
+            &self,
             request: AgentRequest<'_>,
         ) -> Result<AgentToolCall, ProviderError> {
             let last_user = request
@@ -176,7 +174,7 @@ mod tests {
         }
 
         async fn complete_structured(
-            &mut self,
+            &self,
             _session: &AgentSession,
             _schema: Value,
         ) -> Result<Value, ProviderError> {
@@ -207,7 +205,7 @@ mod tests {
         let mut runner = ReactLoop::new(provider);
 
         // Inject MockToolFactory here!
-        let mut workflow = NextCmd::new(&mut runner, &mut memory, MockToolFactory);
+        let mut workflow = NextCmd::new(runner, &mut memory, MockToolFactory);
         let result = workflow.run("list files").await.unwrap();
 
         assert_eq!(result.cmd, "ls -la");
@@ -225,10 +223,10 @@ mod tests {
         memory.register(&cwd).unwrap();
 
         let (provider, _) = MockProvider::new("git status");
-        let mut runner = ReactLoop::new(provider);
+        let runner = ReactLoop::new(provider);
 
         {
-            let mut workflow = NextCmd::new(&mut runner, &mut memory, MockToolFactory);
+            let mut workflow = NextCmd::new(runner, &mut memory, MockToolFactory);
             workflow.run("git st").await.unwrap();
         }
 
@@ -249,10 +247,10 @@ mod tests {
             .unwrap();
 
         let (provider, captured) = MockProvider::new("git diff");
-        let mut runner = ReactLoop::new(provider);
+        let runner = ReactLoop::new(provider);
 
         {
-            let mut workflow = NextCmd::new(&mut runner, &mut memory, MockToolFactory);
+            let mut workflow = NextCmd::new(runner, &mut memory, MockToolFactory);
             workflow.run("git df").await.unwrap();
         }
 
@@ -277,9 +275,9 @@ mod tests {
             let mut memory = FolderMemory::new(&memory_root);
             memory.register(&cwd).unwrap();
             let (provider, _) = MockProvider::new("ls");
-            let mut runner = ReactLoop::new(provider);
+            let runner = ReactLoop::new(provider);
             
-            let mut workflow = NextCmd::new(&mut runner, &mut memory, MockToolFactory);
+            let mut workflow = NextCmd::new(runner, &mut memory, MockToolFactory);
             workflow.run("show files").await.unwrap();
         }
 
