@@ -9,14 +9,14 @@ impl AgentLoopHook for DefaultAgentHook {}
 
 pub struct ToolsRegulator {
     seen_tools: HashMap<String, AgentToolCall>,
-    errors: Vec<AgentError>,
+    _errors: Vec<AgentError>,
 }
 
 impl ToolsRegulator {
     pub fn new() -> Self {
         Self {
             seen_tools: HashMap::new(),
-            errors: Vec::new(),
+            _errors: Vec::new(),
         }
     }
     pub fn mark_as_seen(&mut self, tool: AgentToolCall, key: String) {

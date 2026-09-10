@@ -51,15 +51,15 @@ mod tests {
     #[derive(JsonSchema, Deserialize)]
     #[schemars(deny_unknown_fields)]
     struct Script {
-        pub script: String,
+        pub _script: String,
     }
     impl FlatSchema for Script {}
 
     #[derive(JsonSchema, Deserialize)]
     #[schemars(deny_unknown_fields)]
     struct NextCommand {
-        pub cmd: String,
-        pub man: String,
+        pub _cmd: String,
+        pub _man: String,
     }
     impl FlatSchema for NextCommand {}
 
@@ -70,7 +70,7 @@ mod tests {
     #[test]
     fn accepts_valid_args() {
         let tool = json_tool(Script::schema());
-        let args = json!({ "script": "#!/bin/bash\necho hello" });
+        let args = json!({ "_script": "#!/bin/bash\necho hello" });
         let result = tool.execute(args.clone());
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), args.to_string());
@@ -79,7 +79,7 @@ mod tests {
     #[test]
     fn rejects_missing_required_field() {
         let tool = json_tool(NextCommand::schema());
-        let args = json!({ "cmd": "ls -la" });
+        let args = json!({ "_cmd": "ls -la" });
         let result = tool.execute(args);
         assert!(matches!(result, Err(ToolError::ArgumentsParsing { .. })));
     }
@@ -87,7 +87,7 @@ mod tests {
     #[test]
     fn rejects_wrong_type() {
         let tool = json_tool(Script::schema());
-        let args = json!({ "script": 42 });
+        let args = json!({ "_script": 42 });
         let result = tool.execute(args);
         assert!(matches!(result, Err(ToolError::ArgumentsParsing { .. })));
     }
@@ -95,7 +95,7 @@ mod tests {
     #[test]
     fn rejects_unknown_field() {
         let tool = json_tool(Script::schema());
-        let args = json!({ "script": "echo hi", "extra": "nope" });
+        let args = json!({ "_script": "echo hi", "extra": "nope" });
         let result = tool.execute(args);
         assert!(matches!(result, Err(ToolError::ArgumentsParsing { .. })));
     }
@@ -105,7 +105,6 @@ mod tests {
         let tool = json_tool(NextCommand::schema());
         let args = json!({ "cmd": "ls" });
         let err = tool.execute(args).unwrap_err();
-        let msg = err.to_string();
         // The wrapped anyhow error should mention what went wrong.
         let source = std::error::Error::source(&err)
             .map(|s| s.to_string())

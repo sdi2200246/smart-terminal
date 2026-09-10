@@ -11,11 +11,11 @@ impl From<&ConversationEvent> for Message {
         match event {
             ConversationEvent::System(message) => Message::user(Some(message.clone())),
             ConversationEvent::User(message) => Message::user(Some(message.clone())),
-            ConversationEvent::ToolResult { name, result, id,thinking_state } => {
+            ConversationEvent::ToolResult { name, result, id:_d,thinking_state } => {
                 Message::tool_responce(Some(result.clone()), name.clone() , thinking_state.clone())
             }
             ConversationEvent::ToolCall {
-                name, arguments, id , thinking_state
+                name, arguments, id:_ , thinking_state
             } => Message::tool_call(name.clone(), arguments.clone() , thinking_state.clone()),
         }
     }

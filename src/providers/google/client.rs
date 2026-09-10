@@ -73,7 +73,7 @@ impl GoogleClient {
     pub fn pooled() -> Self { Self::build(2) }
     pub fn no_pool() -> Self { Self::build(0) }
 
-    fn build(max_idle: usize) -> Self {
+    fn build(_max_idle: usize) -> Self {
         let api_key = std::env::var("GEMINI_API_KEY")
             .or_else(|_| std::env::var("GOOGLE_API_KEY"))
             .expect("GEMINI_API_KEY or GOOGLE_API_KEY must be set");

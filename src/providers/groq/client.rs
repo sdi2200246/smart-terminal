@@ -66,7 +66,7 @@ pub struct GroqClient {
         pub fn pooled() -> Self { Self::build(2) }
         pub fn no_pool() -> Self { Self::build(0) }
 
-        fn build(max_idle: usize) -> Self {
+        fn build(_max_idle: usize) -> Self {
             let api_key = std::env::var("GROQ_API_KEY").expect("Missing GROQ_API_KEY");
 
             let mut headers = HeaderMap::new();

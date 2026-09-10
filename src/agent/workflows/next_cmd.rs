@@ -202,7 +202,7 @@ mod tests {
         let mut memory = FolderMemory::new(tmp.path());
 
         let (provider, _captured) = MockProvider::new("ls -la");
-        let mut runner = ReactLoop::new(provider);
+        let runner = ReactLoop::new(provider);
 
         // Inject MockToolFactory here!
         let mut workflow = NextCmd::new(runner, &mut memory, MockToolFactory);
