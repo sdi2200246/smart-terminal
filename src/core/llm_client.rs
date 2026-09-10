@@ -12,12 +12,12 @@ pub struct AgentRequest<'a> {
 
 pub trait LLMProvider: Send {
     fn complete(
-        &mut self,
+        &self,
         request: AgentRequest<'_>,
     ) -> impl Future<Output = Result<AgentToolCall, ProviderError>> + Send;
 
     fn complete_structured(
-        &mut self,
+        &self,
         session: &AgentSession,
         schema: Value,
     ) -> impl Future<Output = Result<Value, ProviderError>> + Send;
