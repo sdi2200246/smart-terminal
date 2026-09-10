@@ -102,11 +102,11 @@ impl Default for GoogleClient {
     }
 }
 impl LLMProvider for GoogleClient {
-    async fn complete(&mut self, request: AgentRequest<'_>) -> Result<AgentToolCall, ProviderError> {
+    async fn complete(&self, request: AgentRequest<'_>) -> Result<AgentToolCall, ProviderError> {
         self.inner.run_complete(&request).await
     }
 
-    async fn complete_structured(&mut self, session: &AgentSession, schema: Value) -> Result<Value, ProviderError> {
+    async fn complete_structured(&self, session: &AgentSession, schema: Value) -> Result<Value, ProviderError> {
         self.inner.run_complete_structured(session, schema).await
     }
 }
