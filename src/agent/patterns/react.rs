@@ -11,6 +11,8 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 use tokio::sync::mpsc::UnboundedSender;
 
+
+#[derive(Clone)]
 pub struct ReactLoop<P: LLMProvider> {
     provider: P,
     events_stream: Option<UnboundedSender<AgentToolCall>>,
