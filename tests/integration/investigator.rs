@@ -21,12 +21,12 @@ fn init_test_tracing() {
 }
 
 // Accepts any LLMProvider so we can inject Groq or Google dynamically
-async fn run_case<P: LLMProvider>(label: &str, question: &str, provider: P) -> (Plan, Report) {
+async fn run_case<P: LLMProvider+Clone>(label: &str, question: &str, provider: P) -> (Plan, Report) {
     init_test_tracing();
     dotenv::dotenv().ok();
 
-    let mut runner = ReactLoop::new(provider);
-    let mut workflow = Investigator::new(&mut runner ,TestToolProvider);
+    let runner = ReactLoop::new(provider);
+    let mut workflow = Investigator::new(runner ,TestToolProvider);
 
     let (plan, report) = workflow
         .run(question)
