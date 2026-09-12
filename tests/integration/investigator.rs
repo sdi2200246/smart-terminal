@@ -57,7 +57,7 @@ async fn run_case<P: LLMProvider + Clone>(
 #[tokio::test]
 #[ignore = "requires GOOGLE_API_KEY"]
 async fn project_overview_google() {
-    let question = "i want you to check weather the factory for tools is a defenseble decision ";
+    let question = "Find weather the is a anticoruption layers between core logic and providers files that you can read indippendedly should be read in the same turn ";
     let provider = GoogleClient::pooled();
     let (_plan, _report) = run_case("overview_google", question, provider).await;
 }
