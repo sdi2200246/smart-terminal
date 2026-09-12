@@ -119,10 +119,11 @@ fn now_secs() -> u64 {
 mod tests {
     use super::*;
     use crate::agent::memory::FolderMemory;
-    use crate::core::capability::Capability; // <-- added import
+    use crate::core::capability::Capability;
     use crate::core::error::ProviderError;
     use crate::core::llm_client::AgentRequest;
-    use crate::core::session::{AgentSession, AgentToolCall, ConversationEvent};
+    use crate::core::session::{AgentSession, ConversationEvent};
+    use crate::core::responce::{AgentResponse, AgentToolCall};
     use serde_json::{Value, json};
     use std::sync::{Arc, Mutex};
     use tempfile::TempDir;
@@ -160,7 +161,7 @@ mod tests {
         async fn complete(
             &self,
             request: AgentRequest<'_>,
-        ) -> Result<AgentToolCall, ProviderError> {
+        ) -> Result<AgentResponse, ProviderError> {
             let last_user = request
                 .session
                 .events
@@ -172,12 +173,12 @@ mod tests {
                 })
                 .unwrap_or_default();
             self.captured.lock().unwrap().push(last_user);
-            Ok(AgentToolCall::new(
+            Ok(AgentResponse::single(AgentToolCall::new(
                 "stop".into(),
                 "".into(),
                 Value::String("done".into()),
                 None,
-            ))
+            )))
         }
 
         async fn complete_structured(
@@ -211,7 +212,6 @@ mod tests {
         let (provider, _captured) = MockProvider::new("ls -la");
         let runner = ReactLoop::new(provider);
 
-        // Inject MockToolFactory here!
         let mut workflow = NextCmd::new(runner, &mut memory, MockToolFactory);
         let result = workflow.run("list files").await.unwrap();
 
