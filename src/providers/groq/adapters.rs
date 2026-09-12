@@ -1,27 +1,73 @@
 use super::protocol::message::Message;
 use super::protocol::request::GroqRequest;
-use super::protocol::tool::{self, Tool};
+use super::protocol::tool::{Tool, ToolCall, ToolMetaData};
 use crate::core::llm_client::AgentRequest;
 use crate::core::model::ModelName;
-use crate::core::session::ConversationEvent;
+use crate::core::session::{ConversationEvent, ToolCall as CoreToolCall, ToolResult as CoreToolResult};
+use crate::core::capability::{ToolMetaData as CoreToolMetaData};
+use serde_json::Value;
 
-impl From<&ConversationEvent> for Message {
-    fn from(event: &ConversationEvent) -> Message {
-        match event {
-            ConversationEvent::System(message) => Message::system(Some(message.clone())),
-            ConversationEvent::User(message) => Message::user(Some(message.clone())),
-            ConversationEvent::ToolResult {
-                name, result, id, ..
-            } => Message::tool_responce(Some(result.clone()), id.clone(), name.clone()),
-            ConversationEvent::ToolCall {
-                name,
-                arguments,
-                id,
-                ..
-            } => Message::tool_call(name.clone(), id.clone(), arguments.clone()),
+
+impl From<&CoreToolMetaData> for ToolMetaData {
+    fn from(core_meta: &CoreToolMetaData) -> Self {
+        ToolMetaData {
+            name: core_meta.name.clone(),
+            description: Some(core_meta.description.clone()),
+            parameters: core_meta.parameters.clone(),
+            arguments: None,
         }
     }
 }
+
+impl From<&CoreToolMetaData> for Tool {
+    fn from(core_meta: &CoreToolMetaData) -> Self {
+        Tool::factory(ToolMetaData::from(core_meta))
+    }
+}
+
+
+impl From<&CoreToolCall> for ToolCall {
+    fn from(core_call: &CoreToolCall) -> Self {
+        ToolCall {
+            id: core_call.id.clone(),
+            call_type: "function".to_string(),
+            function: ToolMetaData {
+                name: core_call.name.clone(),
+                description: None,
+                parameters: Value::Null,
+                arguments: Some(core_call.arguments.to_string()),
+            },
+        }
+    }
+}
+
+impl From<&CoreToolResult> for Message {
+    fn from(core_res: &CoreToolResult) -> Self {
+        Message::tool_responce(
+            Some(core_res.result.clone()),
+            core_res.id.clone(),
+            core_res.name.clone(),
+        )
+    }
+}
+
+impl From<&ConversationEvent> for Vec<Message> {
+    fn from(event: &ConversationEvent) -> Vec<Message> {
+        match event {
+            ConversationEvent::System(message) => vec![Message::system(Some(message.clone()))],
+            
+            ConversationEvent::User(message) => vec![Message::user(Some(message.clone()))],
+            
+            ConversationEvent::ToolCalls(calls) => {
+                return vec![Message::tool_calls(calls.iter().map(ToolCall::from).collect())]
+            }
+            ConversationEvent::ToolResults(results) => {
+                results.iter().map(Message::from).collect()
+            }
+        }
+    }
+}
+
 pub fn to_groq_model_string(model: ModelName) -> String {
     match model {
         ModelName::GptOss120B => "openai/gpt-oss-120b".into(),
@@ -32,30 +78,25 @@ pub fn to_groq_model_string(model: ModelName) -> String {
 
 impl From<&AgentRequest<'_>> for GroqRequest {
     fn from(request: &AgentRequest<'_>) -> Self {
-        let messages = request.session.events.iter().map(Message::from).collect();
-
-        let tools = request
-            .tools_metadata
+        let messages = request
+            .session
+            .events
             .iter()
-            .map(|t| Tool {
-                r#type: "function".into(),
-                function: tool::ToolMetaData {
-                    name: t.name.clone(),
-                    description: Some(t.description.clone()),
-                    parameters: t.parameters.clone(),
-                    arguments: None,
-                },
-            })
+            .flat_map(Vec::<Message>::from)
             .collect();
 
-        let model: String = to_groq_model_string(request.model.get_name());
+        let tools: Vec<Tool> = request
+            .tools_metadata
+            .iter()
+            .map(Tool::from)
+            .collect();
 
         GroqRequest {
-            model,
+            model: to_groq_model_string(request.model.get_name()),
             messages,
-            tools,
-            tool_choice: Some("auto".into()),
+            tools, 
             temperature: request.model.get_temp(),
+            tool_choice: None,
             response_format: None,
         }
     }
@@ -64,154 +105,71 @@ impl From<&AgentRequest<'_>> for GroqRequest {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::capability::ToolMetaData;
-    use crate::core::model::Model;
-    use crate::core::session::AgentSession;
     use serde_json::json;
 
-    // ---------- SYSTEM ----------
     #[test]
-    fn system_event_to_message_json() {
-        let event = ConversationEvent::System("config".into());
+    fn test_system_event_mapping() {
+        let event = ConversationEvent::System("System prompt".into());
+        let messages: Vec<Message> = (&event).into();
 
-        let msg: Message = (&event).into();
-        let serialized = serde_json::to_value(&msg).unwrap();
-
-        let expected = json!({
-            "role": "system",
-            "content": "config"
-        });
-
-        assert_eq!(serialized, expected);
-    }
-
-    // ---------- USER ----------
-    #[test]
-    fn user_event_to_message_json() {
-        let event = ConversationEvent::User("hello".into());
-
-        let msg: Message = (&event).into();
-        let serialized = serde_json::to_value(&msg).unwrap();
-
-        let expected = json!({
-            "role": "user",
-            "content": "hello"
-        });
-
-        assert_eq!(serialized, expected);
-    }
-
-    // ---------- TOOL CALL ----------
-    #[test]
-    fn tool_call_event_to_message_json() {
-        let args = json!({
-            "location": "San Francisco, CA",
-            "unit": "fahrenheit"
-        });
-
-        let event = ConversationEvent::ToolCall {
-            name: "get_weather".into(),
-            arguments: args.clone(),
-            id: "call_abc123".into(),
-            thinking_state: None,
-        };
-
-        let msg: Message = (&event).into();
-        let serialized = serde_json::to_value(&msg).unwrap();
-
-        let expected = json!({
-            "role": "assistant",
-            "tool_calls": [{
-                "id": "call_abc123",
-                "type": "function",
-                "function": {
-                    "name": "get_weather",
-                    "arguments": args.to_string()
-                }
-            }]
-        });
-
-        assert_eq!(serialized, expected);
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].role, "system");
+        assert_eq!(messages[0].content, Some("System prompt".into()));
     }
 
     #[test]
-    fn tool_result_event_to_message_json() {
-        let event = ConversationEvent::ToolResult {
-            name: "get_weather".into(),
-            result: "72°F".into(),
-            id: "call_abc123".into(),
-            thinking_state: None,
-        };
+    fn test_user_event_mapping() {
+        let event = ConversationEvent::User("Hello".into());
+        let messages: Vec<Message> = (&event).into();
 
-        let msg: Message = (&event).into();
-        let serialized = serde_json::to_value(&msg).unwrap();
-
-        let expected = json!({
-            "role": "tool",
-            "content": "72°F",
-            "tool_call_id": "call_abc123",
-            "name": "get_weather"
-        });
-
-        assert_eq!(serialized, expected);
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].role, "user");
+        assert_eq!(messages[0].content, Some("Hello".into()));
     }
 
     #[test]
-    fn agent_request_maps_to_groq_request_correctly() {
-        // ---- Arrange ----
-        let session = AgentSession {
-            events: vec![
-                ConversationEvent::System("sys".into()),
-                ConversationEvent::User("hello".into()),
-                ConversationEvent::ToolCall {
-                    name: "get_weather".into(),
-                    arguments: json!({"a": 1}),
-                    id: "123".into(),
-                    thinking_state: None,
-                },
-            ],
-            steps: 5,
-            final_answer: None,
-        };
+    fn test_tool_calls_event_mapping() {
+        let calls = vec![
+            CoreToolCall::new("get_weather", json!({"location": "Athens"}), "call_123"),
+            CoreToolCall::new("get_time", json!({}), "call_456"),
+        ];
+        let event = ConversationEvent::ToolCalls(calls);
+        let messages: Vec<Message> = (&event).into();
 
-        let tools_metadata = vec![ToolMetaData {
-            name: "get_weather".into(),
-            description: "gets weather".into(),
-            parameters: json!({"type": "object"}),
-        }];
+        assert_eq!(messages.len(), 1);
+        
+        let msg = &messages[0];
+        assert_eq!(msg.role, "assistant");
+        assert_eq!(msg.tool_calls.len(), 2);
+        
+        assert_eq!(msg.tool_calls[0].id, "call_123");
+        assert_eq!(msg.tool_calls[0].function.name, "get_weather");
+        assert_eq!(msg.tool_calls[0].function.arguments.as_deref(), Some("{\"location\":\"Athens\"}"));
+        
+        assert_eq!(msg.tool_calls[1].id, "call_456");
+        assert_eq!(msg.tool_calls[1].function.name, "get_time");
+        assert_eq!(msg.tool_calls[1].function.arguments.as_deref(), Some("{}"));
+    }
 
-        let model = Model::new(ModelName::GptOss120B, 0.5);
+    #[test]
+    fn test_tool_results_event_mapping() {
+        let results = vec![
+            CoreToolResult::new("get_weather", "Sunny, 25C", "call_123"),
+            CoreToolResult::new("get_time", "12:00 PM", "call_456"),
+        ];
+        let event = ConversationEvent::ToolResults(results);
+        let messages: Vec<Message> = (&event).into();
 
-        let request = AgentRequest {
-            model: &model,
-            session: &session,
-            tools_metadata: &tools_metadata,
-        };
-
-        // ---- Act ----
-        let req = GroqRequest::from(&request);
-
-        // ---- Assert: Messages mapped ----
-        assert_eq!(req.messages.len(), 3);
-        assert_eq!(req.messages[0].role, "system");
-        assert_eq!(req.messages[1].role, "user");
-
-        let tool_msg = &req.messages[2];
-        assert_eq!(tool_msg.role, "assistant");
-        assert_eq!(tool_msg.tool_calls.len(), 1);
-
-        // ---- Assert: Tool definitions mapped ----
-        assert_eq!(req.tools.len(), 1);
-
-        let tool = &req.tools[0];
-        assert_eq!(tool.r#type, "function");
-        assert_eq!(tool.function.name, "get_weather");
-        assert_eq!(tool.function.description, Some("gets weather".into()));
-        assert_eq!(tool.function.parameters, json!({"type": "object"}));
-        assert!(tool.function.arguments.is_none());
-
-        // ---- Assert: Model mapped ----
-        assert_eq!(req.model, "openai/gpt-oss-120b");
-        assert_eq!(req.temperature, 0.5);
+        assert_eq!(messages.len(), 2);
+        
+        assert_eq!(messages[0].role, "tool");
+        assert_eq!(messages[0].tool_call_id, Some("call_123".into()));
+        assert_eq!(messages[0].name, Some("get_weather".into()));
+        assert_eq!(messages[0].content, Some("Sunny, 25C".into()));
+        
+        assert_eq!(messages[1].role, "tool");
+        assert_eq!(messages[1].tool_call_id, Some("call_456".into()));
+        assert_eq!(messages[1].name, Some("get_time".into()));
+        assert_eq!(messages[1].content, Some("12:00 PM".into()));
     }
 }

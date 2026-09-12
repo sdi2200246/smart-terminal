@@ -19,7 +19,13 @@ pub struct GroqRequest {
 
 impl GroqRequest {
     pub fn structured(session: &AgentSession, schema: Value) -> Self {
-        let messages = session.events.iter().map(Message::from).collect();
+        // Use flat_map to unpack the Vec<Message> returned by the adapter
+        let messages = session
+            .events
+            .iter()
+            .flat_map(|e| Vec::<Message>::from(e))
+            .collect();
+
         GroqRequest {
             model: "openai/gpt-oss-120b".into(),
             messages,
@@ -30,6 +36,7 @@ impl GroqRequest {
         }
     }
 }
+
 #[derive(Serialize, Debug)]
 pub struct ResponseFormat {
     pub r#type: String,
