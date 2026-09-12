@@ -1,4 +1,4 @@
-use crate::core::session::AgentToolCall;
+use crate::core::responce::{AgentResponse , AgentToolCall};
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::task::JoinHandle;
 
