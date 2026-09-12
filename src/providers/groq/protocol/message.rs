@@ -85,6 +85,16 @@ impl Message {
             name: None,
         }
     }
+
+    pub fn tool_calls(tool_calls: Vec<ToolCall>) -> Message {
+        Message {
+            role: "assistant".into(),
+            content: None,
+            tool_calls,
+            tool_call_id: None,
+            name: None,
+        }
+    }
 }
 #[cfg(test)]
 mod tests {

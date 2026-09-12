@@ -1,28 +1,64 @@
-use super::api::message::Message;
+use super::api::message::{Message, Part};
 use super::api::request::{GeminiRequest, GenerationConfig};
-use super::api::tool::{FunctionDeclaration, Tool};
+use super::api::tool::{FunctionCall, FunctionDeclaration, FunctionResponse, Tool};
 use crate::core::llm_client::AgentRequest;
 use crate::core::model::ModelName;
-use crate::core::session::ConversationEvent;
+use crate::core::session::{ConversationEvent, ToolCall as CoreToolCall, ToolResult as CoreToolResult};
+use crate::core::capability::ToolMetaData as CoreToolMetaData;
 use serde_json::Value;
+
+
+impl From<&CoreToolCall> for Part {
+    fn from(core_call: &CoreToolCall) -> Self {
+        Part {
+            text: None,
+            function_call: Some(FunctionCall {
+                name: core_call.name.clone(),
+                args: core_call.arguments.clone(),
+            }),
+            function_response: None,
+            thought_signature: core_call.thinking_state.clone(),
+        }
+    }
+}
+
+impl From<&CoreToolResult> for Part {
+    fn from(core_res: &CoreToolResult) -> Self {
+        Part {
+            text: None,
+            function_call: None,
+            function_response: Some(FunctionResponse {
+                name: core_res.name.clone(),
+                response: Some(serde_json::json!({ "content": core_res.result })),
+            }),
+            thought_signature: None,
+        }
+    }
+}
+
+impl From<&CoreToolMetaData> for FunctionDeclaration {
+    fn from(core_meta: &CoreToolMetaData) -> Self {
+        FunctionDeclaration {
+            name: core_meta.name.clone(),
+            description: Some(core_meta.description.clone()),
+            parameters: to_gemini_schema(&core_meta.parameters),
+        }
+    }
+}
 
 impl From<&ConversationEvent> for Message {
     fn from(event: &ConversationEvent) -> Message {
         match event {
             ConversationEvent::System(message) => Message::user(Some(message.clone())),
             ConversationEvent::User(message) => Message::user(Some(message.clone())),
-            ConversationEvent::ToolResult {
-                name,
-                result,
-                id: _d,
-                thinking_state,
-            } => Message::tool_responce(Some(result.clone()), name.clone(), thinking_state.clone()),
-            ConversationEvent::ToolCall {
-                name,
-                arguments,
-                id: _,
-                thinking_state,
-            } => Message::tool_call(name.clone(), arguments.clone(), thinking_state.clone()),
+            ConversationEvent::ToolCalls(calls) => Message {
+                role: Some("model".into()),
+                parts: calls.iter().map(Part::from).collect(),
+            },
+            ConversationEvent::ToolResults(results) => Message {
+                role: Some("user".into()),
+                parts: results.iter().map(Part::from).collect(),
+            },
         }
     }
 }
@@ -98,20 +134,19 @@ impl From<&AgentRequest<'_>> for GeminiRequest {
         let function_declarations: Vec<FunctionDeclaration> = request
             .tools_metadata
             .iter()
-            .map(|t| FunctionDeclaration {
-                name: t.name.clone(),
-                description: Some(t.description.clone()),
-                parameters: to_gemini_schema(&t.parameters),
-            })
+            .map(FunctionDeclaration::from)
             .collect();
+
+        let mut tools = Vec::new();
+        if !function_declarations.is_empty() {
+            tools.push(Tool { function_declarations });
+        }
 
         GeminiRequest {
             model: to_google_model_string(request.model.get_name()),
             system_instruction,
             contents,
-            tools: vec![Tool {
-                function_declarations,
-            }],
+            tools,
             generation_config: Some(GenerationConfig {
                 temperature: Some(request.model.get_temp()),
                 response_mime_type: None,
@@ -120,7 +155,6 @@ impl From<&AgentRequest<'_>> for GeminiRequest {
         }
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -139,7 +173,6 @@ mod tests {
 
     #[test]
     fn test_non_standard_type_preserved() {
-        // Custom string values (e.g., inside 'default' or user payloads) shouldn't be touched
         let input = json!({
             "type": "custom_user_value"
         });
@@ -151,7 +184,6 @@ mod tests {
 
     #[test]
     fn test_nullable_option_array_type() {
-        // Handles schemars/JSON Schema representation for Option<T>: ["string", "null"] -> "STRING"
         let input = json!({
             "type": ["string", "null"]
         });

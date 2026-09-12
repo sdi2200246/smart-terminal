@@ -1,6 +1,7 @@
 use crate::core::error::ProviderError;
 use crate::core::llm_client::AgentRequest;
-use crate::core::session::{AgentSession, AgentToolCall};
+use crate::core::session::AgentSession;
+use crate::core::responce::{AgentResponse};
 use reqwest::header::HeaderMap;
 use reqwest::{Client, StatusCode};
 use serde::{Serialize, de::DeserializeOwned};
@@ -18,7 +19,7 @@ pub trait ProviderCodec: Clone + Send + Sync + 'static {
 
     fn build_complete_request(&self, req: &AgentRequest<'_>) -> Self::Request;
     fn build_structured_request(&self, session: &AgentSession, schema: Value) -> Self::Request;
-    fn parse_tool_call(&self, res: Self::Response) -> Result<AgentToolCall, Self::Error>;
+    fn parse_agent_responce(&self, res: Self::Response) -> Result<AgentResponse, Self::Error>;
     fn parse_structured(&self, res: Self::Response) -> Result<Value, Self::Error>;
     fn map_status_error(&self, status: StatusCode, body: String) -> Self::Error;
     fn map_network_error(&self, err: reqwest::Error) -> Self::Error;
@@ -81,10 +82,10 @@ impl<P: ProviderCodec> GenericLlmClient<P> {
     pub async fn run_complete(
         &self,
         request: &AgentRequest<'_>,
-    ) -> Result<AgentToolCall, ProviderError> {
+    ) -> Result<AgentResponse, ProviderError> {
         let req = self.protocol.build_complete_request(request);
         let res = self.call_llm(&req).await.map_err(Into::into)?;
-        self.protocol.parse_tool_call(res).map_err(Into::into)
+        self.protocol.parse_agent_responce(res).map_err(Into::into)
     }
 
     pub async fn run_complete_structured(

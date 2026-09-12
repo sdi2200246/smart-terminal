@@ -1,9 +1,10 @@
 use super::api::request::GeminiRequest;
-use super::api::responce::{GeminiResponse, LlmStructuredOutput, LlmToolCall};
+use super::api::responce::{GeminiResponse, LlmStructuredOutput, LlmResponse , LlmToolCall};
 use super::error::GoogleError;
 use crate::core::error::ProviderError;
 use crate::core::llm_client::{AgentRequest, LLMProvider};
-use crate::core::session::{AgentSession, AgentToolCall};
+use crate::core::session::AgentSession;
+use crate::core::responce::{AgentResponse , AgentToolCall};
 use crate::providers::client::{ClientConfig, GenericLlmClient, ProviderCodec};
 use reqwest::StatusCode;
 use serde_json::Value;
@@ -27,14 +28,15 @@ impl ProviderCodec for GoogleProtocol {
     fn build_structured_request(&self, session: &AgentSession, schema: Value) -> Self::Request {
         GeminiRequest::structured(session, schema, "gemini-3.6-flash".into())
     }
-    fn parse_tool_call(&self, res: Self::Response) -> Result<AgentToolCall, Self::Error> {
-        let call = LlmToolCall::try_from(res)?;
-        Ok(AgentToolCall::new(
-            call.name,
-            "".into(),
-            call.args,
-            Some(call.thinking_state),
-        ))
+    
+    fn parse_agent_responce(&self, res: Self::Response) -> Result<AgentResponse, Self::Error> {
+        let response = LlmResponse::try_from(res)?;
+        let calls :Vec<AgentToolCall> = response
+            .calls
+            .into_iter()
+            .map(|call| AgentToolCall::new(call.name, "".into(), call.args, Some(call.thinking_state)))
+            .collect();
+        Ok(AgentResponse::from(calls))
     }
 
     fn parse_structured(&self, res: Self::Response) -> Result<Value, Self::Error> {
@@ -107,7 +109,7 @@ impl Default for GoogleClient {
     }
 }
 impl LLMProvider for GoogleClient {
-    async fn complete(&self, request: AgentRequest<'_>) -> Result<AgentToolCall, ProviderError> {
+    async fn complete(&self, request: AgentRequest<'_>) -> Result<AgentResponse, ProviderError> {
         self.inner.run_complete(&request).await
     }
 
@@ -122,9 +124,9 @@ impl LLMProvider for GoogleClient {
 #[cfg(test)]
 mod unit {
     use super::*;
-    use crate::core::session::AgentToolCall;
+    use crate::core::responce::{AgentResponse, AgentToolCall};
     use crate::providers::google::api::request::GeminiRequest;
-    use crate::providers::google::api::responce::{GeminiResponse, LlmToolCall};
+    use crate::providers::google::api::responce::{GeminiResponse, LlmResponse};
     use serde_json::json;
 
     fn google_response(
@@ -150,29 +152,86 @@ mod unit {
         .unwrap()
     }
 
+    fn google_response_multi(calls: &[(&str, serde_json::Value)]) -> GeminiResponse {
+        let parts: Vec<_> = calls
+            .iter()
+            .map(|(name, args)| {
+                json!({
+                    "functionCall": { "name": name, "args": args }
+                })
+            })
+            .collect();
+
+        serde_json::from_value(json!({
+            "candidates": [{
+                "finishReason": "STOP",
+                "content": {
+                    "role": "model",
+                    "parts": parts
+                }
+            }]
+        }))
+        .unwrap()
+    }
+
     #[test]
     fn final_answer_parses_as_tool_call() {
         let resp = google_response("final_answer", "call_test", json!({"result":"42"}));
-        let call = LlmToolCall::try_from(resp).unwrap();
-        assert_eq!(call.name, "final_answer");
-        assert_eq!(call.args, json!({"result": "42"}));
+        let response = LlmResponse::try_from(resp).unwrap();
+        assert_eq!(response.calls.len(), 1);
+        assert_eq!(response.calls[0].name, "final_answer");
+        assert_eq!(response.calls[0].args, json!({"result": "42"}));
     }
 
     #[test]
     fn regular_tool_parses_as_tool_call() {
         let resp = google_response("git_status", "call_test", json!({"path":"."}));
-        let call = LlmToolCall::try_from(resp).unwrap();
-        assert_eq!(call.name, "git_status");
-        assert_eq!(call.args, json!({"path": "."}));
+        let response = LlmResponse::try_from(resp).unwrap();
+        assert_eq!(response.calls.len(), 1);
+        assert_eq!(response.calls[0].name, "git_status");
+        assert_eq!(response.calls[0].args, json!({"path": "."}));
     }
 
     #[test]
-    fn llm_tool_call_converts_to_agent_tool_call() {
+    fn llm_response_converts_to_agent_tool_call() {
         let resp = google_response("final_answer", "call_test", json!({"result":"42"}));
-        let llm_call = LlmToolCall::try_from(resp).unwrap();
-        let agent_call = AgentToolCall::new(llm_call.name, "".into(), llm_call.args, None);
+        let llm_response = LlmResponse::try_from(resp).unwrap();
+        let call = &llm_response.calls[0];
+        let agent_call = AgentToolCall::new(
+            call.name.clone(),
+            "".into(),
+            call.args.clone(),
+            None,
+        );
         assert_eq!(agent_call.name(), "final_answer");
         assert_eq!(agent_call.arguments().clone(), json!({"result": "42"}));
+    }
+
+    #[test]
+    fn parse_agent_responce_wraps_single_call() {
+        let protocol = GoogleProtocol;
+        let resp = google_response("git_status", "call_test", json!({"path":"."}));
+
+        let response: AgentResponse = protocol.parse_agent_responce(resp).unwrap();
+
+        assert_eq!(response.len(), 1);
+        assert_eq!(response.calls()[0].name(), "git_status");
+        assert_eq!(response.calls()[0].arguments(), json!({"path": "."}));
+    }
+
+    #[test]
+    fn parse_agent_responce_wraps_multiple_parallel_calls() {
+        let protocol = GoogleProtocol;
+        let resp = google_response_multi(&[
+            ("read_file", json!({"path": "a.rs"})),
+            ("read_file", json!({"path": "b.rs"})),
+        ]);
+
+        let response: AgentResponse = protocol.parse_agent_responce(resp).unwrap();
+
+        assert_eq!(response.len(), 2);
+        assert_eq!(response.calls()[0].arguments(), json!({"path": "a.rs"}));
+        assert_eq!(response.calls()[1].arguments(), json!({"path": "b.rs"}));
     }
 
     #[test]
@@ -186,7 +245,6 @@ mod unit {
 
         let path = protocol.endpoint_path(&req);
 
-        // This guarantees we don't accidentally duplicate /models/ or miss the suffix
         assert_eq!(path, "/models/gemini-1.5-flash:generateContent");
     }
 
@@ -203,7 +261,6 @@ mod unit {
 
         assert_eq!(client.inner.config.timeout, Duration::from_secs(30));
 
-        // Ensure the header was constructed and assigned to the correct name
         let auth_header = client
             .inner
             .config
@@ -212,8 +269,6 @@ mod unit {
             .expect("Missing API key header");
         assert_eq!(auth_header.to_str().unwrap(), "test_gemini_key_123");
     }
-
-    // --- 3. New Error Mapping Tests ---
 
     #[test]
     fn maps_payload_too_large_error() {
@@ -250,7 +305,6 @@ mod unit {
     #[test]
     fn maps_generic_protocol_error_on_standard_bad_request() {
         let protocol = GoogleProtocol;
-        // Notice there is no "tool" or "function" keyword in this body
         let err = protocol.map_status_error(
             StatusCode::BAD_REQUEST,
             "missing required field 'contents'".into(),

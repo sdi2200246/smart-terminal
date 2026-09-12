@@ -3,55 +3,56 @@ use serde_json::Value;
 
 const DEFAULT_STEPS: usize = 50;
 
+#[derive(Debug, PartialEq, Clone)]
+pub struct ToolCall {
+    pub name: String,
+    pub arguments: Value,
+    pub id: String,
+    pub thinking_state: Option<String>,
+}
+
+impl ToolCall {
+    pub fn new(name: impl Into<String>, arguments: Value, id: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            arguments,
+            id: id.into(),
+            thinking_state: None,
+        }
+    }
+
+    pub fn with_thinking_state(mut self, state: Option<String>) -> Self {
+        self.thinking_state = state;
+        self
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct ToolResult {
+    pub name: String,
+    pub result: String,
+
+    pub id: String,
+}
+
+impl ToolResult {
+    pub fn new(name: impl Into<String>, result: impl Into<String>, id: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            result: result.into(),
+            id: id.into(),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum ConversationEvent {
     System(String),
     User(String),
-    ToolCall {
-        name: String,
-        arguments: Value,
-        id: String,
-        thinking_state: Option<String>,
-    },
-    ToolResult {
-        name: String,
-        result: String,
-        id: String,
-        thinking_state: Option<String>,
-    },
-}
-
-#[derive(Debug, Clone)]
-pub struct AgentToolCall {
-    id: String,
-    arguments: Value,
-    name: String,
-    thinking_state: Option<String>,
-}
-impl AgentToolCall {
-    pub fn new(name: String, id: String, arguments: Value, thinking_state: Option<String>) -> Self {
-        Self {
-            name,
-            id,
-            arguments,
-            thinking_state,
-        }
-    }
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-    pub fn id(&self) -> &str {
-        &self.id
-    }
-    pub fn arguments(&self) -> Value {
-        self.arguments.clone()
-    }
-    pub fn into_arguments(self) -> Value {
-        self.arguments
-    }
-    pub fn thinking_state(&self) -> Option<String> {
-        self.thinking_state.clone()
-    }
+    /// One model turn's calls, in emission order. Length 1 for sequential.
+    ToolCalls(Vec<ToolCall>),
+    /// Results for the immediately preceding ToolCalls, same order and length.
+    ToolResults(Vec<ToolResult>),
 }
 
 #[derive(Debug)]
@@ -82,6 +83,7 @@ impl AgentSession {
         self.events.push(ConversationEvent::User(message.into()));
     }
 
+
     pub fn add_reflection(&mut self, reflection: impl Into<String>) {
         self.events.push(ConversationEvent::System(format!(
             "[REFLECTION] {}",
@@ -89,45 +91,37 @@ impl AgentSession {
         )));
     }
 
-    pub fn add_tool_call(
-        &mut self,
-        name: impl Into<String>,
-        arguments: Value,
-        id: impl Into<String>,
-        thinking_state: Option<String>,
-    ) {
-        self.events.push(ConversationEvent::ToolCall {
-            name: name.into(),
-            arguments,
-            id: id.into(),
-            thinking_state: thinking_state,
-        });
+    pub fn add_tool_calls(&mut self, calls: Vec<ToolCall>) {
+        debug_assert!(!calls.is_empty(), "empty tool call batch");
+        self.events.push(ConversationEvent::ToolCalls(calls));
     }
 
-    pub fn add_tool_result(
-        &mut self,
-        name: impl Into<String>,
-        result: impl Into<String>,
-        id: impl Into<String>,
-        thinking_state: Option<String>,
-    ) {
-        self.events.push(ConversationEvent::ToolResult {
-            name: name.into(),
-            result: result.into(),
-            id: id.into(),
-            thinking_state,
-        });
+    pub fn add_tool_results(&mut self, results: Vec<ToolResult>) {
+        debug_assert_eq!(
+            self.pending_call_count(),
+            Some(results.len()),
+            "tool results must pair 1:1 with the preceding call batch"
+        );
+        self.events.push(ConversationEvent::ToolResults(results));
     }
+
 
     pub fn add_error(&mut self, er: String) {
-        let error = format!("[ERROR]:{}", er);
-        self.events.push(ConversationEvent::System(error));
+        self.events
+            .push(ConversationEvent::System(format!("[ERROR]:{}", er)));
     }
 
+    fn pending_call_count(&self) -> Option<usize> {
+        match self.events.last() {
+            Some(ConversationEvent::ToolCalls(calls)) => Some(calls.len()),
+            _ => None,
+        }
+    }
+    
     pub fn current_steps(&self) -> usize {
         self.events
             .iter()
-            .filter(|e| matches!(e, ConversationEvent::ToolCall { .. }))
+            .filter(|e| matches!(e, ConversationEvent::ToolCalls(_)))
             .count()
     }
 
@@ -168,6 +162,7 @@ impl SessionBuilder {
             steps: DEFAULT_STEPS,
         }
     }
+
     pub fn system(mut self, message: impl Into<String>) -> Self {
         self.events.push(ConversationEvent::System(message.into()));
         self

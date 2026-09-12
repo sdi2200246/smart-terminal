@@ -10,6 +10,11 @@ pub struct LlmToolCall {
     pub thinking_state: String,
 }
 
+#[derive(Debug)]
+pub struct LlmResponse {
+    pub calls: Vec<LlmToolCall>,
+}
+
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct GeminiResponse {
@@ -24,28 +29,33 @@ pub struct Candidate {
     pub content: Message,
 }
 
-impl TryFrom<GeminiResponse> for LlmToolCall {
+impl TryFrom<GeminiResponse> for LlmResponse {
     type Error = GoogleError;
 
     fn try_from(value: GeminiResponse) -> Result<Self, Self::Error> {
-        let candidate =
-            value
-                .candidates
-                .into_iter()
-                .next()
-                .ok_or_else(|| GoogleError::UnexpectedOutput {
-                    body: "No candidates in response".to_string(),
-                })?;
+        let candidate = value
+            .candidates
+            .into_iter()
+            .next()
+            .ok_or_else(|| GoogleError::UnexpectedOutput {
+                body: "No candidates in response".to_string(),
+            })?;
 
-        for part in &candidate.content.parts {
-            if let Some(fc) = &part.function_call {
-                let thinking = part.thought_signature.clone().unwrap_or("".to_string());
-                return Ok(LlmToolCall {
+        let calls: Vec<LlmToolCall> = candidate
+            .content
+            .parts
+            .iter()
+            .filter_map(|part| {
+                part.function_call.as_ref().map(|fc| LlmToolCall {
                     name: fc.name.clone(),
                     args: fc.args.clone(),
-                    thinking_state: thinking,
-                });
-            }
+                    thinking_state: part.thought_signature.clone().unwrap_or("skip_thought_signature_validator".into()),
+                })
+            })
+            .collect();
+
+        if !calls.is_empty() {
+            return Ok(LlmResponse { calls });
         }
 
         if candidate.finish_reason.as_deref() == Some("STOP") {
@@ -59,10 +69,12 @@ impl TryFrom<GeminiResponse> for LlmToolCall {
                     body: "Model stopped without producing a conclusion. Expected non-empty text content alongside finish_reason=STOP.".to_string(),
                 })?;
 
-            return Ok(LlmToolCall {
-                name: "stop".into(),
-                args: Value::String(text),
-                thinking_state: "".to_string(),
+            return Ok(LlmResponse {
+                calls: vec![LlmToolCall {
+                    name: "stop".into(),
+                    args: Value::String(text),
+                    thinking_state: "".to_string(),
+                }],
             });
         }
 
@@ -80,13 +92,13 @@ impl TryFrom<GeminiResponse> for LlmStructuredOutput {
     type Error = GoogleError;
 
     fn try_from(res: GeminiResponse) -> Result<Self, Self::Error> {
-        let candidate =
-            res.candidates
-                .into_iter()
-                .next()
-                .ok_or_else(|| GoogleError::UnexpectedOutput {
-                    body: "No candidates in response".to_string(),
-                })?;
+        let candidate = res
+            .candidates
+            .into_iter()
+            .next()
+            .ok_or_else(|| GoogleError::UnexpectedOutput {
+                body: "No candidates in response".to_string(),
+            })?;
 
         let text = candidate
             .content
@@ -116,7 +128,7 @@ mod tests {
     }
 
     #[test]
-    fn parses_tool_call() {
+    fn parses_single_tool_call() {
         let raw = json!({
             "candidates": [{
                 "finishReason": "STOP",
@@ -132,9 +144,39 @@ mod tests {
             }]
         });
 
-        let result = LlmToolCall::try_from(parse(raw)).unwrap();
-        assert_eq!(result.name, "git_status");
-        assert_eq!(result.args, json!({"path": "."}));
+        let result = LlmResponse::try_from(parse(raw)).unwrap();
+        assert_eq!(result.calls.len(), 1);
+        assert_eq!(result.calls[0].name, "git_status");
+        assert_eq!(result.calls[0].args, json!({"path": "."}));
+    }
+
+    #[test]
+    fn parses_multiple_parallel_tool_calls() {
+        let raw = json!({
+            "candidates": [{
+                "finishReason": "STOP",
+                "content": {
+                    "role": "model",
+                    "parts": [
+                        {
+                            "functionCall": { "name": "read_file", "args": { "path": "a.rs" } },
+                            "thoughtSignature": "sig-a"
+                        },
+                        {
+                            "functionCall": { "name": "read_file", "args": { "path": "b.rs" } },
+                            "thoughtSignature": "sig-b"
+                        }
+                    ]
+                }
+            }]
+        });
+
+        let result = LlmResponse::try_from(parse(raw)).unwrap();
+        assert_eq!(result.calls.len(), 2);
+        assert_eq!(result.calls[0].name, "read_file");
+        assert_eq!(result.calls[0].thinking_state, "sig-a");
+        assert_eq!(result.calls[1].args, json!({"path": "b.rs"}));
+        assert_eq!(result.calls[1].thinking_state, "sig-b");
     }
 
     #[test]
@@ -151,9 +193,10 @@ mod tests {
             }]
         });
 
-        let result = LlmToolCall::try_from(parse(raw)).unwrap();
-        assert_eq!(result.name, "stop");
-        assert_eq!(result.args, json!("I have everything I need."));
+        let result = LlmResponse::try_from(parse(raw)).unwrap();
+        assert_eq!(result.calls.len(), 1);
+        assert_eq!(result.calls[0].name, "stop");
+        assert_eq!(result.calls[0].args, json!("I have everything I need."));
     }
 
     #[test]
@@ -168,14 +211,14 @@ mod tests {
             }]
         });
 
-        let result = LlmToolCall::try_from(parse(raw));
+        let result = LlmResponse::try_from(parse(raw));
         assert!(matches!(result, Err(GoogleError::UnexpectedOutput { .. })));
     }
 
     #[test]
     fn fails_when_no_candidates() {
         let raw = json!({ "candidates": [] });
-        let result = LlmToolCall::try_from(parse(raw));
+        let result = LlmResponse::try_from(parse(raw));
         assert!(matches!(result, Err(GoogleError::UnexpectedOutput { .. })));
     }
 }

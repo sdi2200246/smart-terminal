@@ -1,4 +1,4 @@
-use crate::core::session::AgentToolCall;
+use crate::core::responce::{AgentResponse , AgentToolCall};
 use serde_json::Value;
 
 const RESET: &str = "\x1b[0m";

@@ -3,7 +3,8 @@ use super::protocol::request::GroqRequest;
 use super::protocol::responce::{GroqResponse, LlmStructuredOutput, LlmToolCall};
 use crate::core::error::ProviderError;
 use crate::core::llm_client::{AgentRequest, LLMProvider};
-use crate::core::session::{AgentSession, AgentToolCall};
+use crate::core::session::{AgentSession};
+use crate::core::responce::{AgentResponse , AgentToolCall};
 use crate::providers::client::{ClientConfig, GenericLlmClient, ProviderCodec};
 use reqwest::StatusCode;
 use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
@@ -26,10 +27,13 @@ impl ProviderCodec for GroqProtocol {
         GroqRequest::structured(session, schema)
     }
 
-    fn parse_tool_call(&self, res: Self::Response) -> Result<AgentToolCall, Self::Error> {
+    fn parse_agent_responce(&self, res: Self::Response) -> Result<AgentResponse, Self::Error> {
         let call = LlmToolCall::try_from(res)?;
-        Ok(AgentToolCall::new(call.name, call.id, call.args, None))
+        Ok(AgentResponse::single(AgentToolCall::new(
+            call.name, call.id, call.args, None,
+        )))
     }
+
 
     fn parse_structured(&self, res: Self::Response) -> Result<Value, Self::Error> {
         let out = LlmStructuredOutput::try_from(res)?;
@@ -98,7 +102,7 @@ impl Default for GroqClient {
 }
 
 impl LLMProvider for GroqClient {
-    async fn complete(&self, request: AgentRequest<'_>) -> Result<AgentToolCall, ProviderError> {
+    async fn complete(&self, request: AgentRequest<'_>) -> Result<AgentResponse, ProviderError> {
         self.inner.run_complete(&request).await
     }
 
@@ -114,7 +118,7 @@ impl LLMProvider for GroqClient {
 #[cfg(test)]
 mod unit {
     use super::*;
-    use crate::core::session::AgentToolCall;
+    use crate::core::responce::{AgentToolCall};
     use crate::providers::groq::protocol::request::GroqRequest;
     use crate::providers::groq::protocol::responce::{GroqResponse, LlmToolCall};
     use reqwest::StatusCode;
@@ -261,7 +265,19 @@ mod unit {
                 assert_eq!(status, StatusCode::BAD_REQUEST);
                 assert_eq!(body, "invalid request parameters");
             }
-            _ => panic!("Expected GroqError::Protocol, got {:?}", err),
+            _ => panic!("Expected GroqErro  r::Protocol, got {:?}", err),
         }
+    }
+
+        #[test]
+    fn parse_tool_call_wraps_single_call_in_agent_response() {
+        let protocol = GroqProtocol;
+        let resp = groq_response("git_status", "call_test", json!({"path": "."}));
+        let response = protocol.parse_agent_responce(resp).unwrap();
+        assert_eq!(response.len(), 1);
+        let call = &response.calls()[0];
+        assert_eq!(call.name(), "git_status");
+        assert_eq!(call.id(), "call_test");
+        assert_eq!(call.arguments(), json!({"path": "."}));
     }
 }
