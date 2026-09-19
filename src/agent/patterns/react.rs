@@ -1,11 +1,9 @@
+use crate::agent::agents::Agent;
 use crate::agent::error::AgentError;
-use crate::agent::patterns::hook::AgentLoopHook;
-use crate::core::capability::{ToolMetaData, ToolRegistry};
 use crate::core::error::ProviderError;
 use crate::core::llm_client::{AgentRequest, LLMProvider};
-use crate::core::model::Model;
-use crate::core::session::{AgentSession, ToolCall, ToolResult};
 use crate::core::responce::{AgentResponse, AgentToolCall};
+use crate::core::session::{AgentSession, ToolCall, ToolResult};
 use crate::utils::FlatSchema;
 
 use serde::de::DeserializeOwned;
@@ -20,7 +18,10 @@ pub struct ReactLoop<P: LLMProvider> {
 
 impl<P: LLMProvider> ReactLoop<P> {
     pub fn new(provider: P) -> Self {
-        ReactLoop { provider, events_stream: None }
+        ReactLoop {
+            provider,
+            events_stream: None,
+        }
     }
 
     pub fn with_events_streaming(mut self, tx: UnboundedSender<AgentToolCall>) -> Self {
@@ -28,68 +29,56 @@ impl<P: LLMProvider> ReactLoop<P> {
         self
     }
 
-    #[tracing::instrument(skip(self, session, tools, model, hooks), fields(loop_kind = "React"))]
+    #[tracing::instrument(skip(self, agent, session), fields(loop_kind = "React"))]
     pub async fn run<T>(
         &mut self,
+        agent: &mut Agent,
         session: &mut AgentSession,
-        tools: &ToolRegistry,
-        model: &Model,
-        hooks: &mut Box<dyn AgentLoopHook>,
     ) -> Result<T, AgentError>
     where
         T: FlatSchema + DeserializeOwned,
     {
-        hooks.on_loop_start();
+        agent.hooks.on_loop_start();
         let stop_args: Value;
         loop {
             if let Some(value) = session.take_final_answer() {
-                hooks.on_final_answer();
+                agent.hooks.on_final_answer();
                 return serde_json::from_value::<T>(value)
                     .map_err(|_| AgentError::ScheemaViolation);
             }
 
             if session.steps_exhausted() {
-                hooks.on_loop_exhausted();
+                agent.hooks.on_loop_exhausted();
                 return Err(AgentError::StepsExhausted);
             }
 
-            let response = match self
-                .call_llm(session, tools.metadata(), model, hooks)
-                .await?
-            {
+            let response = match self.call_llm(session, agent).await? {
                 Some(r) => r,
                 None => continue,
             };
 
-            tracing::info!(
-                tool_call_count = response.len(),
-                "Received response from LLM"
-            );
-
             if response.is_stop() {
                 let call = response.calls().first().expect("is_stop guarantees one call");
-                hooks.on_tool_received(call);
+                agent.hooks.on_tool_received(call);
                 stop_args = call.arguments();
                 break;
             }
 
-            self.dispatch_tool_batch(session, tools, response, hooks);
+            self.dispatch_tool_batch(session, agent, response);
         }
-        self.structure_output::<T>(session, &stop_args, hooks).await
+        self.structure_output::<T>(session, &stop_args, agent).await
     }
-
 
     fn dispatch_tool_batch(
         &self,
         session: &mut AgentSession,
-        tools: &ToolRegistry,
+        agent: &mut Agent,
         response: AgentResponse,
-        hooks: &mut Box<dyn AgentLoopHook>,
     ) {
         let calls = response.into_calls();
 
         for call in &calls {
-            hooks.on_tool_received(call);
+            agent.hooks.on_tool_received(call);
         }
 
         session.add_tool_calls(
@@ -106,7 +95,7 @@ impl<P: LLMProvider> ReactLoop<P> {
         let mut final_answer: Option<Value> = None;
 
         for call in &calls {
-            let payload = match self.execute_tool(tools, call, hooks) {
+            let payload = match self.execute_tool(agent, call) {
                 Ok(result) => {
                     if call.name() == "final_answer" {
                         final_answer = Some(call.arguments().clone());
@@ -127,13 +116,9 @@ impl<P: LLMProvider> ReactLoop<P> {
         }
     }
 
-    fn execute_tool(
-        &self,
-        tools: &ToolRegistry,
-        call: &AgentToolCall,
-        hooks: &mut Box<dyn AgentLoopHook>,
-    ) -> Result<String, String> {
-        match tools
+    fn execute_tool(&self, agent: &mut Agent, call: &AgentToolCall) -> Result<String, String> {
+        match agent
+            .registry
             .get(call.name())
             .expect("correct_tool_name")
             .execute(call.arguments().clone())
@@ -141,7 +126,7 @@ impl<P: LLMProvider> ReactLoop<P> {
             Ok(result) => Ok(result),
             Err(e) => {
                 let msg = e.to_string();
-                hooks.on_tool_failed(call, &msg);
+                agent.hooks.on_tool_failed(call, &msg);
                 Err(msg)
             }
         }
@@ -150,26 +135,28 @@ impl<P: LLMProvider> ReactLoop<P> {
     async fn call_llm(
         &mut self,
         session: &mut AgentSession,
-        tools_meta: &[ToolMetaData],
-        model: &Model,
-        hooks: &mut Box<dyn AgentLoopHook>,
+        agent: &mut Agent,
     ) -> Result<Option<AgentResponse>, AgentError> {
-        let request = AgentRequest { model, session, tools_metadata: tools_meta };
+        let request = AgentRequest {
+            model: &agent.model,
+            session,
+            tools_metadata: agent.registry.metadata(),
+        };
 
         match self.provider.complete(request).await {
             Ok(response) => Ok(Some(response)),
             Err(ProviderError::InvalidToolCall { source }) => {
-                hooks.on_invalid_tool_call(&source.to_string());
+                agent.hooks.on_invalid_tool_call(&source.to_string());
                 session.add_error(format!("{}", source));
                 Ok(None)
             }
             Err(ProviderError::MalformedResponse { source }) => {
-                hooks.on_provider_error(&source.to_string());
+                agent.hooks.on_provider_error(&source.to_string());
                 session.add_error(format!("{}", source));
                 Ok(None)
             }
             Err(e) => {
-                hooks.on_provider_error(&e.to_string());
+                agent.hooks.on_provider_error(&e.to_string());
                 Err(e.into())
             }
         }
@@ -179,7 +166,7 @@ impl<P: LLMProvider> ReactLoop<P> {
         &mut self,
         session: &mut AgentSession,
         stop_args: &Value,
-        hooks: &mut Box<dyn AgentLoopHook>,
+        agent: &mut Agent,
     ) -> Result<T, AgentError>
     where
         T: FlatSchema + DeserializeOwned,
@@ -188,10 +175,10 @@ impl<P: LLMProvider> ReactLoop<P> {
         session.add_system("Your one and ONLY job is to return the following text into the scheema provided to you");
         session.add_user(stop_args.to_string());
 
-        hooks.on_structuring_start();
+        agent.hooks.on_structuring_start();
         let raw = self.provider.complete_structured(session, T::schema()).await?;
         let typed = serde_json::from_value::<T>(raw).expect("Type must always be right");
-        hooks.on_structuring_complete();
+        agent.hooks.on_structuring_complete();
         Ok(typed)
     }
 }
