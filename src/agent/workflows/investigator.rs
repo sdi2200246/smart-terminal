@@ -53,13 +53,16 @@ impl<'a, P: LLMProvider + Clone, F: InvestigatorToolFactory> Investigator<P, F> 
     pub async fn run(&mut self, question: impl Into<String>) -> Result<(Plan, Report), AgentError> {
         let question = question.into();
 
-        let plan: Plan = Agent::planner(
-            self.runner.clone(),
+        let mut planner_agent = Agent::planner(
             Model::with_default_temp(ModelName::GptOss120B),
             self.factory.planner_tools(),
-        )
-        .run(format!("Question:\n{}", question))
-        .await?;
+        );
+        let mut planner_session = planner_agent.build_session(format!("Question:\n{}", question));
+
+        let plan: Plan = self
+            .runner
+            .run(&mut planner_agent, &mut planner_session)
+            .await?;
 
         let plan_json = serde_json::to_string_pretty(&plan).expect("plan serializes");
         let user_prompt = format!(
@@ -67,13 +70,16 @@ impl<'a, P: LLMProvider + Clone, F: InvestigatorToolFactory> Investigator<P, F> 
             question, plan_json
         );
 
-        let report: Report = Agent::executor(
-            self.runner.clone(),
+        let mut executor_agent = Agent::executor(
             Model::creative(ModelName::GptOss120B),
             self.factory.executor_tools(),
-        )
-        .run(user_prompt)
-        .await?;
+        );
+        let mut executor_session = executor_agent.build_session(user_prompt);
+
+        let report: Report = self
+            .runner
+            .run(&mut executor_agent, &mut executor_session)
+            .await?;
 
         Ok((plan, report))
     }

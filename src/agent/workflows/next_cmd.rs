@@ -65,13 +65,16 @@ impl<'a, P: LLMProvider + Clone, M: Memory, F: NextCmdToolFactory> NextCmd<'a, P
 
         let user_prompt = build_user_prompt(&input, history);
 
-        let prediction: NextCommand = Agent::cmd_predictor(
-            self.runner.clone(),
+        let mut agent = Agent::cmd_predictor(
             Model::creative(ModelName::GptOss120B),
             self.factory.cmd_predictor_tools(NextCommand::schema()),
-        )
-        .run(user_prompt)
-        .await?;
+        );
+        let mut session = agent.build_session(user_prompt);
+
+        let prediction: NextCommand = self
+            .runner
+            .run(&mut agent, &mut session)
+            .await?;
 
         if loaded {
             let entry = Interaction {
