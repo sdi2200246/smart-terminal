@@ -136,7 +136,6 @@ impl From<&AgentRequest<'_>> for GeminiRequest {
                 "Current scratchpad:\n{}",
                 serde_json::to_string_pretty(sp).unwrap()
             ))));
-            tracing::debug!(?sp, "scratchpad state");
         }
         
         let function_declarations: Vec<FunctionDeclaration> = request
