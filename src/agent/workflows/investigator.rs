@@ -1,5 +1,6 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::agent::agents::Agent;
 use crate::agent::error::AgentError;
@@ -10,8 +11,8 @@ use crate::core::model::{Model, ModelName};
 use crate::utils::FlatSchema;
 
 pub trait InvestigatorToolFactory {
-    fn planner_tools(&self) -> Vec<Box<dyn Capability>>;
-    fn executor_tools(&self) -> Vec<Box<dyn Capability>>;
+    fn planner_tools(&self , schema :Value) -> Vec<Box<dyn Capability>>;
+    fn executor_tools(&self, schema :Value) -> Vec<Box<dyn Capability>>;
 }
 
 #[derive(JsonSchema, Deserialize, Serialize, Debug)]
@@ -55,7 +56,7 @@ impl<'a, P: LLMProvider + Clone, F: InvestigatorToolFactory> Investigator<P, F> 
 
         let mut planner_agent = Agent::planner(
             Model::with_default_temp(ModelName::GptOss120B),
-            self.factory.planner_tools(),
+            self.factory.planner_tools(Plan::schema()),
         );
         let mut planner_session = planner_agent.build_session(format!("Question:\n{}", question));
 
@@ -72,7 +73,7 @@ impl<'a, P: LLMProvider + Clone, F: InvestigatorToolFactory> Investigator<P, F> 
 
         let mut executor_agent = Agent::executor(
             Model::creative(ModelName::GptOss120B),
-            self.factory.executor_tools(),
+            self.factory.executor_tools(Report::schema()),
         );
         let mut executor_session = executor_agent.build_session(user_prompt);
 
