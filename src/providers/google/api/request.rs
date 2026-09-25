@@ -1,6 +1,6 @@
 use super::message::Message;
 use super::tool::Tool;
-use crate::core::session::{AgentSession, ConversationEvent};
+use crate::core::session::{AgentSession, ConversationEvent , Scratchpad};
 use crate::providers::google::adapters::to_gemini_schema;
 
 use serde::Serialize;
@@ -70,6 +70,7 @@ mod tests {
             events,
             steps: 5,
             final_answer: None,
+            scratchpad:None
         }
     }
 

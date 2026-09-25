@@ -14,6 +14,7 @@ mod integration {
     use smart_terminal::tools::last_error::ReadLastError;
     use smart_terminal::tools::read_dir::ReadDir;
     use smart_terminal::tools::read_file::ReadFile;
+    use smart_terminal::tools::scratchpad::UpdateScratchpad;
 
     pub struct TestToolProvider;
 
@@ -23,7 +24,7 @@ mod integration {
         }
 
         fn executor_tools(&self) -> Vec<Box<dyn Capability>> {
-            return vec![Box::new(ReadDir), Box::new(Bash), Box::new(ReadFile)];
+            return vec![Box::new(ReadDir), Box::new(Bash), Box::new(ReadFile) , Box::new(UpdateScratchpad)];
         }
     }
 

@@ -1,6 +1,6 @@
 use crate::agent::agents::Agent;
 use crate::core::responce::{AgentResponse, AgentToolCall};
-use crate::core::session::{AgentSession, ToolCall, ToolResult};
+use crate::core::session::{AgentSession, ToolCall, ToolResult , Scratchpad};
 use serde_json::Value;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -45,7 +45,10 @@ impl ToolExecutionEngine {
         let mut final_answer: Option<Value> = None;
 
         for call in &calls {
-            let payload = match self.execute_tool(agent, call) {
+        let payload = if call.name() == "update_scratchpad" {
+            self.execute_scratchpad_update(session,call.clone())
+        } else {
+            match self.execute_tool(agent, call) {
                 Ok(result) => {
                     if call.name() == "final_answer" {
                         final_answer = Some(call.arguments().clone());
@@ -55,10 +58,10 @@ impl ToolExecutionEngine {
                     result
                 }
                 Err(e) => format!("Tool '{}' failed: {}", call.name(), e),
-            };
-            results.push(ToolResult::new(call.name(), payload, call.id()));
-        }
-
+            }
+        };
+        results.push(ToolResult::new(call.name(), payload, call.id()));
+    }
         session.add_tool_results(results);
 
         if let Some(value) = final_answer {
@@ -66,7 +69,7 @@ impl ToolExecutionEngine {
         }
     }
 
-    fn execute_tool(&self, agent: &mut Agent, call: &AgentToolCall) -> Result<String, String> {
+    fn execute_tool(&self, agent: &mut Agent ,call: &AgentToolCall) -> Result<String, String> {
         match agent
             .registry
             .get(call.name())
@@ -81,8 +84,18 @@ impl ToolExecutionEngine {
             }
         }
     }
+    fn execute_scratchpad_update(&self , session: &mut AgentSession ,call: AgentToolCall) -> String {
+        match serde_json::from_value::<Scratchpad>(call.arguments()) {
+            Ok(sp) => {
+                session.update_scratchpad(sp);
+                return "scratchpad updated successfully".to_string()
+            }
+            Err(e) => {
+                return format!("Tool 'update_scratchpad' failed: invalid scratchpad — {}", e)
+            }
+        }
 }
-
+}
 
 #[cfg(test)]
 mod tests {
@@ -252,5 +265,94 @@ mod tests {
             }
             other => panic!("expected ToolResults, got {other:?}"),
         }
+    }
+        fn valid_scratchpad_args() -> Value {
+        json!({
+            "main_goal": "ship the scratchpad tool",
+            "completed_milestones": ["designed schema"],
+            "current_focus": "wiring the engine",
+            "vital_findings": ["session owns Scratchpad directly"]
+        })
+    }
+
+    #[test]
+    fn scratchpad_update_success_mutates_session_and_returns_confirmation() {
+        let engine = ToolExecutionEngine::new();
+        let mut session = AgentSession::new(5);
+        let mut agent = test_agent(vec![]);
+
+        engine.dispatch_tool_batch(
+            &mut session,
+            &mut agent,
+            AgentResponse::single(call("update_scratchpad", "call_1", valid_scratchpad_args())),
+        );
+
+        let sp = session.scratchpad.as_ref().expect("scratchpad should be Some after update");
+        assert_eq!(sp.main_goal, "ship the scratchpad tool");
+        assert_eq!(sp.current_focus, "wiring the engine");
+
+        match session.events().last().unwrap() {
+            ConversationEvent::ToolResults(rs) => {
+                assert_eq!(rs[0].id, "call_1");
+                assert_eq!(rs[0].result, "scratchpad updated successfully");
+            }
+            other => panic!("expected ToolResults, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn scratchpad_update_invalid_args_leaves_session_scratchpad_untouched() {
+        let engine = ToolExecutionEngine::new();
+        let mut session = AgentSession::new(5);
+        let mut agent = test_agent(vec![]);
+
+        // missing required fields -> serde_json::from_value fails
+        let bad_args = json!({ "main_goal": "only this field" });
+
+        engine.dispatch_tool_batch(
+            &mut session,
+            &mut agent,
+            AgentResponse::single(call("update_scratchpad", "call_1", bad_args)),
+        );
+
+        assert_eq!(session.scratchpad, None);
+
+        match session.events().last().unwrap() {
+            ConversationEvent::ToolResults(rs) => {
+                assert!(rs[0].result.contains("Tool 'update_scratchpad' failed"));
+                assert!(rs[0].result.contains("invalid scratchpad"));
+            }
+            other => panic!("expected ToolResults, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn scratchpad_update_is_never_streamed() {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let engine = ToolExecutionEngine::new().with_events_streaming(tx);
+        let mut session = AgentSession::new(5);
+        let mut agent = test_agent(vec![]);
+
+        engine.dispatch_tool_batch(
+            &mut session,
+            &mut agent,
+            AgentResponse::single(call("update_scratchpad", "call_1", valid_scratchpad_args())),
+        );
+
+        assert!(rx.try_recv().is_err(), "scratchpad updates should not be streamed");
+    }
+
+    #[test]
+    fn scratchpad_update_does_not_go_through_registry() {
+        // empty registry — if execute_tool were hit, `.expect("correct_tool_name")` would panic
+        let engine = ToolExecutionEngine::new();
+        let mut session = AgentSession::new(5);
+        let mut agent = test_agent(vec![]);
+
+        engine.dispatch_tool_batch(
+            &mut session,
+            &mut agent,
+            AgentResponse::single(call("update_scratchpad", "call_1", valid_scratchpad_args())),
+        );
     }
 }

@@ -131,6 +131,14 @@ impl From<&AgentRequest<'_>> for GeminiRequest {
             }
         }
 
+        if let Some(sp) = &request.session.scratchpad {
+            contents.push(Message::system(Some(format!(
+                "Current scratchpad:\n{}",
+                serde_json::to_string_pretty(sp).unwrap()
+            ))));
+            tracing::debug!(?sp, "scratchpad state");
+        }
+        
         let function_declarations: Vec<FunctionDeclaration> = request
             .tools_metadata
             .iter()
@@ -155,100 +163,100 @@ impl From<&AgentRequest<'_>> for GeminiRequest {
         }
     }
 }
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use serde_json::json;
 
-    #[test]
-    fn test_basic_type_uppercasing() {
-        let input = json!({
-            "type": "string"
-        });
-        let expected = json!({
-            "type": "STRING"
-        });
-        assert_eq!(to_gemini_schema(&input), expected);
-    }
+        #[test]
+        fn test_basic_type_uppercasing() {
+            let input = json!({
+                "type": "string"
+            });
+            let expected = json!({
+                "type": "STRING"
+            });
+            assert_eq!(to_gemini_schema(&input), expected);
+        }
 
-    #[test]
-    fn test_non_standard_type_preserved() {
-        let input = json!({
-            "type": "custom_user_value"
-        });
-        let expected = json!({
-            "type": "custom_user_value"
-        });
-        assert_eq!(to_gemini_schema(&input), expected);
-    }
+        #[test]
+        fn test_non_standard_type_preserved() {
+            let input = json!({
+                "type": "custom_user_value"
+            });
+            let expected = json!({
+                "type": "custom_user_value"
+            });
+            assert_eq!(to_gemini_schema(&input), expected);
+        }
 
-    #[test]
-    fn test_nullable_option_array_type() {
-        let input = json!({
-            "type": ["string", "null"]
-        });
-        let expected = json!({
-            "type": "STRING"
-        });
-        assert_eq!(to_gemini_schema(&input), expected);
-    }
+        #[test]
+        fn test_nullable_option_array_type() {
+            let input = json!({
+                "type": ["string", "null"]
+            });
+            let expected = json!({
+                "type": "STRING"
+            });
+            assert_eq!(to_gemini_schema(&input), expected);
+        }
 
-    #[test]
-    fn test_stripping_unsupported_gemini_keys() {
-        let input = json!({
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "title": "UserConfig",
-            "type": "object",
-            "additionalProperties": false
-        });
-        let expected = json!({
-            "type": "OBJECT"
-        });
-        assert_eq!(to_gemini_schema(&input), expected);
-    }
+        #[test]
+        fn test_stripping_unsupported_gemini_keys() {
+            let input = json!({
+                "$schema": "http://json-schema.org/draft-07/schema#",
+                "title": "UserConfig",
+                "type": "object",
+                "additionalProperties": false
+            });
+            let expected = json!({
+                "type": "OBJECT"
+            });
+            assert_eq!(to_gemini_schema(&input), expected);
+        }
 
-    #[test]
-    fn test_nested_object_and_array_schema() {
-        let input = json!({
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "title": "ToolInput",
-            "type": "object",
-            "properties": {
-                "file_path": {
-                    "type": "string",
-                    "title": "File Path"
-                },
-                "max_lines": {
-                    "type": ["integer", "null"]
-                },
-                "flags": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
+        #[test]
+        fn test_nested_object_and_array_schema() {
+            let input = json!({
+                "$schema": "http://json-schema.org/draft-07/schema#",
+                "title": "ToolInput",
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "title": "File Path"
+                    },
+                    "max_lines": {
+                        "type": ["integer", "null"]
+                    },
+                    "flags": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
                     }
-                }
-            },
-            "additionalProperties": false
-        });
+                },
+                "additionalProperties": false
+            });
 
-        let expected = json!({
-            "type": "OBJECT",
-            "properties": {
-                "file_path": {
-                    "type": "STRING"
-                },
-                "max_lines": {
-                    "type": "INTEGER"
-                },
-                "flags": {
-                    "type": "ARRAY",
-                    "items": {
+            let expected = json!({
+                "type": "OBJECT",
+                "properties": {
+                    "file_path": {
                         "type": "STRING"
+                    },
+                    "max_lines": {
+                        "type": "INTEGER"
+                    },
+                    "flags": {
+                        "type": "ARRAY",
+                        "items": {
+                            "type": "STRING"
+                        }
                     }
                 }
-            }
-        });
+            });
 
-        assert_eq!(to_gemini_schema(&input), expected);
+            assert_eq!(to_gemini_schema(&input), expected);
+        }
     }
-}

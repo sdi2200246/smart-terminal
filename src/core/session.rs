@@ -1,5 +1,6 @@
-use serde::Serialize;
+use serde::{Serialize , Deserialize};
 use serde_json::Value;
+use schemars::JsonSchema;
 
 const DEFAULT_STEPS: usize = 50;
 
@@ -55,11 +56,21 @@ pub enum ConversationEvent {
     ToolResults(Vec<ToolResult>),
 }
 
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default, PartialEq)]
+pub struct Scratchpad {
+    pub main_goal: String,
+    pub completed_milestones: Vec<String>,
+    pub current_focus: String,
+    pub vital_findings: Vec<String>,
+}
+
 #[derive(Debug)]
 pub struct AgentSession {
     pub events: Vec<ConversationEvent>,
     pub steps: usize,
     pub final_answer: Option<Value>,
+    pub scratchpad: Option<Scratchpad>, 
 }
 
 impl AgentSession {
@@ -68,6 +79,7 @@ impl AgentSession {
             events: Vec::new(),
             steps,
             final_answer: None,
+            scratchpad:None,
         }
     }
 
@@ -148,6 +160,10 @@ impl AgentSession {
     pub fn take_final_answer(&mut self) -> Option<Value> {
         self.final_answer.take()
     }
+
+    pub fn update_scratchpad(&mut self, new: Scratchpad) {
+        self.scratchpad = Some(new);
+    }
 }
 
 pub struct SessionBuilder {
@@ -190,6 +206,7 @@ impl SessionBuilder {
             events: self.events,
             steps: self.steps,
             final_answer: None,
+            scratchpad:None,
         }
     }
 }
