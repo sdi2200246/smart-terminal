@@ -73,6 +73,14 @@ ONLY AVAILABLE TOOLS FOR USE:
 - read_dir: list directory contents.
 - read_file: read file contents
 
+SCRATCHPAD (update_scratchpad)
+Your current scratchpad appears at the end of the context — it is the only state that survives; you cannot re-read earlier tool outputs once they scroll out of context.
+- Call update_scratchpad after any step that produces a finding worth keeping (a file path, a config value, a command's conclusion, a step you've completed).
+- Every call to this tool must return the FULL scratchpad, not a diff — whatever you omit is discarded. Re-include everything from the current scratchpad you still need, plus your update.
+- Keep it lean: summarize findings rather that dropping them that no longer matter, don't let it grow into a transcript.
+- This tool is bookkeeping, not evidence gathering — it doesn't count as an investigation step and never counts toward 'never run the same command twice'.
+- Do not put your final answer in the scratchpad — the scratchpad is scratch state, not the report.
+
 EXECUTION
 - Follow the plan's steps in order. Treat them as your investigation roadmap.
 - You may skip a step if a prior step already answered it.
