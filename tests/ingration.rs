@@ -19,12 +19,12 @@ mod integration {
     pub struct TestToolProvider;
 
     impl InvestigatorToolFactory for TestToolProvider {
-        fn planner_tools(&self) -> Vec<Box<dyn Capability>> {
-            return vec![Box::new(ReadDir)];
+        fn planner_tools(&self, schema: Value) -> Vec<Box<dyn Capability>> {
+            return vec![Box::new(ReadDir) , Box::new(Json { properties: schema })];
         }
 
-        fn executor_tools(&self) -> Vec<Box<dyn Capability>> {
-            return vec![Box::new(ReadDir), Box::new(Bash), Box::new(ReadFile) , Box::new(UpdateScratchpad)];
+        fn executor_tools(&self ,  schema: Value) -> Vec<Box<dyn Capability>> {
+            return vec![Box::new(ReadDir), Box::new(Bash), Box::new(ReadFile) , Box::new(UpdateScratchpad) , Box::new(Json { properties: schema })];
         }
     }
 

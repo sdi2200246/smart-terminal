@@ -15,12 +15,12 @@ use crate::tools::read_file::ReadFile;
 pub struct CliToolProvider;
 
 impl InvestigatorToolFactory for CliToolProvider {
-    fn planner_tools(&self) -> Vec<Box<dyn Capability>> {
-        return vec![Box::new(ReadDir)];
+    fn planner_tools(&self , schema:Value) -> Vec<Box<dyn Capability>> {
+        return vec![Box::new(ReadDir),Box::new(Json { properties: schema })];
     }
 
-    fn executor_tools(&self) -> Vec<Box<dyn Capability>> {
-        return vec![Box::new(ReadDir), Box::new(Bash), Box::new(ReadFile)];
+    fn executor_tools(&self , schema:Value) -> Vec<Box<dyn Capability>> {
+        return vec![Box::new(ReadDir), Box::new(Bash), Box::new(ReadFile) , Box::new(Json { properties: schema })];
     }
 }
 
