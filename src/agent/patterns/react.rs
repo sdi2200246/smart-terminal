@@ -1,4 +1,4 @@
-use crate::agent::agents::Agent;
+use crate::agent::agents::{Agent, AgentState};
 use crate::agent::error::AgentError;
 use crate::agent::patterns::tool_engine::ToolExecutionEngine;
 use crate::core::error::ProviderError;
@@ -9,7 +9,6 @@ use crate::utils::FlatSchema;
 
 use serde::de::DeserializeOwned;
 use serde_json::Value;
-use tokio::sync::mpsc::UnboundedSender;
 
 #[derive(Clone)]
 pub struct ReactLoop<P: LLMProvider> {
@@ -25,11 +24,6 @@ impl<P: LLMProvider> ReactLoop<P> {
         }
     }
 
-    pub fn with_events_streaming(mut self, tx: UnboundedSender<crate::core::responce::AgentToolCall>) -> Self {
-        self.tool_engine = self.tool_engine.with_events_streaming(tx);
-        self
-    }
-
     #[tracing::instrument(skip(self, agent, session), fields(loop_kind = "React"))]
     pub async fn run<T>(
         &mut self,
@@ -40,6 +34,23 @@ impl<P: LLMProvider> ReactLoop<P> {
         T: FlatSchema + DeserializeOwned,
     {
         agent.hooks.on_loop_start();
+        let result = self.run_loop::<T>(agent, session).await;
+        agent.update_state(if result.is_ok() {
+            AgentState::Completed
+        } else {
+            AgentState::Failed
+        });
+        result
+    }
+
+    async fn run_loop<T>(
+        &mut self,
+        agent: &mut Agent,
+        session: &mut AgentSession,
+    ) -> Result<T, AgentError>
+    where
+        T: FlatSchema + DeserializeOwned,
+    {
         let stop_args: Value;
         loop {
             if let Some(value) = session.take_final_answer() {
@@ -53,6 +64,7 @@ impl<P: LLMProvider> ReactLoop<P> {
                 return Err(AgentError::StepsExhausted);
             }
 
+            agent.update_state(AgentState::Thinking);
             let response = match self.call_llm(session, agent).await? {
                 Some(r) => r,
                 None => continue,
@@ -65,6 +77,7 @@ impl<P: LLMProvider> ReactLoop<P> {
                 break;
             }
 
+            agent.update_state(AgentState::ExecutingTool);
             self.tool_engine.dispatch_tool_batch(session, agent, response);
         }
         self.structure_output::<T>(session, &stop_args, agent).await
@@ -109,6 +122,7 @@ impl<P: LLMProvider> ReactLoop<P> {
     where
         T: FlatSchema + DeserializeOwned,
     {
+        agent.update_state(AgentState::StructuringOutput);
         session.clear_events();
         session.add_system("Your one and ONLY job is to return the following text into the scheema provided to you");
         session.add_user(stop_args.to_string());

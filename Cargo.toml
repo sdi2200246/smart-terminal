@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 reqwest = { version = "0.12", features = ["json"] }
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["full" , "signal"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 dotenv = "0.15"
@@ -19,3 +19,5 @@ tracing-appender = "0.2.4"
 clap = { version = "4", features = ["derive"] }
 tempfile = "3.27.0"
 dirs = "6.0.0"
+colored = "2.1"
+indicatif = "0.17"

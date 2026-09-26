@@ -7,8 +7,36 @@ use crate::agent::agents::hooks::{DefaultAgentHook, ToolsRegulator};
 use crate::agent::patterns::hook::AgentLoopHook;
 use crate::core::capability::{Capability, ToolRegistry};
 use crate::core::model::Model;
+use crate::core::responce::AgentToolCall;
 use crate::core::session::AgentSession;
 use serde::Serialize;
+use tokio::sync::mpsc::UnboundedSender;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AgentState {
+    Thinking,
+    ExecutingTool,
+    StructuringOutput,
+    Completed,
+    Failed,
+}
+
+pub enum AgentEvent {
+    StateUpdate(AgentState),
+    ToolCall(AgentToolCall),
+}
+
+impl AgentState {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Thinking => "Thinking",
+            Self::ExecutingTool => "Executing tool",
+            Self::StructuringOutput => "Structuring output",
+            Self::Completed => "Completed",
+            Self::Failed => "Failed",
+        }
+    }
+}
 
 pub struct Agent {
     pub registry: ToolRegistry,
@@ -16,6 +44,7 @@ pub struct Agent {
     pub model: Model,
     pub hooks: Box<dyn AgentLoopHook>,
     pub context: Option<String>,
+    event_stream: Option<UnboundedSender<AgentEvent>>,
 }
 
 impl Agent {
@@ -27,6 +56,7 @@ impl Agent {
             model,
             hooks: Box::new(DefaultAgentHook),
             context: None,
+            event_stream: None,
         }
     }
     
@@ -43,6 +73,27 @@ impl Agent {
     pub fn with_hook(mut self, hook: Box<dyn AgentLoopHook>) -> Self {
         self.hooks = hook;
         self
+    }
+
+    pub fn with_events_streaming(mut self, tx: UnboundedSender<AgentEvent>) -> Self {
+        self.event_stream = Some(tx);
+        self
+    }
+
+    pub(crate) fn stream_tool_call(&self, call: &AgentToolCall) {
+        if let Some(stream) = &self.event_stream {
+            if let Err(error) = stream.send(AgentEvent::ToolCall(call.clone())) {
+                tracing::warn!(tool = %call.name(), error = %error, "failed to stream agent tool event");
+            }
+        }
+    }
+
+    pub(crate) fn update_state(&self, state: AgentState) {
+        if let Some(stream) = &self.event_stream {
+            if let Err(error) = stream.send(AgentEvent::StateUpdate(state)) {
+                tracing::warn!(state = state.label(), error = %error, "failed to stream agent state");
+            }
+        }
     }
 
     pub fn planner(model: Model, tools: Vec<Box<dyn Capability>>) -> Self {
@@ -111,5 +162,25 @@ impl OneShotAgent {
             builder = builder.system(format!("Context:\n{}", ctx));
         }
         builder.user(user_prompt).build()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::model::{Model, ModelName};
+
+    #[test]
+    fn state_updates_are_sent_to_the_presenter() {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let agent = Agent::base("test prompt", Model::with_default_temp(ModelName::GptOss120B))
+            .with_events_streaming(tx);
+
+        agent.update_state(AgentState::ExecutingTool);
+
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(AgentEvent::StateUpdate(AgentState::ExecutingTool))
+        ));
     }
 }

@@ -2,21 +2,13 @@ use crate::agent::agents::Agent;
 use crate::core::responce::{AgentResponse, AgentToolCall};
 use crate::core::session::{AgentSession, ToolCall, ToolResult , Scratchpad};
 use serde_json::Value;
-use tokio::sync::mpsc::UnboundedSender;
 
-#[derive(Clone)]
-pub struct ToolExecutionEngine {
-    events_stream: Option<UnboundedSender<AgentToolCall>>,
-}
+#[derive(Clone, Default)]
+pub struct ToolExecutionEngine;
 
 impl ToolExecutionEngine {
     pub fn new() -> Self {
-        Self { events_stream: None }
-    }
-
-    pub fn with_events_streaming(mut self, tx: UnboundedSender<AgentToolCall>) -> Self {
-        self.events_stream = Some(tx);
-        self
+        Self
     }
 
     pub fn dispatch_tool_batch(
@@ -29,6 +21,9 @@ impl ToolExecutionEngine {
 
         for call in &calls {
             agent.hooks.on_tool_received(call);
+            if call.name() != "update_scratchpad" && call.name() != "final_answer" {
+                agent.stream_tool_call(call);
+            }
         }
 
         session.add_tool_calls(
@@ -52,8 +47,6 @@ impl ToolExecutionEngine {
                 Ok(result) => {
                     if call.name() == "final_answer" {
                         final_answer = Some(call.arguments().clone());
-                    } else if let Some(stream) = &self.events_stream {
-                        let _ = stream.send(call.clone());
                     }
                     result
                 }
@@ -195,6 +188,25 @@ mod tests {
     }
 
     #[test]
+    fn failed_tool_call_is_still_streamed_for_activity_logging() {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let engine = ToolExecutionEngine::new();
+        let mut session = AgentSession::new(5);
+        let mut agent = test_agent(vec![Box::new(Boom)]).with_events_streaming(tx);
+
+        engine.dispatch_tool_batch(
+            &mut session,
+            &mut agent,
+            AgentResponse::single(call("boom", "call_1", json!({}))),
+        );
+
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(crate::agent::agents::AgentEvent::ToolCall(call)) if call.name() == "boom"
+        ));
+    }
+
+    #[test]
     fn final_answer_call_sets_session_final_answer() {
         let engine = ToolExecutionEngine::new();
         let mut session = AgentSession::new(5);
@@ -208,21 +220,25 @@ mod tests {
     #[test]
     fn non_final_tool_call_is_streamed_when_configured() {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-        let engine = ToolExecutionEngine::new().with_events_streaming(tx);
+        let engine = ToolExecutionEngine::new();
         let mut session = AgentSession::new(5);
-        let mut agent = test_agent(vec![Box::new(Echo)]);
+        let mut agent = test_agent(vec![Box::new(Echo)]).with_events_streaming(tx);
 
         engine.dispatch_tool_batch(&mut session, &mut agent, AgentResponse::single(call("echo", "call_1", json!({}))));
 
-        assert_eq!(rx.try_recv().expect("expected a streamed call").name(), "echo");
+        assert!(matches!(
+            rx.try_recv().expect("expected a streamed call"),
+            crate::agent::agents::AgentEvent::ToolCall(call)
+                if call.name() == "echo"
+        ));
     }
 
     #[test]
     fn final_answer_call_is_not_streamed() {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-        let engine = ToolExecutionEngine::new().with_events_streaming(tx);
+        let engine = ToolExecutionEngine::new();
         let mut session = AgentSession::new(5);
-        let mut agent = test_agent(vec![Box::new(FinalAnswer)]);
+        let mut agent = test_agent(vec![Box::new(FinalAnswer)]).with_events_streaming(tx);
 
         engine.dispatch_tool_batch(&mut session, &mut agent, AgentResponse::single(call("final_answer", "call_1", json!({"result": "ok"}))));
 
@@ -329,9 +345,9 @@ mod tests {
     #[test]
     fn scratchpad_update_is_never_streamed() {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-        let engine = ToolExecutionEngine::new().with_events_streaming(tx);
+        let engine = ToolExecutionEngine::new();
         let mut session = AgentSession::new(5);
-        let mut agent = test_agent(vec![]);
+        let mut agent = test_agent(vec![]).with_events_streaming(tx);
 
         engine.dispatch_tool_batch(
             &mut session,
