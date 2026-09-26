@@ -7,6 +7,13 @@ Built in Rust. Uses provider-specific LLMs via Groq and Google Gemini.
 <img width="1088" height="60" alt="image" src="https://github.com/user-attachments/assets/daada4f4-38dd-44af-a8cc-31634c140816" />
 
 
+## Project Documentation
+
+The project docs are split into a few focused guides:
+
+- [docs/architecture.md](docs/architecture.md) — architecture, data flow, and extension points.
+- [docs/development.md](docs/development.md) — local setup, build/test workflow, and contributor expectations.
+
 ## Who this is for
  
 Shell users at every level — beginners learning the ropes, intermediates getting better, and professionals who already know their tools and want to move faster.
