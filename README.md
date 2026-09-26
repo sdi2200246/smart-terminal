@@ -1,8 +1,8 @@
 # smart-terminal
  
-An AI-powered shell companion that predicts your next command and investigates your codebase and shell enviroment.
+An AI-powered shell companion that predicts your next command and investigates your codebase and shell environment.
  
-Built in Rust. Powered by open-source LLMs via Groq.
+Built in Rust. Uses provider-specific LLMs via Groq and Google Gemini.
 
 <img width="1088" height="60" alt="image" src="https://github.com/user-attachments/assets/daada4f4-38dd-44af-a8cc-31634c140816" />
 
@@ -82,7 +82,7 @@ The planner uses `read_dir` to orient and emits a structured plan as JSON. The e
 Useful for anything you'd normally answer by poking around — what does this codebase do, where is X implemented, what's installed on this machine, what's the git state, why is this test failing, what changed between two branches.
  
 > Under active development. The planner sometimes over- or under-scopes, the executor occasionally repeats steps. Both will sharpen.
-> **Groq free tier limits**: the free API key has rate limits that can throttle `investigate` (which chains multiple LLM calls across planner + executor) and some `next-cmd` flows that inspect git diffs or docker state before predicting. `next-cmd` on simple completions stays fast. If you hit rate limits, wait a few seconds and retry — or upgrade your Groq plan.
+> **Provider rate limits**: `investigate` uses Google Gemini and chains multiple LLM calls across the planner and executor, while `next-cmd` uses Groq and may make additional calls when inspecting git diffs or Docker state. Simple `next-cmd` completions stay fast. If a provider rate limit is reached, wait a few seconds and retry or review that provider's plan.
 
 ## Architecture Overview
 
@@ -104,7 +104,7 @@ Useful for anything you'd normally answer by poking around — what does this co
 | `memory/` | Persistent JSON session storage, keyed by project folder. |
 
 ### High-Level Code Flow
-Every command follows the same call stack. `cli` is the composition root — it constructs `GroqClient` and hands it to the workflow. The workflow spins up one or more agents, each agent assembles a tool registry and delegates to a loop. The loop drives everything: it calls the provider, dispatches tool results, and repeats until the model signals completion, at which point it makes a final structured output call and unwinds back up the stack.
+Every command follows the same call stack. `cli` is the composition root — it constructs the command's configured provider (`GroqClient` for `next-cmd`, `GoogleClient` for `investigate`) and hands it to the workflow. The workflow spins up one or more agents, each agent assembles a tool registry and delegates to a loop. The loop drives everything: it calls the provider, dispatches tool results, and repeats until the model signals completion, at which point it makes a final structured output call and unwinds back up the stack.
  
 Memory is not part of the call chain. The workflow loads it before the loop starts and appends to it after the result returns — nothing below the workflow layer touches it.
  
@@ -117,7 +117,7 @@ The only thing that varies per command is what happens inside the workflow box:
 
 <p align="center">
 <img height="500" alt="smart_terminal_runtime_flow_clean" src="https://github.com/user-attachments/assets/17b9772b-a549-493f-aade-7859b931ac56" />
-</>
+</p>
 
 ### Design Goals
 
@@ -128,70 +128,87 @@ The only thing that varies per command is what happens inside the workflow box:
 
 
 ## Setup
- 
-**Requirements**: macOS or Linux with **zsh**.
- 
-**1. Install Rust**
- 
+
+**Requirements**: macOS or Linux with **zsh** and Rust installed.
+
+### 1. Install Rust
+
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"
 ```
- 
-Follow the prompts (defaults are fine). Then either open a new terminal or run `source $HOME/.cargo/env`.
- 
-**2. Get a Groq API key**
- 
-Sign up at [console.groq.com](https://console.groq.com), create an API key, and copy it. The free tier is enough to get going.
- 
-**3. Clone and install**
- 
+
+If Rust is already installed, `source "$HOME/.cargo/env"` is enough to add Cargo to your `PATH` in the current shell.
+
+### 2. Get the required API keys
+
+`smart-terminal` uses Groq for command prediction, and the `investigate` feature uses Gemini/Google.
+
+- Create a Groq key at [console.groq.com](https://console.groq.com)
+- Create a Google/Gemini key in the relevant Google AI console if you plan to use `smart-terminal investigate`
+
+Add them to your shell profile so the app can read them at runtime:
+
 ```bash
-git clone https://github.com/yourusername/smart-terminal.git
+cat <<'EOF' >> ~/.zshrc
+export GROQ_API_KEY="your_groq_api_key"
+export GEMINI_API_KEY="your_gemini_api_key"
+# or: export GOOGLE_API_KEY="your_gemini_api_key"
+EOF
+source ~/.zshrc
+```
+
+### 3. Clone and install the binary
+
+```bash
+git clone https://github.com/sdi2200246/smart-terminal.git
 cd smart-terminal
 cargo install --path .
 ```
- 
-This builds and installs `smart-terminal` into `~/.cargo/bin`, which `rustup` already added to your `$PATH`.
- 
 
- 
-**5. Apply and verify**
- 
+This builds the Rust binary and installs it to `~/.cargo/bin`, which is already on your `PATH` via `rustup`.
+
+### 4. Enable the zsh integration
+
+The shell hook lives in `scripts/zsh/smart-terminal.zsh`.
+
 ```bash
+cat <<'EOF' >> ~/.zshrc
+source /path/to/smart-terminal/scripts/zsh/smart-terminal.zsh
+reload() { source ~/.zshrc; }
+EOF
 source ~/.zshrc
+```
+
+Replace `/path/to/smart-terminal` with the actual location where you cloned the repo.
+
+### 5. Verify the install
+
+```bash
 smart-terminal next-cmd "list files"
 ```
- 
-You should see a command suggestion printed. Now open a fresh zsh session and press `^G` on an empty prompt — a ghost suggestion should appear inline. If it does, you're done.
+
+You should see a command suggestion printed. Then open a fresh zsh session and press `^G` on an empty prompt — the ghost suggestion should appear inline. If it does, setup is complete.
 
 ## Updating
 
-Pull the latest, rebuild the binary, and reload the shell integration:
+Pull the latest changes, rebuild the binary, and reload the zsh integration:
 
 ```bash
-cd /path/to/where/you/cloned/smart-terminal
+cd /path/to/smart-terminal
 git pull
 cargo install --path . --force
 reload
 ```
 
-`--force` overwrites the existing binary in `~/.cargo/bin`, and `reload`
-(added to your `.zshrc` during setup) re-sources the integration so zsh
-picks up any changes to the plugin script.
+`--force` replaces the existing binary in `~/.cargo/bin`, and `reload` re-sources your zsh config so the latest hook is active.
 
-> Other open terminal tabs keep the old integration until you run `reload`
-> in them or open a fresh session.
+> Other open terminal tabs keep the old shell integration until you run `reload` in them or open a fresh session.
  
-## Planned Improvements
+## Roadmap
 
-- **More reliable planning** — improve the investigation planner so it scopes tasks more precisely.
-- **Faster execution** — reduce repeated tool calls and make multi-step workflows more efficient.
-
-## Future Features
-
-- **Per-project instruction profiles** — allow users to define custom behavior and instructions scoped to specific project folders.
-- **Personalized command modeling** — build a lightweight behavioral profile from user workflows and shell habits to create more customized suggestions over time.
-- **More integrations** — support additional shells and future LLM providers.
+- **Folder-scoped investigation state** — maintain one investigation conversation history per project folder, so the `investigate` agent can preserve context between sessions without mixing unrelated projects.
+- **Conversation management commands** — add commands to compact or erase the stored investigation history when users want to reduce context or start fresh.
 
 Contributions, bug reports, and feature suggestions are welcome.
  
