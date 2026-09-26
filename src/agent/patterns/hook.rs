@@ -1,6 +1,6 @@
 use crate::agent::error::AgentError;
 use crate::core::session::AgentSession;
-use crate::core::responce::{AgentResponse, AgentToolCall};
+use crate::core::responce::{AgentToolCall};
 
 pub enum HookAction {
     Continue,

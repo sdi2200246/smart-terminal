@@ -9,6 +9,8 @@ use crate::core::capability::Capability;
 use crate::core::llm_client::LLMProvider;
 use crate::core::model::{Model, ModelName};
 use crate::utils::FlatSchema;
+use crate::agent::agents::AgentEvent;
+use tokio::sync::mpsc::UnboundedSender;
 
 pub trait InvestigatorToolFactory {
     fn planner_tools(&self , schema :Value) -> Vec<Box<dyn Capability>>;
@@ -44,11 +46,21 @@ impl FlatSchema for Report {}
 pub struct Investigator<P: LLMProvider + Clone, F: InvestigatorToolFactory> {
     runner: ReactLoop<P>,
     factory: F,
+    event_stream: Option<UnboundedSender<AgentEvent>>,
 }
 
 impl<'a, P: LLMProvider + Clone, F: InvestigatorToolFactory> Investigator<P, F> {
     pub fn new(runner: ReactLoop<P>, factory: F) -> Self {
-        Self { runner, factory }
+        Self {
+            runner,
+            factory,
+            event_stream: None,
+        }
+    }
+
+    pub fn with_events_streaming(mut self, tx: UnboundedSender<AgentEvent>) -> Self {
+        self.event_stream = Some(tx);
+        self
     }
 
     pub async fn run(&mut self, question: impl Into<String>) -> Result<(Plan, Report), AgentError> {
@@ -58,6 +70,9 @@ impl<'a, P: LLMProvider + Clone, F: InvestigatorToolFactory> Investigator<P, F> 
             Model::with_default_temp(ModelName::GptOss120B),
             self.factory.planner_tools(Plan::schema()),
         );
+        if let Some(stream) = &self.event_stream {
+            planner_agent = planner_agent.with_events_streaming(stream.clone());
+        }
         let mut planner_session = planner_agent.build_session(format!("Question:\n{}", question));
 
         let plan: Plan = self
@@ -75,6 +90,9 @@ impl<'a, P: LLMProvider + Clone, F: InvestigatorToolFactory> Investigator<P, F> 
             Model::creative(ModelName::GptOss120B),
             self.factory.executor_tools(Report::schema()),
         );
+        if let Some(stream) = &self.event_stream {
+            executor_agent = executor_agent.with_events_streaming(stream.clone());
+        }
         let mut executor_session = executor_agent.build_session(user_prompt);
 
         let report: Report = self

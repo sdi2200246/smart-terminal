@@ -1,15 +1,10 @@
-use crate::core::responce::{AgentResponse , AgentToolCall};
+use crate::core::responce::AgentToolCall;
 use serde_json::Value;
 
-const RESET: &str = "\x1b[0m";
-const BOLD: &str = "\x1b[1m";
-const DIM: &str = "\x1b[2m";
-const GREEN: &str = "\x1b[32m";
-
-pub(super) fn format_call(call: &AgentToolCall) -> String {
+pub(crate) fn format_call(call: &AgentToolCall) -> String {
     let name = call.name();
     let args = summarize_args(&call.arguments());
-    return format!("{GREEN}●{RESET} {BOLD}{name}{RESET}{DIM}({args}){RESET}");
+    return format!("\x1b[32m●\x1b[0m \x1b[1m{name}\x1b[0m\x1b[2m({args})\x1b[0m")
 }
 
 fn summarize_args(args: &Value) -> String {
@@ -30,7 +25,7 @@ fn render_value(v: &Value) -> String {
     }
 }
 
-fn truncate(s: &str, max: usize) -> String {
+pub(super) fn truncate(s: &str, max: usize) -> String {
     if s.chars().count() <= max {
         s.to_string()
     } else {
