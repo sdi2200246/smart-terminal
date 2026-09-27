@@ -132,6 +132,23 @@ To enable it in a shell session:
 source /path/to/smart-terminal/scripts/zsh/smart-terminal.zsh
 ```
 
+The Rust executable and the sourced Zsh script must agree on the `next-cmd` stdout protocol. Its wire format is:
+
+```text
+SMART_TERMINAL_NEXT_CMD_V1
+one-line explanation
+reversibility
+complete command payload, possibly multiple lines
+```
+
+The command payload consumes the rest of stdout, so never print diagnostics or additional fields to stdout after it. Send diagnostics to stderr. Keep the protocol marker synchronized between the Rust writer (`src/cli/cmds/next_cmd.rs` and `src/cli/suggestion_handoff.rs`) and the Zsh reader (`scripts/zsh/smart-terminal.zsh`). Update both sides together when changing the format. The Zsh reader waits until the producer closes the stream before rendering, because a multiline command has no fixed line count.
+
+The investigator handoff uses the same marker and field order in a private per-shell temporary directory exported as `SMART_TERMINAL_SUGGESTION_DIR`. The report remains normal CLI output; only the recommendation is written to the handoff. Zsh consumes the file once at the next prompt. `^F` copies only the command into `BUFFER`; explanation and reversibility are presentation metadata and must not be appended to the accepted command.
+
+When changing either stream reader or writer, verify with commands containing both multiple lines and a here-document. Check that the full command appears as ghost text, the explanation follows the command and is colorized, and `^F` inserts only the command. Also verify that the integrated shell reports a clear error if it receives an unsupported protocol marker.
+
+After rebuilding the Rust binary, make sure the interactive shell is invoking that binary (for example, check `whence -p smart-terminal`). If the Zsh script changed, reload it with `source /path/to/smart-terminal/scripts/zsh/smart-terminal.zsh` or open a new shell.
+
 For a persistent setup, include it in `~/.zshrc`:
 
 ```bash

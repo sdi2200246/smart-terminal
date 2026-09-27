@@ -32,9 +32,9 @@ pub enum Reversibility {
 #[derive(JsonSchema, Deserialize, Serialize, Debug)]
 #[schemars(deny_unknown_fields)]
 pub struct NextCommand {
-    /// The exact shell command to run. No backticks, no `$ ` prefix.
+    /// The exact shell command to run. May span multiple lines; no Markdown fences or `$ ` prefix.
     pub cmd: String,
-    /// One short sentence describing what the command does and any assumption made. Under 15 words.
+    /// One short, single-line sentence describing the command and any assumption made. Under 15 words.
     pub man: String,
     /// How reversible the command is, given the current environment.
     pub scale: Reversibility,
@@ -71,10 +71,7 @@ impl<'a, P: LLMProvider + Clone, M: Memory, F: NextCmdToolFactory> NextCmd<'a, P
         );
         let mut session = agent.build_session(user_prompt);
 
-        let prediction: NextCommand = self
-            .runner
-            .run(&mut agent, &mut session)
-            .await?;
+        let prediction: NextCommand = self.runner.run(&mut agent, &mut session).await?;
 
         if loaded {
             let entry = Interaction {
@@ -125,8 +122,8 @@ mod tests {
     use crate::core::capability::Capability;
     use crate::core::error::ProviderError;
     use crate::core::llm_client::AgentRequest;
-    use crate::core::session::{AgentSession, ConversationEvent};
     use crate::core::responce::{AgentResponse, AgentToolCall};
+    use crate::core::session::{AgentSession, ConversationEvent};
     use serde_json::{Value, json};
     use std::sync::{Arc, Mutex};
     use tempfile::TempDir;

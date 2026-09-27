@@ -42,6 +42,9 @@ https://github.com/user-attachments/assets/3d984007-d8ac-477c-a0d3-5c22b70f3240
 
 Press `^G` to fetch a suggestion, `^F` to accept, `^B` to clear.
 
+Suggestions may contain multiple lines, including shell blocks and here-documents.
+`^F` inserts only the suggested command into the editable buffer; the explanation stays as display-only ghost text and is not added to the command.
+
 The inline # description next to each suggestion is color-coded by how reversible the predicted command is — at a glance you know the cost of pressing ^F
 
 > [!NOTE]
@@ -85,6 +88,16 @@ Pose a question; a planner agent forms a plan, an executor agent runs it against
 https://github.com/user-attachments/assets/5ac577fa-13b1-421b-a1a2-649fb0c95211
  
 The planner uses `read_dir` to orient and emits a structured plan as JSON. The executor consumes that plan and runs it with `bash`, `read_dir`, and `read_file`, then writes the report.
+
+Every investigation includes the command the executor predicts you are most likely to run next, based on the findings and context. It can include state-changing commands when those best match your intent. With the Zsh integration loaded, it appears as ghost text after the report; press `^F` to accept it or `^B` to dismiss it. It is never run automatically: after accepting, review it and press Enter to execute. Without the integration, the command is printed normally after the report.
+
+#### Zsh integration notes
+
+- The integration must be loaded in the **interactive shell that runs the command**. After changing `scripts/zsh/smart-terminal.zsh`, source it again or start a new shell.
+- The executable and shell script must use the same version of the `next-cmd` output protocol. If the shell reports `outdated next-cmd output`, rebuild/reinstall `smart-terminal` and reload the script.
+- The output protocol sends a version marker, a one-line explanation, and the reversibility level first; all remaining output is the command. This allows multiline commands and here-documents. Do not add output after the command payload.
+- `^F` accepts the command only. The explanation and reversibility color are display metadata and are not inserted into the command buffer.
+- Investigator handoff uses the same fields and protocol in a private temporary directory. Zsh consumes the handoff on the next prompt; it is not extracted from or mixed into the printed report.
  
 Useful for anything you'd normally answer by poking around — what does this codebase do, where is X implemented, what's installed on this machine, what's the git state, why is this test failing, what changed between two branches.
  
