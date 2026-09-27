@@ -8,6 +8,7 @@ AI_LAST_SUGGESTION=""
 AI_LAST_REVERSIBILITY=""
 AI_LAST_DESCRIPTION=""
 AI_BUFFER_OWNER=""
+AI_EMPTY_BUFFER_ONLY=0
 AI_LOADING=""
 AI_DOTS=0
 AI_FETCH_FD=""
@@ -15,16 +16,24 @@ AI_FETCH_BUFFER=""
 AI_FETCH_LINES=()
 AI_TICK_FD=""
 
+if [[ -z "$AI_HANDOFF_DIR" || ! -d "$AI_HANDOFF_DIR" || "$SMART_TERMINAL_SUGGESTION_DIR" != "$AI_HANDOFF_DIR" ]]; then
+  AI_HANDOFF_DIR="$(mktemp -d "${TMPDIR:-/tmp}/smart-terminal-${UID}-XXXXXXXXXX")" || {
+    print -u2 "smart-terminal: unable to create a private suggestion handoff directory"
+    return 1
+  }
+  export SMART_TERMINAL_SUGGESTION_DIR="$AI_HANDOFF_DIR"
+fi
+
 # ---------------------------------------------------------------------
 # UI and Color Formatting Helpers
 # ---------------------------------------------------------------------
 ai_reversibility_color() {
   case "$1" in
-    Full)         echo "fg=22"  ;;
-    Mostly)       echo "fg=23"  ;;
-    Partial)      echo "fg=58"  ;;
-    Hard)         echo "fg=88"  ;;
-    Irreversible) echo "fg=124" ;;
+    Full)         echo "fg=46"  ;;
+    Mostly)       echo "fg=39"  ;;
+    Partial)      echo "fg=226" ;;
+    Hard)         echo "fg=202" ;;
+    Irreversible) echo "fg=196" ;;
     *)            echo "fg=8"   ;;
   esac
 }
@@ -42,23 +51,34 @@ ai_ghost() {
   fi
 
   if [[ -n "$AI_LAST_SUGGESTION" ]]; then
+    if (( AI_EMPTY_BUFFER_ONLY )) && [[ -n "$BUFFER" ]]; then
+      AI_LAST_SUGGESTION=""
+      AI_LAST_REVERSIBILITY=""
+      AI_LAST_DESCRIPTION=""
+      AI_BUFFER_OWNER=""
+      AI_EMPTY_BUFFER_ONLY=0
+      POSTDISPLAY=""
+      return
+    fi
     if [[ "$BUFFER" != "$AI_BUFFER_OWNER"* ]]; then
       AI_LAST_SUGGESTION=""
       AI_LAST_REVERSIBILITY=""
       AI_LAST_DESCRIPTION=""
+      AI_EMPTY_BUFFER_ONLY=0
       POSTDISPLAY=""
       return
     fi
   fi
 
   if [[ -n "$AI_LAST_SUGGESTION" ]]; then
-    local display_text="" desc_text=""
+    local display_text="" desc_text="" desc_separator="  # "
     if [[ "$AI_LAST_SUGGESTION" == "$BUFFER"* ]]; then
       display_text="${AI_LAST_SUGGESTION#$BUFFER}"
     else
       display_text=" -> $AI_LAST_SUGGESTION"
     fi
-    [[ -n "$AI_LAST_DESCRIPTION" ]] && desc_text="  # $AI_LAST_DESCRIPTION"
+    [[ "$AI_LAST_SUGGESTION" == *$'\n'* ]] && desc_separator=$'\n  # '
+    [[ -n "$AI_LAST_DESCRIPTION" ]] && desc_text="${desc_separator}${AI_LAST_DESCRIPTION}"
     if [[ -n "$display_text" ]]; then
       POSTDISPLAY="${display_text}${desc_text}"
       local start=$#BUFFER
@@ -126,6 +146,7 @@ ai_start_ticker() {
 # ---------------------------------------------------------------------
 _ai_cleanup_fetch() {
   local fd=$1
+  local protocol
   zle -F $fd 2>/dev/null
   exec {fd}<&- 
   AI_FETCH_FD=""
@@ -134,9 +155,18 @@ _ai_cleanup_fetch() {
   AI_FETCH_BUFFER=""
   
   if (( ${#AI_FETCH_LINES} >= 3 )); then
-    AI_LAST_SUGGESTION="${AI_FETCH_LINES[1]}"
-    AI_LAST_DESCRIPTION="${AI_FETCH_LINES[2]}"
-    AI_LAST_REVERSIBILITY="${AI_FETCH_LINES[3]}"
+    protocol="${AI_FETCH_LINES[1]}"
+    if [[ "$protocol" != "SMART_TERMINAL_NEXT_CMD_V1" ]]; then
+      AI_LAST_SUGGESTION=""
+      AI_LAST_DESCRIPTION=""
+      AI_LAST_REVERSIBILITY=""
+      POSTDISPLAY=""
+      zle -M "smart-terminal: outdated next-cmd output; rebuild/reinstall the current binary"
+    else
+      AI_LAST_DESCRIPTION="${AI_FETCH_LINES[2]}"
+      AI_LAST_REVERSIBILITY="${AI_FETCH_LINES[3]}"
+      AI_LAST_SUGGESTION="${(F)AI_FETCH_LINES[4,-1]}"
+    fi
   fi
   AI_FETCH_LINES=()
   ai_stop_ticker
@@ -148,11 +178,6 @@ _ai_cleanup_fetch() {
 ai_fetch_handler() {
   local fd=$1 event=$2 chunk
   
-  if [[ "$event" == "hup" || "$event" == "err" ]]; then
-    _ai_cleanup_fetch $fd
-    return
-  fi
-
   if ! sysread -i $fd chunk 2>/dev/null; then
     _ai_cleanup_fetch $fd
     return
@@ -164,24 +189,6 @@ ai_fetch_handler() {
     AI_FETCH_BUFFER="${AI_FETCH_BUFFER#*$'\n'}"
   done
 
-  # When all 3 flushed rows from Rust cross the pipe, process them immediately
-  if (( ${#AI_FETCH_LINES} >= 3 )); then
-    zle -F $fd 2>/dev/null
-    exec {fd}<&- 
-    AI_FETCH_FD=""
-    
-    AI_LAST_SUGGESTION="${AI_FETCH_LINES[1]}"
-    AI_LAST_DESCRIPTION="${AI_FETCH_LINES[2]}"
-    AI_LAST_REVERSIBILITY="${AI_FETCH_LINES[3]}"
-    
-    AI_FETCH_BUFFER=""
-    AI_FETCH_LINES=()
-    ai_stop_ticker
-    AI_LOADING=""
-    
-    # Run the official display bridge widget to draw the suggestion instantly
-    zle _ai_redisplay_ghost
-  fi
 }
 
 # ---------------------------------------------------------------------
@@ -193,6 +200,7 @@ ai_fetch_suggestion() {
   AI_LAST_SUGGESTION=""
   AI_LAST_DESCRIPTION=""
   AI_LAST_REVERSIBILITY=""
+  AI_EMPTY_BUFFER_ONLY=0
   AI_FETCH_BUFFER=""
   AI_FETCH_LINES=()
   export AI_CONTEXT_HISTORY="$(history -n -20)"
@@ -207,12 +215,17 @@ ai_fetch_suggestion() {
 
 ai_accept_suggestion() {
   if [[ -n "$AI_LAST_SUGGESTION" ]]; then
+    if (( AI_EMPTY_BUFFER_ONLY )) && [[ -n "$BUFFER" ]]; then
+      ai_clear_suggestion
+      return
+    fi
     BUFFER="$AI_LAST_SUGGESTION"
     CURSOR=${#BUFFER}
     AI_LAST_SUGGESTION=""
     AI_LAST_REVERSIBILITY=""
     AI_LAST_DESCRIPTION=""
     AI_BUFFER_OWNER=""
+    AI_EMPTY_BUFFER_ONLY=0
     POSTDISPLAY=""
     region_highlight=()
     zle redisplay
@@ -232,10 +245,37 @@ ai_clear_suggestion() {
   AI_LAST_REVERSIBILITY=""
   AI_LAST_DESCRIPTION=""
   AI_BUFFER_OWNER=""
+  AI_EMPTY_BUFFER_ONLY=0
   AI_LOADING=""
   POSTDISPLAY=""
   region_highlight=()
   zle redisplay
+}
+
+_ai_receive_investigator_suggestion() {
+  [[ -n "$AI_HANDOFF_DIR" ]] || return
+
+  local handoff_file="$AI_HANDOFF_DIR/investigator-command"
+  [[ -f "$handoff_file" ]] || return
+
+  local -a suggestion_data
+  suggestion_data=("${(@f)$(<"$handoff_file")}")
+  rm -f "$handoff_file"
+
+  (( ${#suggestion_data} >= 4 )) || return
+  [[ "${suggestion_data[1]}" == "SMART_TERMINAL_NEXT_CMD_V1" ]] || return
+  [[ -n "${suggestion_data[2]}" ]] || return
+  case "${suggestion_data[3]}" in
+    Full|Mostly|Partial|Hard|Irreversible) ;;
+    *) return ;;
+  esac
+
+  AI_LAST_SUGGESTION="${(F)suggestion_data[4,-1]}"
+  [[ -n "$AI_LAST_SUGGESTION" ]] || return
+  AI_LAST_DESCRIPTION="${suggestion_data[2]}"
+  AI_LAST_REVERSIBILITY="${suggestion_data[3]}"
+  AI_BUFFER_OWNER=""
+  AI_EMPTY_BUFFER_ONLY=1
 }
 
 # ---------------------------------------------------------------------
@@ -251,6 +291,7 @@ zle -N ai_fetch_handler
 # Hook into the Zsh line-drawing interface to continuously keep ghost highlights accurate
 autoload -Uz add-zle-hook-widget
 add-zle-hook-widget line-pre-redraw ai_ghost
+add-zle-hook-widget zle-line-init _ai_redisplay_ghost
 
 # Define hotkeys
 bindkey '^G' ai_fetch_suggestion  # Ctrl + G to request suggestions
@@ -269,7 +310,12 @@ _snapshot_err() {
   : > "$ERR_STREAM"
 }
 
-zshexit() { rm -f "$ERR_STREAM" "$ERR_LAST" }
+autoload -Uz add-zsh-hook
+
+zshexit() {
+  rm -f "$ERR_STREAM" "$ERR_LAST" "$AI_HANDOFF_DIR/investigator-command"
+  rmdir "$AI_HANDOFF_DIR" 2>/dev/null
+}
 
 add-zsh-hook precmd _snapshot_err
-autoload -Uz add-zsh-hook
+add-zsh-hook precmd _ai_receive_investigator_suggestion
