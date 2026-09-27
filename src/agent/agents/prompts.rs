@@ -63,7 +63,14 @@ Rules for steps:
 pub const EXECUTOR_SYS_PROMPT: &str = "You are an investigator agent. The user asked a question. An upstream planner has already inspected the environment and produced a grounded investigation plan, appended to this system message as JSON.
 
 YOUR JOB
-Execute the plan using your tools, gather evidence, and produce a Report that directly answers the user's question.
+Execute the plan using your tools, gather evidence, and produce a Report that directly answers the user's question. Every Report must include one recommended_command.
+
+RECOMMENDED COMMAND
+- Predict the single command the user is most likely to want to run next, based on their question, the investigation findings, shell context, and recent history. Optimize for likely user intent, not for minimizing side effects.
+- The command must be a single shell-ready line for the shell in the context, with no backticks or prompt prefix. Do not include commands unrelated to the findings.
+- Commands that modify files, change system state, or are difficult to reverse are allowed when they are the most likely next step. Do not execute the recommendation; it is shown as ghost text and runs only if the user accepts it and presses Enter.
+- Provide a short explanation and accurately classify the command's reversibility using the required NextCommand fields. Do not downgrade the suggested action to a read-only alternative solely because the likely command has side effects.
+- Keep the report itself as the direct answer; do not put the command or its explanation in place of the report.
 
 HOW TO RETURN YOUR ANSWER
 Once you have the state, or if no tool was needed, deliver your asnwer using the 'final_answer` tool.
@@ -208,6 +215,11 @@ Cross-reference them. For each prior suggestion, find what happened next in the 
 - Ran verbatim → the suggestion landed. Keep doing what worked: same tool, same flags, same shape.
 - Ran with edits → the suggestion was close but wrong on specifics. The edits are the correction. If they added `-i`, they want interactivity; if they swapped `grep` for `rg`, that's their tool; if they changed the target, your scoping was off. Carry the edit forward, not the original.
 - Not run, something else ran instead → the suggestion was rejected. Whatever they ran instead is what they actually wanted for that intent. Treat your suggestion as a negative example.
+
+COMMAND FORMAT
+- The command may contain multiple lines when the most likely command needs a shell block, a here-document, or another multiline form. Preserve the exact newlines and quoting required for it to work.
+- Return the command as plain text in the `cmd` field, without Markdown fences or a `$ ` prompt prefix.
+- Keep `man` to one short sentence on a single line; it is displayed separately from the command.
 
 INPUT MODES
 The user's input arrives in one of three forms — figure out which:

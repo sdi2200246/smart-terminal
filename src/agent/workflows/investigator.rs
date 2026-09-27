@@ -3,18 +3,19 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::agent::agents::Agent;
+use crate::agent::agents::AgentEvent;
 use crate::agent::error::AgentError;
 use crate::agent::patterns::react::ReactLoop;
+use crate::agent::workflows::next_cmd::NextCommand;
 use crate::core::capability::Capability;
 use crate::core::llm_client::LLMProvider;
 use crate::core::model::{Model, ModelName};
 use crate::utils::FlatSchema;
-use crate::agent::agents::AgentEvent;
 use tokio::sync::mpsc::UnboundedSender;
 
 pub trait InvestigatorToolFactory {
-    fn planner_tools(&self , schema :Value) -> Vec<Box<dyn Capability>>;
-    fn executor_tools(&self, schema :Value) -> Vec<Box<dyn Capability>>;
+    fn planner_tools(&self, schema: Value) -> Vec<Box<dyn Capability>>;
+    fn executor_tools(&self, schema: Value) -> Vec<Box<dyn Capability>>;
 }
 
 #[derive(JsonSchema, Deserialize, Serialize, Debug)]
@@ -41,8 +42,11 @@ impl FlatSchema for Plan {}
 pub struct Report {
     ///A direct text with out special characters report answering the user's question. Not a description of what was done.
     pub report: String,
+    /// The most likely next command the user wants to run, grounded in the investigation.
+    pub recommended_command: NextCommand,
 }
 impl FlatSchema for Report {}
+
 pub struct Investigator<P: LLMProvider + Clone, F: InvestigatorToolFactory> {
     runner: ReactLoop<P>,
     factory: F,
@@ -101,5 +105,28 @@ impl<'a, P: LLMProvider + Clone, F: InvestigatorToolFactory> Investigator<P, F> 
             .await?;
 
         Ok((plan, report))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn report_requires_a_recommended_command() {
+        let report = serde_json::json!({
+            "report": "The working tree has no changes.",
+            "recommended_command": {
+                "cmd": "git status --short",
+                "man": "Verify that the working tree remains clean.",
+                "scale": "Full"
+            }
+        });
+        assert!(serde_json::from_value::<Report>(report).is_ok());
+
+        let report_without_command = serde_json::json!({
+            "report": "The working tree has no changes."
+        });
+        assert!(serde_json::from_value::<Report>(report_without_command).is_err());
     }
 }
