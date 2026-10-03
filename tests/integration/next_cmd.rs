@@ -1,9 +1,9 @@
 use super::TestToolProvider;
-use smart_terminal::agent::memory::FolderMemory;
 use smart_terminal::agent::patterns::react::ReactLoop;
 use smart_terminal::agent::workflows::next_cmd::{NextCmd, NextCommand};
 use smart_terminal::core::llm_client::LLMProvider;
 use smart_terminal::core::memory::{Interaction, Memory};
+use smart_terminal::persistence::NextCmdMemory;
 use smart_terminal::providers::google::client::GoogleClient;
 use smart_terminal::providers::groq::client::GroqClient;
 use std::env;
@@ -28,7 +28,7 @@ async fn run_case<P: LLMProvider + Clone>(label: &str, input: &str, provider: P)
     dotenv::dotenv().ok();
 
     let tmp = TempDir::new().expect("tempdir");
-    let mut memory = FolderMemory::new(tmp.path());
+    let mut memory = NextCmdMemory::new(tmp.path());
     let cwd = env::current_dir().expect("cwd");
     memory.register(&cwd).expect("register cwd");
 
@@ -65,7 +65,7 @@ async fn run_case_with_history<P: LLMProvider + Clone>(
     dotenv::dotenv().ok();
 
     let tmp = TempDir::new().expect("tempdir");
-    let mut memory = FolderMemory::new(tmp.path());
+    let mut memory = NextCmdMemory::new(tmp.path());
     let cwd = env::current_dir().expect("cwd");
     memory.register(&cwd).expect("register cwd");
 

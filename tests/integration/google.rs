@@ -2,7 +2,7 @@
 mod integration {
     use std::print;
 
-use smart_terminal::core::capability::ToolMetaData;
+    use smart_terminal::core::capability::ToolMetaData;
     use smart_terminal::core::llm_client::{AgentRequest, LLMProvider};
     use smart_terminal::core::model::{Model, ModelName};
     use smart_terminal::core::session::AgentSession;
@@ -35,8 +35,6 @@ use smart_terminal::core::capability::ToolMetaData;
 
         let result = client.complete(request).await;
         assert!(result.is_ok(), "complete() failed: {:?}", result.err());
-
-        
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -74,7 +72,7 @@ use smart_terminal::core::capability::ToolMetaData;
         assert!(result.is_ok(), "complete() failed: {:?}", result.err());
 
         let call = result.unwrap();
-        print!("{:?}" , call);
+        print!("{:?}", call);
     }
 
     #[cfg(test)]

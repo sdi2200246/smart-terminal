@@ -9,6 +9,7 @@ use crate::agent::patterns::react::ReactLoop;
 use crate::agent::workflows::next_cmd::NextCommand;
 use crate::core::capability::Capability;
 use crate::core::llm_client::LLMProvider;
+use crate::core::memory::InvestigationSession;
 use crate::core::model::{Model, ModelName};
 use crate::utils::FlatSchema;
 use tokio::sync::mpsc::UnboundedSender;
@@ -68,6 +69,17 @@ impl<'a, P: LLMProvider + Clone, F: InvestigatorToolFactory> Investigator<P, F> 
     }
 
     pub async fn run(&mut self, question: impl Into<String>) -> Result<(Plan, Report), AgentError> {
+        let (plan, report, _) = self
+            .run_with_session(question, InvestigationSession::default())
+            .await?;
+        Ok((plan, report))
+    }
+
+    pub async fn run_with_session(
+        &mut self,
+        question: impl Into<String>,
+        mut saved_session: InvestigationSession,
+    ) -> Result<(Plan, Report, InvestigationSession), AgentError> {
         let question = question.into();
 
         let mut planner_agent = Agent::planner(
@@ -77,7 +89,14 @@ impl<'a, P: LLMProvider + Clone, F: InvestigatorToolFactory> Investigator<P, F> 
         if let Some(stream) = &self.event_stream {
             planner_agent = planner_agent.with_events_streaming(stream.clone());
         }
-        let mut planner_session = planner_agent.build_session(format!("Question:\n{}", question));
+        let planner_prompt = planner_prompt(&question, &saved_session.completed_reports);
+        let mut planner_session = match saved_session.planner.take() {
+            Some(mut session) => {
+                session.add_user(planner_prompt);
+                session
+            }
+            None => planner_agent.build_session(planner_prompt),
+        };
 
         let plan: Plan = self
             .runner
@@ -97,20 +116,143 @@ impl<'a, P: LLMProvider + Clone, F: InvestigatorToolFactory> Investigator<P, F> 
         if let Some(stream) = &self.event_stream {
             executor_agent = executor_agent.with_events_streaming(stream.clone());
         }
-        let mut executor_session = executor_agent.build_session(user_prompt);
+        let mut executor_session = match saved_session.executor.take() {
+            Some(mut session) => {
+                session.add_user(user_prompt);
+                session
+            }
+            None => executor_agent.build_session(user_prompt),
+        };
 
         let report: Report = self
             .runner
             .run(&mut executor_agent, &mut executor_session)
             .await?;
 
-        Ok((plan, report))
+        saved_session
+            .completed_reports
+            .push(serde_json::to_string_pretty(&report).expect("report serializes"));
+        saved_session.planner = Some(planner_session);
+        saved_session.executor = Some(executor_session);
+
+        Ok((plan, report, saved_session))
     }
+}
+
+fn planner_prompt(question: &str, completed_reports: &[String]) -> String {
+    if completed_reports.is_empty() {
+        return format!("Question:\n{}", question);
+    }
+
+    let previous_reports = completed_reports
+        .iter()
+        .enumerate()
+        .map(|(index, report)| format!("Execution {}:\n{}", index + 1, report))
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    format!(
+        "Previous execution reports and findings are included below. Use them to interpret references to earlier results, and re-check facts that may have changed.\n\n{}\n\nCurrent question:\n{}",
+        previous_reports, question
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::error::ProviderError;
+    use crate::core::llm_client::AgentRequest;
+    use crate::core::responce::{AgentResponse, AgentToolCall};
+    use crate::core::session::ConversationEvent;
+    use serde_json::{Value, json};
+    use std::sync::{Arc, Mutex};
+
+    struct EmptyToolFactory;
+
+    impl InvestigatorToolFactory for EmptyToolFactory {
+        fn planner_tools(&self, _schema: Value) -> Vec<Box<dyn Capability>> {
+            Vec::new()
+        }
+
+        fn executor_tools(&self, _schema: Value) -> Vec<Box<dyn Capability>> {
+            Vec::new()
+        }
+    }
+
+    #[derive(Clone)]
+    struct SessionCaptureProvider(Arc<Mutex<Vec<Vec<ConversationEvent>>>>);
+
+    impl LLMProvider for SessionCaptureProvider {
+        async fn complete(
+            &self,
+            request: AgentRequest<'_>,
+        ) -> Result<AgentResponse, ProviderError> {
+            self.0.lock().unwrap().push(request.session.events.clone());
+            Ok(AgentResponse::single(AgentToolCall::new(
+                "stop".into(),
+                String::new(),
+                json!({"complete":true}),
+                None,
+            )))
+        }
+
+        async fn complete_structured(
+            &self,
+            _session: &crate::core::session::AgentSession,
+            schema: Value,
+        ) -> Result<Value, ProviderError> {
+            if schema["properties"].get("goal").is_some() {
+                Ok(json!({"goal":"test goal","steps":[]}))
+            } else {
+                Ok(json!({
+                    "report":"test report",
+                    "recommended_command": {
+                        "cmd":"echo done",
+                        "man":"Print done.",
+                        "scale":"Full"
+                    }
+                }))
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn continues_planner_and_executor_conversations_on_follow_up() {
+        let captured = Arc::new(Mutex::new(Vec::new()));
+        let runner = ReactLoop::new(SessionCaptureProvider(captured.clone()));
+        let mut investigator = Investigator::new(runner, EmptyToolFactory);
+
+        let (_, _, saved_session) = investigator
+            .run_with_session("first question", InvestigationSession::default())
+            .await
+            .unwrap();
+        let (second_plan, _, updated_session) = investigator
+            .run_with_session("follow-up question", saved_session)
+            .await
+            .unwrap();
+
+        assert_eq!(second_plan.goal, "test goal");
+        let requests = captured.lock().unwrap();
+        assert_eq!(requests.len(), 4);
+        for resumed_request in [&requests[2], &requests[3]] {
+            assert!(
+                resumed_request
+                    .iter()
+                    .any(|event| matches!(event, ConversationEvent::Assistant(_)))
+            );
+            assert!(resumed_request.iter().any(|event| matches!(
+                event,
+                ConversationEvent::User(question) if question.contains("follow-up question")
+            )));
+        }
+        assert!(requests[2].iter().any(|event| matches!(
+            event,
+            ConversationEvent::User(question)
+                if question.contains("test report") && question.contains("echo done")
+        )));
+        assert!(updated_session.planner.is_some());
+        assert!(updated_session.executor.is_some());
+        assert_eq!(updated_session.completed_reports.len(), 2);
+    }
 
     #[test]
     fn report_requires_a_recommended_command() {

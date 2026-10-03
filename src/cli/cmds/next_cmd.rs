@@ -1,9 +1,9 @@
-use crate::agent::memory::FolderMemory;
 use crate::agent::patterns::react::ReactLoop;
 use crate::agent::workflows::next_cmd::{NextCmd, NextCommand, Reversibility};
 use crate::cli::agent_setup::CliToolProvider;
 use crate::cli::cli::NextCmdArgs;
 use crate::core::memory::Memory;
+use crate::persistence::NextCmdMemory;
 use crate::providers::groq::client::GroqClient;
 use std::env;
 use std::io::{self, Write};
@@ -12,7 +12,7 @@ const OUTPUT_PROTOCOL: &str = "SMART_TERMINAL_NEXT_CMD_V1";
 
 pub async fn run(args: NextCmdArgs) {
     let mut memory =
-        FolderMemory::project_local().unwrap_or_else(|_| FolderMemory::new(env::temp_dir()));
+        NextCmdMemory::project_local().unwrap_or_else(|_| NextCmdMemory::new(env::temp_dir()));
 
     if let Ok(cwd) = env::current_dir() {
         let _ = memory.load(&cwd);

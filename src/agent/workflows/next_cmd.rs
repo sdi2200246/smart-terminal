@@ -118,12 +118,12 @@ fn now_secs() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::memory::FolderMemory;
     use crate::core::capability::Capability;
     use crate::core::error::ProviderError;
     use crate::core::llm_client::AgentRequest;
     use crate::core::responce::{AgentResponse, AgentToolCall};
     use crate::core::session::{AgentSession, ConversationEvent};
+    use crate::persistence::NextCmdMemory;
     use serde_json::{Value, json};
     use std::sync::{Arc, Mutex};
     use tempfile::TempDir;
@@ -207,7 +207,7 @@ mod tests {
     #[tokio::test]
     async fn runs_without_registered_memory() {
         let tmp = TempDir::new().unwrap();
-        let mut memory = FolderMemory::new(tmp.path());
+        let mut memory = NextCmdMemory::new(tmp.path());
 
         let (provider, _captured) = MockProvider::new("ls -la");
         let runner = ReactLoop::new(provider);
@@ -225,7 +225,7 @@ mod tests {
     #[tokio::test]
     async fn appends_interaction_when_registered() {
         let tmp = TempDir::new().unwrap();
-        let mut memory = FolderMemory::new(tmp.path());
+        let mut memory = NextCmdMemory::new(tmp.path());
         let cwd = env::current_dir().unwrap();
         memory.register(&cwd).unwrap();
 
@@ -246,7 +246,7 @@ mod tests {
     #[tokio::test]
     async fn prior_interactions_appear_in_prompt() {
         let tmp = TempDir::new().unwrap();
-        let mut memory = FolderMemory::new(tmp.path());
+        let mut memory = NextCmdMemory::new(tmp.path());
         let cwd = env::current_dir().unwrap();
         memory.register(&cwd).unwrap();
         memory
@@ -279,7 +279,7 @@ mod tests {
         let cwd = env::current_dir().unwrap();
 
         {
-            let mut memory = FolderMemory::new(&memory_root);
+            let mut memory = NextCmdMemory::new(&memory_root);
             memory.register(&cwd).unwrap();
             let (provider, _) = MockProvider::new("ls");
             let runner = ReactLoop::new(provider);
@@ -288,7 +288,7 @@ mod tests {
             workflow.run("show files").await.unwrap();
         }
 
-        let mut memory = FolderMemory::new(&memory_root);
+        let mut memory = NextCmdMemory::new(&memory_root);
         assert!(memory.load(&cwd).unwrap());
         let conv = memory.current().unwrap();
         assert_eq!(conv.interactions.len(), 1);

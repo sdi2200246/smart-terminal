@@ -1,9 +1,9 @@
 use std::env;
 use std::path::PathBuf;
 
-use crate::agent::memory::FolderMemory;
 use crate::cli::cli::{MemoryAction, MemoryArgs};
 use crate::core::memory::{Memory, MemoryError};
+use crate::persistence::NextCmdMemory;
 
 pub async fn run(args: MemoryArgs) {
     let cwd = match env::current_dir() {
@@ -14,7 +14,7 @@ pub async fn run(args: MemoryArgs) {
         }
     };
 
-    let mut memory = match FolderMemory::project_local() {
+    let mut memory = match NextCmdMemory::project_local() {
         Ok(m) => m,
         Err(e) => {
             eprintln!("failed to open memory store: {e}");
@@ -35,19 +35,19 @@ pub async fn run(args: MemoryArgs) {
     }
 }
 
-fn init(memory: &mut FolderMemory, cwd: &PathBuf) -> Result<(), MemoryError> {
+fn init(memory: &mut NextCmdMemory, cwd: &PathBuf) -> Result<(), MemoryError> {
     memory.register(cwd)?;
     println!("\x1b[32m✓ registered\x1b[0m {}", cwd.display());
     Ok(())
 }
 
-fn delete(memory: &mut FolderMemory, cwd: &PathBuf) -> Result<(), MemoryError> {
+fn delete(memory: &mut NextCmdMemory, cwd: &PathBuf) -> Result<(), MemoryError> {
     memory.unregister(cwd)?;
     println!("\x1b[32m✓ deleted\x1b[0m memory for {}", cwd.display());
     Ok(())
 }
 
-fn clear(memory: &mut FolderMemory, cwd: &PathBuf) -> Result<(), MemoryError> {
+fn clear(memory: &mut NextCmdMemory, cwd: &PathBuf) -> Result<(), MemoryError> {
     if !memory.load(cwd)? {
         eprintln!("not registered — run `memory init` first");
         return Ok(());
@@ -60,7 +60,7 @@ fn clear(memory: &mut FolderMemory, cwd: &PathBuf) -> Result<(), MemoryError> {
     Ok(())
 }
 
-fn show(memory: &mut FolderMemory, cwd: &PathBuf) -> Result<(), MemoryError> {
+fn show(memory: &mut NextCmdMemory, cwd: &PathBuf) -> Result<(), MemoryError> {
     if !memory.load(cwd)? {
         println!("not registered — run `memory init` first");
         return Ok(());

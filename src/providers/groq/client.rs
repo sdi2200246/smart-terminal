@@ -3,8 +3,8 @@ use super::protocol::request::GroqRequest;
 use super::protocol::responce::{GroqResponse, LlmStructuredOutput, LlmToolCall};
 use crate::core::error::ProviderError;
 use crate::core::llm_client::{AgentRequest, LLMProvider};
-use crate::core::session::{AgentSession};
-use crate::core::responce::{AgentResponse , AgentToolCall};
+use crate::core::responce::{AgentResponse, AgentToolCall};
+use crate::core::session::AgentSession;
 use crate::providers::client::{ClientConfig, GenericLlmClient, ProviderCodec};
 use reqwest::StatusCode;
 use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
@@ -33,7 +33,6 @@ impl ProviderCodec for GroqProtocol {
             call.name, call.id, call.args, None,
         )))
     }
-
 
     fn parse_structured(&self, res: Self::Response) -> Result<Value, Self::Error> {
         let out = LlmStructuredOutput::try_from(res)?;
@@ -118,7 +117,7 @@ impl LLMProvider for GroqClient {
 #[cfg(test)]
 mod unit {
     use super::*;
-    use crate::core::responce::{AgentToolCall};
+    use crate::core::responce::AgentToolCall;
     use crate::providers::groq::protocol::request::GroqRequest;
     use crate::providers::groq::protocol::responce::{GroqResponse, LlmToolCall};
     use reqwest::StatusCode;
@@ -269,7 +268,7 @@ mod unit {
         }
     }
 
-        #[test]
+    #[test]
     fn parse_tool_call_wraps_single_call_in_agent_response() {
         let protocol = GroqProtocol;
         let resp = groq_response("git_status", "call_test", json!({"path": "."}));

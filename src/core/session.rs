@@ -1,10 +1,10 @@
-use serde::{Serialize , Deserialize};
-use serde_json::Value;
 use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 const DEFAULT_STEPS: usize = 50;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct ToolCall {
     pub name: String,
     pub arguments: Value,
@@ -28,7 +28,7 @@ impl ToolCall {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct ToolResult {
     pub name: String,
     pub result: String,
@@ -46,16 +46,16 @@ impl ToolResult {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum ConversationEvent {
     System(String),
     User(String),
+    Assistant(String),
     /// One model turn's calls, in emission order. Length 1 for sequential.
     ToolCalls(Vec<ToolCall>),
     /// Results for the immediately preceding ToolCalls, same order and length.
     ToolResults(Vec<ToolResult>),
 }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default, PartialEq)]
 pub struct Scratchpad {
@@ -65,12 +65,12 @@ pub struct Scratchpad {
     pub vital_findings: Vec<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentSession {
     pub events: Vec<ConversationEvent>,
     pub steps: usize,
     pub final_answer: Option<Value>,
-    pub scratchpad: Option<Scratchpad>, 
+    pub scratchpad: Option<Scratchpad>,
 }
 
 impl AgentSession {
@@ -79,7 +79,7 @@ impl AgentSession {
             events: Vec::new(),
             steps,
             final_answer: None,
-            scratchpad:None,
+            scratchpad: None,
         }
     }
 
@@ -95,6 +95,10 @@ impl AgentSession {
         self.events.push(ConversationEvent::User(message.into()));
     }
 
+    pub fn add_assistant(&mut self, message: impl Into<String>) {
+        self.events
+            .push(ConversationEvent::Assistant(message.into()));
+    }
 
     pub fn add_reflection(&mut self, reflection: impl Into<String>) {
         self.events.push(ConversationEvent::System(format!(
@@ -117,7 +121,6 @@ impl AgentSession {
         self.events.push(ConversationEvent::ToolResults(results));
     }
 
-
     pub fn add_error(&mut self, er: String) {
         self.events
             .push(ConversationEvent::System(format!("[ERROR]:{}", er)));
@@ -129,9 +132,14 @@ impl AgentSession {
             _ => None,
         }
     }
-    
+
     pub fn current_steps(&self) -> usize {
-        self.events
+        let start = self
+            .events
+            .iter()
+            .rposition(|event| matches!(event, ConversationEvent::User(_)))
+            .map_or(0, |index| index + 1);
+        self.events[start..]
             .iter()
             .filter(|e| matches!(e, ConversationEvent::ToolCalls(_)))
             .count()
@@ -206,7 +214,44 @@ impl SessionBuilder {
             events: self.events,
             steps: self.steps,
             final_answer: None,
-            scratchpad:None,
+            scratchpad: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn agent_session_round_trips_tool_calls_and_provider_metadata() {
+        let mut session = AgentSession::builder().user("question").build();
+        session.add_tool_calls(vec![
+            ToolCall::new("inspect", serde_json::json!({"path": "."}), "call-1")
+                .with_thinking_state(Some("gemini-signature".into())),
+        ]);
+        session.add_tool_results(vec![ToolResult::new("inspect", "result", "call-1")]);
+
+        let serialized = serde_json::to_string(&session).unwrap();
+        let restored: AgentSession = serde_json::from_str(&serialized).unwrap();
+
+        assert_eq!(restored.events, session.events);
+        match &restored.events[1] {
+            ConversationEvent::ToolCalls(calls) => {
+                assert_eq!(calls[0].thinking_state.as_deref(), Some("gemini-signature"));
+            }
+            _ => panic!("expected tool calls"),
+        }
+    }
+
+    #[test]
+    fn resumed_session_counts_steps_after_latest_user_event() {
+        let mut session = AgentSession::builder().user("first run").build();
+        session.add_tool_calls(vec![ToolCall::new("old", serde_json::Value::Null, "old")]);
+        session.add_user("resumed run");
+
+        assert_eq!(session.current_steps(), 0);
+        session.add_tool_calls(vec![ToolCall::new("new", serde_json::Value::Null, "new")]);
+        assert_eq!(session.current_steps(), 1);
     }
 }

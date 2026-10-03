@@ -33,8 +33,6 @@ impl AgentToolCall {
     }
 }
 
-
-
 #[derive(Debug, Clone, Default)]
 pub struct AgentResponse {
     calls: Vec<AgentToolCall>,
@@ -70,7 +68,7 @@ impl AgentResponse {
     }
 
     pub fn is_stop(&self) -> bool {
-        return matches!(self.calls.as_slice(), [call] if call.name() == "stop")
+        return matches!(self.calls.as_slice(), [call] if call.name() == "stop");
     }
 }
 

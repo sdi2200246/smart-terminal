@@ -43,6 +43,61 @@ pub enum MemoryAction {
 
 #[derive(Args)]
 pub struct InvestigateArgs {
+    /// Investigate once without loading or changing the project's main session
+    #[arg(long)]
+    pub one_off: bool,
     /// The question to investigate
-    pub question: String,
+    pub question: Option<String>,
+    #[command(subcommand)]
+    pub action: Option<InvestigateAction>,
+}
+
+#[derive(Subcommand)]
+pub enum InvestigateAction {
+    /// Manage the project's main investigation session
+    Session(InvestigationSessionArgs),
+}
+
+#[derive(Args)]
+pub struct InvestigationSessionArgs {
+    #[command(subcommand)]
+    pub action: InvestigationSessionAction,
+}
+
+#[derive(Subcommand)]
+pub enum InvestigationSessionAction {
+    /// Delete the project's saved investigation session
+    Clear,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_one_off_investigation() {
+        let cli = Cli::try_parse_from(["agent", "investigate", "--one-off", "question"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Commands::Investigate(InvestigateArgs {
+                one_off: true,
+                question: Some(question),
+                action: None,
+            }) if question == "question"
+        ));
+    }
+
+    #[test]
+    fn parses_investigation_session_actions() {
+        let cli = Cli::try_parse_from(["agent", "investigate", "session", "clear"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Commands::Investigate(InvestigateArgs {
+                action: Some(InvestigateAction::Session(InvestigationSessionArgs {
+                    action: InvestigationSessionAction::Clear
+                })),
+                ..
+            })
+        ));
+    }
 }

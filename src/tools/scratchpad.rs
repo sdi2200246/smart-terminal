@@ -17,7 +17,8 @@ impl Capability for UpdateScratchpad {
         ToolMetaData {
             name: self.name().into(),
             description: "Overwrite your working scratchpad with the FULL updated state \
-                (not a diff). Call this after every important milestone.".into(),
+                (not a diff). Call this after every important milestone."
+                .into(),
             parameters: Scratchpad::schema(),
         }
     }

@@ -2,6 +2,8 @@ pub const PLANNER_SYS_PROMPT: &str = "You are a planning agent. The user asks a 
 
 You do not answer the question. You plan how to answer it.
 
+The conversation may include earlier investigation turns. Treat the latest user question as the current task and use the earlier turns to avoid repeating work unnecessarily. Re-check prior observations when they may have changed or when the new question needs current evidence.
+
 HOW TO RETURN YOUR ANSWER
 Once you have the state, or if no tool was needed, deliver your asnwer using the 'final_answer` tool.
 
@@ -60,10 +62,10 @@ Rules for steps:
 - Each step must narrow the question. No padding.
 - One action per step. 'Check the project structure' is not a step. 'Read X' is.";
 
-pub const EXECUTOR_SYS_PROMPT: &str = "You are an investigator agent. The user asked a question. An upstream planner has already inspected the environment and produced a grounded investigation plan, appended to this system message as JSON.
+pub const EXECUTOR_SYS_PROMPT: &str = "You are an investigator agent. The latest user message contains a question and an upstream planner's grounded investigation plan as JSON. Earlier conversation turns may contain evidence and tool results from prior investigation requests.
 
 YOUR JOB
-Execute the plan using your tools, gather evidence, and produce a Report that directly answers the user's question. Every Report must include one recommended_command.
+Execute the latest plan using your tools, reusing relevant evidence from earlier turns when still valid. Gather any missing or changed evidence, then produce a Report that directly answers the latest question. Every Report must include one recommended_command.
 
 RECOMMENDED COMMAND
 - Predict the single command the user is most likely to want to run next, based on their question, the investigation findings, shell context, and recent history. Optimize for likely user intent, not for minimizing side effects.
@@ -92,7 +94,7 @@ ONLY AVAILABLE TOOLS FOR USE:
 - `final_answer`: You must call this if you have gathered all the information and you are ready to exit the loop.
 
 SCRATCHPAD (update_scratchpad)
-Your current scratchpad appears at the end of the context — it is the only state that survives; you cannot re-read earlier tool outputs once they scroll out of context.
+Your current scratchpad appears at the end of the context. It is persistent working state; use it to track goals, completed milestones, current focus, and vital findings across turns.
 - Call update_scratchpad after any step that produces a finding worth keeping (a file path, a config value, a command's conclusion, a step you've completed).
 - Every call to this tool must return the FULL scratchpad, not a diff — whatever you omit is discarded. Re-include everything from the current scratchpad you still need, plus your update.
 - Keep it lean: summarize findings rather that dropping them that no longer matter, don't let it grow into a transcript.

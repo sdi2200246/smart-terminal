@@ -48,7 +48,6 @@ pub struct Agent {
 }
 
 impl Agent {
-
     pub fn base(system_prompt: &'static str, model: Model) -> Self {
         Self {
             registry: ToolRegistry::new(vec![]),
@@ -59,7 +58,7 @@ impl Agent {
             event_stream: None,
         }
     }
-    
+
     pub fn with_tools(mut self, tools: Vec<Box<dyn Capability>>) -> Self {
         self.registry = ToolRegistry::new(tools);
         self
@@ -116,10 +115,7 @@ impl Agent {
             .with_context(&contexts::ShellEnv::gather())
     }
 
-    pub fn cmd_predictor(
-        model: Model,
-        tools: Vec<Box<dyn Capability>>,
-    ) -> Self {
+    pub fn cmd_predictor(model: Model, tools: Vec<Box<dyn Capability>>) -> Self {
         Self::base(prompts::CMD_PREDICTOR_SYS_PROMPT, model)
             .with_tools(tools)
             .with_context(&contexts::ShellEnv::gather())
@@ -173,8 +169,11 @@ mod tests {
     #[test]
     fn state_updates_are_sent_to_the_presenter() {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-        let agent = Agent::base("test prompt", Model::with_default_temp(ModelName::GptOss120B))
-            .with_events_streaming(tx);
+        let agent = Agent::base(
+            "test prompt",
+            Model::with_default_temp(ModelName::GptOss120B),
+        )
+        .with_events_streaming(tx);
 
         agent.update_state(AgentState::ExecutingTool);
 

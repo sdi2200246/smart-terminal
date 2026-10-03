@@ -1,10 +1,10 @@
 use super::api::request::GeminiRequest;
-use super::api::responce::{GeminiResponse, LlmStructuredOutput, LlmResponse , LlmToolCall};
+use super::api::responce::{GeminiResponse, LlmResponse, LlmStructuredOutput, LlmToolCall};
 use super::error::GoogleError;
 use crate::core::error::ProviderError;
 use crate::core::llm_client::{AgentRequest, LLMProvider};
+use crate::core::responce::{AgentResponse, AgentToolCall};
 use crate::core::session::AgentSession;
-use crate::core::responce::{AgentResponse , AgentToolCall};
 use crate::providers::client::{ClientConfig, GenericLlmClient, ProviderCodec};
 use reqwest::StatusCode;
 use serde_json::Value;
@@ -28,13 +28,15 @@ impl ProviderCodec for GoogleProtocol {
     fn build_structured_request(&self, session: &AgentSession, schema: Value) -> Self::Request {
         GeminiRequest::structured(session, schema, "gemini-3.6-flash".into())
     }
-    
+
     fn parse_agent_responce(&self, res: Self::Response) -> Result<AgentResponse, Self::Error> {
         let response = LlmResponse::try_from(res)?;
-        let calls :Vec<AgentToolCall> = response
+        let calls: Vec<AgentToolCall> = response
             .calls
             .into_iter()
-            .map(|call| AgentToolCall::new(call.name, "".into(), call.args, Some(call.thinking_state)))
+            .map(|call| {
+                AgentToolCall::new(call.name, "".into(), call.args, Some(call.thinking_state))
+            })
             .collect();
         Ok(AgentResponse::from(calls))
     }
@@ -197,12 +199,7 @@ mod unit {
         let resp = google_response("final_answer", "call_test", json!({"result":"42"}));
         let llm_response = LlmResponse::try_from(resp).unwrap();
         let call = &llm_response.calls[0];
-        let agent_call = AgentToolCall::new(
-            call.name.clone(),
-            "".into(),
-            call.args.clone(),
-            None,
-        );
+        let agent_call = AgentToolCall::new(call.name.clone(), "".into(), call.args.clone(), None);
         assert_eq!(agent_call.name(), "final_answer");
         assert_eq!(agent_call.arguments().clone(), json!({"result": "42"}));
     }

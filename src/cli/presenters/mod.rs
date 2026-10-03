@@ -1,11 +1,11 @@
 use crate::agent::agents::{AgentEvent, AgentState};
-use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
-use tokio::task::JoinHandle;
-use tokio::time::{interval, Duration};
-use indicatif::{ProgressBar, ProgressStyle, ProgressDrawTarget};
 use colored::Colorize;
+use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
+use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
+use tokio::task::JoinHandle;
+use tokio::time::{Duration, interval};
 
 pub mod render;
 
@@ -85,8 +85,14 @@ struct Board {
 impl Board {
     fn seeded(width: usize, height: usize, seed: u64) -> Self {
         let mut rng = XorShift64::new(seed);
-        let cells = (0..width * height).map(|_| rng.next_f32() < DENSITY).collect();
-        Self { width, height, cells }
+        let cells = (0..width * height)
+            .map(|_| rng.next_f32() < DENSITY)
+            .collect();
+        Self {
+            width,
+            height,
+            cells,
+        }
     }
 
     fn idx(&self, x: usize, y: usize) -> usize {
@@ -106,7 +112,9 @@ impl Board {
                 let mut n = 0;
                 for dy in [-1isize, 0, 1] {
                     for dx in [-1isize, 0, 1] {
-                        if dx == 0 && dy == 0 { continue; }
+                        if dx == 0 && dy == 0 {
+                            continue;
+                        }
                         if self.alive(x as isize + dx, y as isize + dy) {
                             n += 1;
                         }
@@ -125,10 +133,7 @@ impl Board {
 
     fn render(&self, state: AgentState, message: &str) -> String {
         let mut out = format!("{}\n", format!("Agent: {}", state.label()).dimmed());
-        out.push_str(&format!(
-            "┌{}┐\n",
-            "─".repeat(self.width * 2)
-        ));
+        out.push_str(&format!("┌{}┐\n", "─".repeat(self.width * 2)));
 
         for y in 0..self.height {
             out.push('│');

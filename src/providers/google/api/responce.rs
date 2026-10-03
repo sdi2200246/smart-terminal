@@ -33,13 +33,14 @@ impl TryFrom<GeminiResponse> for LlmResponse {
     type Error = GoogleError;
 
     fn try_from(value: GeminiResponse) -> Result<Self, Self::Error> {
-        let candidate = value
-            .candidates
-            .into_iter()
-            .next()
-            .ok_or_else(|| GoogleError::UnexpectedOutput {
-                body: "No candidates in response".to_string(),
-            })?;
+        let candidate =
+            value
+                .candidates
+                .into_iter()
+                .next()
+                .ok_or_else(|| GoogleError::UnexpectedOutput {
+                    body: "No candidates in response".to_string(),
+                })?;
 
         let calls: Vec<LlmToolCall> = candidate
             .content
@@ -49,7 +50,10 @@ impl TryFrom<GeminiResponse> for LlmResponse {
                 part.function_call.as_ref().map(|fc| LlmToolCall {
                     name: fc.name.clone(),
                     args: fc.args.clone(),
-                    thinking_state: part.thought_signature.clone().unwrap_or("skip_thought_signature_validator".into()),
+                    thinking_state: part
+                        .thought_signature
+                        .clone()
+                        .unwrap_or("skip_thought_signature_validator".into()),
                 })
             })
             .collect();
@@ -92,13 +96,13 @@ impl TryFrom<GeminiResponse> for LlmStructuredOutput {
     type Error = GoogleError;
 
     fn try_from(res: GeminiResponse) -> Result<Self, Self::Error> {
-        let candidate = res
-            .candidates
-            .into_iter()
-            .next()
-            .ok_or_else(|| GoogleError::UnexpectedOutput {
-                body: "No candidates in response".to_string(),
-            })?;
+        let candidate =
+            res.candidates
+                .into_iter()
+                .next()
+                .ok_or_else(|| GoogleError::UnexpectedOutput {
+                    body: "No candidates in response".to_string(),
+                })?;
 
         let text = candidate
             .content

@@ -1,6 +1,6 @@
 use crate::agent::agents::Agent;
 use crate::core::responce::{AgentResponse, AgentToolCall};
-use crate::core::session::{AgentSession, ToolCall, ToolResult , Scratchpad};
+use crate::core::session::{AgentSession, Scratchpad, ToolCall, ToolResult};
 use serde_json::Value;
 
 #[derive(Clone, Default)]
@@ -40,21 +40,21 @@ impl ToolExecutionEngine {
         let mut final_answer: Option<Value> = None;
 
         for call in &calls {
-        let payload = if call.name() == "update_scratchpad" {
-            self.execute_scratchpad_update(session,call.clone())
-        } else {
-            match self.execute_tool(agent, call) {
-                Ok(result) => {
-                    if call.name() == "final_answer" {
-                        final_answer = Some(call.arguments().clone());
+            let payload = if call.name() == "update_scratchpad" {
+                self.execute_scratchpad_update(session, call.clone())
+            } else {
+                match self.execute_tool(agent, call) {
+                    Ok(result) => {
+                        if call.name() == "final_answer" {
+                            final_answer = Some(call.arguments().clone());
+                        }
+                        result
                     }
-                    result
+                    Err(e) => format!("Tool '{}' failed: {}", call.name(), e),
                 }
-                Err(e) => format!("Tool '{}' failed: {}", call.name(), e),
-            }
-        };
-        results.push(ToolResult::new(call.name(), payload, call.id()));
-    }
+            };
+            results.push(ToolResult::new(call.name(), payload, call.id()));
+        }
         session.add_tool_results(results);
 
         if let Some(value) = final_answer {
@@ -62,7 +62,7 @@ impl ToolExecutionEngine {
         }
     }
 
-    fn execute_tool(&self, agent: &mut Agent ,call: &AgentToolCall) -> Result<String, String> {
+    fn execute_tool(&self, agent: &mut Agent, call: &AgentToolCall) -> Result<String, String> {
         match agent
             .registry
             .get(call.name())
@@ -77,17 +77,20 @@ impl ToolExecutionEngine {
             }
         }
     }
-    fn execute_scratchpad_update(&self , session: &mut AgentSession ,call: AgentToolCall) -> String {
+    fn execute_scratchpad_update(&self, session: &mut AgentSession, call: AgentToolCall) -> String {
         match serde_json::from_value::<Scratchpad>(call.arguments()) {
             Ok(sp) => {
                 session.update_scratchpad(sp);
-                return "scratchpad updated successfully".to_string()
+                return "scratchpad updated successfully".to_string();
             }
             Err(e) => {
-                return format!("Tool 'update_scratchpad' failed: invalid scratchpad — {}", e)
+                return format!(
+                    "Tool 'update_scratchpad' failed: invalid scratchpad — {}",
+                    e
+                );
             }
         }
-}
+    }
 }
 
 #[cfg(test)]
@@ -102,7 +105,9 @@ mod tests {
 
     struct Echo;
     impl Capability for Echo {
-        fn name(&self) -> &'static str { "echo" }
+        fn name(&self) -> &'static str {
+            "echo"
+        }
         fn metadata(&self) -> ToolMetaData {
             ToolMetaData {
                 name: self.name().into(),
@@ -117,7 +122,9 @@ mod tests {
 
     struct Boom;
     impl Capability for Boom {
-        fn name(&self) -> &'static str { "boom" }
+        fn name(&self) -> &'static str {
+            "boom"
+        }
         fn metadata(&self) -> ToolMetaData {
             ToolMetaData {
                 name: self.name().into(),
@@ -126,13 +133,17 @@ mod tests {
             }
         }
         fn execute(&self, _args: Value) -> Result<String, ToolError> {
-            Err(ToolError::ToolExecution { source: anyhow::anyhow!("boom failed") })
+            Err(ToolError::ToolExecution {
+                source: anyhow::anyhow!("boom failed"),
+            })
         }
     }
 
     struct FinalAnswer;
     impl Capability for FinalAnswer {
-        fn name(&self) -> &'static str { "final_answer" }
+        fn name(&self) -> &'static str {
+            "final_answer"
+        }
         fn metadata(&self) -> ToolMetaData {
             ToolMetaData {
                 name: self.name().into(),
@@ -146,7 +157,11 @@ mod tests {
     }
 
     fn test_agent(tools: Vec<Box<dyn Capability>>) -> Agent {
-        Agent::base("test prompt", Model::with_default_temp(ModelName::GptOss120B)).with_tools(tools)
+        Agent::base(
+            "test prompt",
+            Model::with_default_temp(ModelName::GptOss120B),
+        )
+        .with_tools(tools)
     }
 
     fn call(name: &str, id: &str, args: Value) -> AgentToolCall {
@@ -159,7 +174,11 @@ mod tests {
         let mut session = AgentSession::new(5);
         let mut agent = test_agent(vec![Box::new(Echo)]);
 
-        engine.dispatch_tool_batch(&mut session, &mut agent, AgentResponse::single(call("echo", "call_1", json!({"x": 1}))));
+        engine.dispatch_tool_batch(
+            &mut session,
+            &mut agent,
+            AgentResponse::single(call("echo", "call_1", json!({"x": 1}))),
+        );
 
         match session.events().last().unwrap() {
             ConversationEvent::ToolResults(rs) => {
@@ -176,7 +195,11 @@ mod tests {
         let mut session = AgentSession::new(5);
         let mut agent = test_agent(vec![Box::new(Boom)]);
 
-        engine.dispatch_tool_batch(&mut session, &mut agent, AgentResponse::single(call("boom", "call_1", json!({}))));
+        engine.dispatch_tool_batch(
+            &mut session,
+            &mut agent,
+            AgentResponse::single(call("boom", "call_1", json!({}))),
+        );
 
         match session.events().last().unwrap() {
             ConversationEvent::ToolResults(rs) => {
@@ -212,7 +235,11 @@ mod tests {
         let mut session = AgentSession::new(5);
         let mut agent = test_agent(vec![Box::new(FinalAnswer)]);
 
-        engine.dispatch_tool_batch(&mut session, &mut agent, AgentResponse::single(call("final_answer", "call_1", json!({"result": "42"}))));
+        engine.dispatch_tool_batch(
+            &mut session,
+            &mut agent,
+            AgentResponse::single(call("final_answer", "call_1", json!({"result": "42"}))),
+        );
 
         assert_eq!(session.take_final_answer(), Some(json!({"result": "42"})));
     }
@@ -224,7 +251,11 @@ mod tests {
         let mut session = AgentSession::new(5);
         let mut agent = test_agent(vec![Box::new(Echo)]).with_events_streaming(tx);
 
-        engine.dispatch_tool_batch(&mut session, &mut agent, AgentResponse::single(call("echo", "call_1", json!({}))));
+        engine.dispatch_tool_batch(
+            &mut session,
+            &mut agent,
+            AgentResponse::single(call("echo", "call_1", json!({}))),
+        );
 
         assert!(matches!(
             rx.try_recv().expect("expected a streamed call"),
@@ -240,9 +271,16 @@ mod tests {
         let mut session = AgentSession::new(5);
         let mut agent = test_agent(vec![Box::new(FinalAnswer)]).with_events_streaming(tx);
 
-        engine.dispatch_tool_batch(&mut session, &mut agent, AgentResponse::single(call("final_answer", "call_1", json!({"result": "ok"}))));
+        engine.dispatch_tool_batch(
+            &mut session,
+            &mut agent,
+            AgentResponse::single(call("final_answer", "call_1", json!({"result": "ok"}))),
+        );
 
-        assert!(rx.try_recv().is_err(), "final_answer should not be streamed");
+        assert!(
+            rx.try_recv().is_err(),
+            "final_answer should not be streamed"
+        );
     }
 
     #[test]
@@ -251,13 +289,22 @@ mod tests {
         let mut session = AgentSession::new(5);
         let mut agent = test_agent(vec![Box::new(Echo)]);
 
-        let signed = AgentToolCall::new("echo".into(), "call_1".into(), json!({}), Some("sig-a".into()));
+        let signed = AgentToolCall::new(
+            "echo".into(),
+            "call_1".into(),
+            json!({}),
+            Some("sig-a".into()),
+        );
         engine.dispatch_tool_batch(&mut session, &mut agent, AgentResponse::single(signed));
 
-        let calls = session.events().iter().find_map(|e| match e {
-            ConversationEvent::ToolCalls(c) => Some(c),
-            _ => None,
-        }).expect("ToolCalls event present");
+        let calls = session
+            .events()
+            .iter()
+            .find_map(|e| match e {
+                ConversationEvent::ToolCalls(c) => Some(c),
+                _ => None,
+            })
+            .expect("ToolCalls event present");
         assert_eq!(calls[0].thinking_state, Some("sig-a".into()));
     }
 
@@ -282,7 +329,7 @@ mod tests {
             other => panic!("expected ToolResults, got {other:?}"),
         }
     }
-        fn valid_scratchpad_args() -> Value {
+    fn valid_scratchpad_args() -> Value {
         json!({
             "main_goal": "ship the scratchpad tool",
             "completed_milestones": ["designed schema"],
@@ -303,7 +350,10 @@ mod tests {
             AgentResponse::single(call("update_scratchpad", "call_1", valid_scratchpad_args())),
         );
 
-        let sp = session.scratchpad.as_ref().expect("scratchpad should be Some after update");
+        let sp = session
+            .scratchpad
+            .as_ref()
+            .expect("scratchpad should be Some after update");
         assert_eq!(sp.main_goal, "ship the scratchpad tool");
         assert_eq!(sp.current_focus, "wiring the engine");
 
@@ -355,7 +405,10 @@ mod tests {
             AgentResponse::single(call("update_scratchpad", "call_1", valid_scratchpad_args())),
         );
 
-        assert!(rx.try_recv().is_err(), "scratchpad updates should not be streamed");
+        assert!(
+            rx.try_recv().is_err(),
+            "scratchpad updates should not be streamed"
+        );
     }
 
     #[test]

@@ -3,18 +3,20 @@ use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
-use crate::core::memory::{Conversation, Interaction, Memory, MemoryError, MemoryIndex};
+use crate::core::folder_index::FolderIndex;
+use crate::core::memory::{Conversation, Interaction, Memory, MemoryError};
+use crate::persistence::ProjectRootResolver;
 
 const INDEX_FILENAME: &str = "index.json";
 const MEMORY_DIRNAME: &str = "memory";
 
-pub struct FolderMemory {
+pub struct NextCmdMemory {
     root: PathBuf,
     cwd: Option<PathBuf>,
     conversation: Option<Conversation>,
 }
 
-impl FolderMemory {
+impl NextCmdMemory {
     pub fn new(root: impl Into<PathBuf>) -> Self {
         Self {
             root: root.into(),
@@ -49,16 +51,16 @@ impl FolderMemory {
         self.root.join(filename)
     }
 
-    fn load_index(&self) -> Result<MemoryIndex, MemoryError> {
+    fn load_index(&self) -> Result<FolderIndex, MemoryError> {
         let path = self.index_path();
         if !path.exists() {
-            return Ok(MemoryIndex::default());
+            return Ok(FolderIndex::default());
         }
         let raw = fs::read_to_string(&path)?;
         Ok(serde_json::from_str(&raw)?)
     }
 
-    fn save_index(&self, index: &MemoryIndex) -> Result<(), MemoryError> {
+    fn save_index(&self, index: &FolderIndex) -> Result<(), MemoryError> {
         let json = serde_json::to_string_pretty(index)?;
         atomic_write(&self.index_path(), &json)
     }
@@ -67,24 +69,28 @@ impl FolderMemory {
         let cwd = self.cwd.as_ref().ok_or(MemoryError::NotLoaded)?;
         let conv = self.conversation.as_ref().ok_or(MemoryError::NotLoaded)?;
 
-        let index = self.load_index()?;
-        let filename = index.resolve(cwd).ok_or(MemoryError::NotRegistered)?;
-        let path = self.conv_path(&filename);
+        let resolved = ProjectRootResolver::new(self.index_path())
+            .resolve_registered_root(cwd)
+            .map_err(|error| MemoryError::ProjectRoot(error.to_string()))?
+            .ok_or(MemoryError::NotRegistered)?;
+        let path = self.conv_path(&resolved.memory_filename);
 
         let json = serde_json::to_string_pretty(conv)?;
         atomic_write(&path, &json)
     }
 }
 
-impl Memory for FolderMemory {
+impl Memory for NextCmdMemory {
     fn load(&mut self, cwd: &Path) -> Result<bool, MemoryError> {
-        let index = self.load_index()?;
-        let Some(filename) = index.resolve(cwd) else {
+        let resolved = ProjectRootResolver::new(self.index_path())
+            .resolve_registered_root(cwd)
+            .map_err(|error| MemoryError::ProjectRoot(error.to_string()))?;
+        let Some(resolved) = resolved else {
             self.cwd = Some(cwd.to_path_buf());
             self.conversation = None;
             return Ok(false);
         };
-        let path = self.conv_path(&filename);
+        let path = self.conv_path(&resolved.memory_filename);
         let conv = if path.exists() {
             serde_json::from_str(&fs::read_to_string(&path)?)?
         } else {
@@ -128,8 +134,10 @@ impl Memory for FolderMemory {
             return Err(MemoryError::OverlapsExisting(existing));
         }
 
-        for desc in index.descendants_of(&cwd_owned) {
-            if let Some(filename) = index.folders.remove(&desc) {
+        let descendants = index.descendants_of(&cwd_owned);
+        index.reparent_roots(&descendants, &cwd_owned);
+        for desc in &descendants {
+            if let Some(filename) = index.folders.remove(desc) {
                 let path = self.conv_path(&filename);
                 if path.exists() {
                     fs::remove_file(path)?;
@@ -207,9 +215,9 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
-    fn fresh() -> (FolderMemory, TempDir) {
+    fn fresh() -> (NextCmdMemory, TempDir) {
         let tmp = TempDir::new().unwrap();
-        let mem = FolderMemory::new(tmp.path());
+        let mem = NextCmdMemory::new(tmp.path());
         (mem, tmp)
     }
 
@@ -254,12 +262,12 @@ mod tests {
         let root = tmp.path().to_path_buf();
 
         {
-            let mut mem = FolderMemory::new(&root);
+            let mut mem = NextCmdMemory::new(&root);
             mem.register(Path::new("/proj/foo")).unwrap();
             mem.append(entry("hello", "echo hello")).unwrap();
         }
 
-        let mut mem2 = FolderMemory::new(&root);
+        let mut mem2 = NextCmdMemory::new(&root);
         let loaded = mem2.load(Path::new("/proj/foo")).unwrap();
         assert!(loaded);
         let conv = mem2.current().unwrap();
@@ -289,7 +297,7 @@ mod tests {
         let seed = Conversation {
             interactions: vec![entry("prev", "ls")],
         };
-        let mem = FolderMemory::with_conversation(tmp.path(), Path::new("/x"), seed);
+        let mem = NextCmdMemory::with_conversation(tmp.path(), Path::new("/x"), seed);
 
         let conv = mem.current().unwrap();
         assert_eq!(conv.interactions.len(), 1);
@@ -302,14 +310,14 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path().to_path_buf();
 
-        let mut mem = FolderMemory::new(&root);
+        let mut mem = NextCmdMemory::new(&root);
         mem.register(Path::new("/proj/foo")).unwrap();
         mem.append(entry("a", "b")).unwrap();
         mem.unregister(Path::new("/proj/foo")).unwrap();
 
         assert!(mem.current().is_none());
 
-        let mut mem2 = FolderMemory::new(&root);
+        let mut mem2 = NextCmdMemory::new(&root);
         let loaded = mem2.load(Path::new("/proj/foo")).unwrap();
         assert!(!loaded);
     }
@@ -331,7 +339,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let root = tmp.path().to_path_buf();
 
-        let mut mem = FolderMemory::new(&root);
+        let mut mem = NextCmdMemory::new(&root);
         mem.register(Path::new("/proj/foo/src")).unwrap();
         mem.append(entry("a", "ls")).unwrap();
         mem.register(Path::new("/proj/foo/tests")).unwrap();
@@ -340,7 +348,7 @@ mod tests {
         mem.register(Path::new("/proj/foo")).unwrap();
         assert!(mem.current().unwrap().interactions.is_empty());
 
-        let mut mem2 = FolderMemory::new(&root);
+        let mut mem2 = NextCmdMemory::new(&root);
         let loaded_src = mem2.load(Path::new("/proj/foo/src")).unwrap();
         assert!(loaded_src);
         assert!(mem2.current().unwrap().interactions.is_empty());
@@ -352,12 +360,12 @@ mod tests {
         let root = tmp.path().to_path_buf();
 
         {
-            let mut mem = FolderMemory::new(&root);
+            let mut mem = NextCmdMemory::new(&root);
             mem.register(Path::new("/proj/foo")).unwrap();
             mem.append(entry("hello", "echo hello")).unwrap();
         }
 
-        let mut mem = FolderMemory::new(&root);
+        let mut mem = NextCmdMemory::new(&root);
         mem.register(Path::new("/proj/foo")).unwrap();
 
         let conv = mem.current().unwrap();
@@ -366,12 +374,52 @@ mod tests {
     }
     #[test]
     fn project_local_resolves_under_manifest_dir() {
-        let mem = FolderMemory::project_local().unwrap();
+        let mem = NextCmdMemory::project_local().unwrap();
         let expected_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("memory");
         assert_eq!(mem.root, expected_root);
         assert!(
             expected_root.exists(),
             "project_local should create the directory"
         );
+    }
+
+    #[test]
+    fn shared_project_resolver_migrates_investigator_history_after_parent_registration() {
+        use crate::core::memory::{InvestigationSession, InvestigationSessionStore};
+        use crate::core::session::AgentSession;
+        use crate::persistence::{FileInvestigationSessionStore, ProjectRootResolver};
+
+        let (mut memory, temporary) = fresh();
+        let child = PathBuf::from("/project/child");
+        let parent = PathBuf::from("/project");
+        memory.register(&child).unwrap();
+
+        let store = FileInvestigationSessionStore::for_project_memory_root(temporary.path());
+        store
+            .save(
+                &child.to_string_lossy(),
+                &InvestigationSession {
+                    planner: Some(AgentSession::builder().user("child investigation").build()),
+                    completed_reports: vec!["child report".into()],
+                    ..InvestigationSession::default()
+                },
+            )
+            .unwrap();
+
+        memory.register(&parent).unwrap();
+        let resolver = ProjectRootResolver::new(temporary.path().join(INDEX_FILENAME));
+        assert_eq!(
+            resolver
+                .resolve_root(Path::new("/project/child/src"))
+                .unwrap(),
+            parent
+        );
+
+        let migrated = store
+            .load_for_project_root(&parent, &resolver)
+            .unwrap()
+            .unwrap();
+        assert_eq!(migrated.completed_reports, vec!["child report"]);
+        assert!(store.load(&child.to_string_lossy()).unwrap().is_none());
     }
 }

@@ -1,44 +1,9 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use thiserror::Error;
 
-#[derive(Serialize, Deserialize, Default, Debug)]
-pub struct MemoryIndex {
-    pub folders: HashMap<PathBuf, String>,
-}
-
-impl MemoryIndex {
-    pub fn ancestor_of(&self, cwd: &Path) -> Option<PathBuf> {
-        let mut current = cwd.parent()?;
-        loop {
-            if self.folders.contains_key(current) {
-                return Some(current.to_path_buf());
-            }
-            current = current.parent()?;
-        }
-    }
-
-    pub fn descendants_of(&self, cwd: &Path) -> Vec<PathBuf> {
-        self.folders
-            .keys()
-            .filter(|p| p.as_path() != cwd && p.starts_with(cwd))
-            .cloned()
-            .collect()
-    }
-
-    pub fn resolve(&self, cwd: &Path) -> Option<String> {
-        let mut current = cwd;
-        loop {
-            if let Some(filename) = self.folders.get(current) {
-                return Some(filename.clone());
-            }
-            match current.parent() {
-                Some(p) => current = p,
-                None => return None,
-            }
-        }
-    }
-}
+pub use crate::core::folder_index::FolderIndex as MemoryIndex;
+use crate::core::session::AgentSession;
 
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct Conversation {
@@ -79,6 +44,8 @@ pub enum MemoryError {
     Io(#[from] std::io::Error),
     #[error("failed to parse memory file: {0}")]
     Parse(#[from] serde_json::Error),
+    #[error("failed to resolve project root: {0}")]
+    ProjectRoot(String),
 }
 
 pub trait Memory: Send + Sync {
@@ -88,6 +55,75 @@ pub trait Memory: Send + Sync {
     fn register(&mut self, cwd: &Path) -> Result<(), MemoryError>;
     fn unregister(&mut self, cwd: &Path) -> Result<(), MemoryError>;
     fn clear(&mut self) -> Result<(), MemoryError>;
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+pub struct InvestigationSession {
+    #[serde(default)]
+    pub planner: Option<AgentSession>,
+    #[serde(default)]
+    pub executor: Option<AgentSession>,
+    #[serde(default)]
+    pub completed_reports: Vec<String>,
+    #[serde(default)]
+    pub absorbed_roots: Vec<PathBuf>,
+}
+
+impl InvestigationSession {
+    pub fn is_empty(&self) -> bool {
+        self.planner.is_none()
+            && self.executor.is_none()
+            && self.completed_reports.is_empty()
+            && self.absorbed_roots.is_empty()
+    }
+
+    pub fn merge_history(&mut self, mut other: Self) {
+        merge_agent_history(&mut self.planner, other.planner.take());
+        merge_agent_history(&mut self.executor, other.executor.take());
+        self.completed_reports.append(&mut other.completed_reports);
+        self.absorbed_roots.append(&mut other.absorbed_roots);
+    }
+}
+
+fn merge_agent_history(target: &mut Option<AgentSession>, source: Option<AgentSession>) {
+    let Some(mut source) = source else {
+        return;
+    };
+    match target {
+        Some(target) => target.events.append(&mut source.events),
+        None => *target = Some(source),
+    }
+}
+
+#[derive(Debug, Error)]
+#[error("investigation session storage failed: {message}")]
+pub struct InvestigationStoreError {
+    pub message: String,
+}
+
+impl InvestigationStoreError {
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
+}
+
+/// Stores investigator conversation history under a project identity.
+/// Histories include provider-specific metadata and currently require the same
+/// compatible provider when they are resumed.
+pub trait InvestigationSessionStore: Send + Sync {
+    fn load(
+        &self,
+        project_key: &str,
+    ) -> Result<Option<InvestigationSession>, InvestigationStoreError>;
+    fn save(
+        &self,
+        project_key: &str,
+        session: &InvestigationSession,
+    ) -> Result<(), InvestigationStoreError>;
+    fn clear(&self, project_key: &str) -> Result<(), InvestigationStoreError>;
 }
 
 #[cfg(test)]
@@ -136,33 +172,26 @@ mod tests {
     }
 
     #[test]
-    fn resolve_exact_match() {
-        let index = index_with(&["/proj/foo"]);
-        assert!(index.resolve(Path::new("/proj/foo")).is_some());
-    }
-
-    #[test]
-    fn resolve_finds_parent_via_longest_prefix() {
-        let index = index_with(&["/proj/foo"]);
-        let filename = index.resolve(Path::new("/proj/foo/src/agent"));
-        assert!(filename.is_some());
-    }
-
-    #[test]
-    fn resolve_returns_none_when_no_match() {
-        let index = index_with(&["/proj/foo"]);
-        assert!(index.resolve(Path::new("/elsewhere")).is_none());
-    }
-
-    #[test]
-    fn resolve_picks_deepest_match_when_multiple_apply() {
+    fn root_for_resolves_the_nearest_registered_ancestor() {
         let index = index_with(&["/proj", "/proj/foo"]);
-        let outer = index.folders.get(Path::new("/proj")).unwrap().clone();
-        let inner = index.folders.get(Path::new("/proj/foo")).unwrap().clone();
-        let resolved = index.resolve(Path::new("/proj/foo/src")).unwrap();
-        assert_eq!(resolved, inner);
-        let resolved = index.resolve(Path::new("/proj/other")).unwrap();
-        assert_eq!(resolved, outer);
+
+        assert_eq!(
+            index.root_for(Path::new("/proj/foo/src")),
+            Some(PathBuf::from("/proj/foo"))
+        );
+        assert_eq!(
+            index.root_for(Path::new("/proj/other")),
+            Some(PathBuf::from("/proj"))
+        );
+    }
+
+    #[test]
+    fn loads_sessions_saved_before_completed_reports_were_added() {
+        let session: InvestigationSession =
+            serde_json::from_str(r#"{"planner":null,"executor":null}"#).unwrap();
+
+        assert!(session.completed_reports.is_empty());
+        assert!(session.is_empty());
     }
 
     #[test]

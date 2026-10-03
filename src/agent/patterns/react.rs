@@ -71,14 +71,18 @@ impl<P: LLMProvider> ReactLoop<P> {
             };
 
             if response.is_stop() {
-                let call = response.calls().first().expect("is_stop guarantees one call");
+                let call = response
+                    .calls()
+                    .first()
+                    .expect("is_stop guarantees one call");
                 agent.hooks.on_tool_received(call);
                 stop_args = call.arguments();
                 break;
             }
 
             agent.update_state(AgentState::ExecutingTool);
-            self.tool_engine.dispatch_tool_batch(session, agent, response);
+            self.tool_engine
+                .dispatch_tool_batch(session, agent, response);
         }
         self.structure_output::<T>(session, &stop_args, agent).await
     }
@@ -123,14 +127,102 @@ impl<P: LLMProvider> ReactLoop<P> {
         T: FlatSchema + DeserializeOwned,
     {
         agent.update_state(AgentState::StructuringOutput);
-        session.clear_events();
-        session.add_system("Your one and ONLY job is to return the following text into the scheema provided to you");
-        session.add_user(stop_args.to_string());
+        let output_session = AgentSession::builder()
+            .system(
+                "Your one and ONLY job is to return the following text into the scheema provided to you",
+            )
+            .user(stop_args.to_string())
+            .build();
 
         agent.hooks.on_structuring_start();
-        let raw = self.provider.complete_structured(session, T::schema()).await?;
+        let raw = self
+            .provider
+            .complete_structured(&output_session, T::schema())
+            .await?;
+        let response_text = raw.to_string();
         let typed = serde_json::from_value::<T>(raw).expect("Type must always be right");
+        session.add_assistant(response_text);
         agent.hooks.on_structuring_complete();
         Ok(typed)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agent::workflows::next_cmd::NextCommand;
+    use crate::core::model::{Model, ModelName};
+    use crate::core::responce::{AgentResponse, AgentToolCall};
+    use crate::core::session::{ConversationEvent, ToolCall, ToolResult};
+    use serde_json::{Value, json};
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
+
+    #[derive(Clone)]
+    struct StructuredCallTracker(Arc<AtomicBool>);
+
+    impl LLMProvider for StructuredCallTracker {
+        async fn complete(
+            &self,
+            _request: AgentRequest<'_>,
+        ) -> Result<AgentResponse, ProviderError> {
+            Ok(AgentResponse::single(AgentToolCall::new(
+                "stop".into(),
+                String::new(),
+                json!({"cmd":"echo done","man":"Print done.","scale":"Full"}),
+                None,
+            )))
+        }
+
+        async fn complete_structured(
+            &self,
+            session: &AgentSession,
+            _schema: Value,
+        ) -> Result<Value, ProviderError> {
+            self.0.store(
+                session
+                    .events
+                    .iter()
+                    .any(|event| matches!(event, ConversationEvent::ToolCalls(_))),
+                Ordering::SeqCst,
+            );
+            Ok(json!({"cmd":"echo done","man":"Print done.","scale":"Full"}))
+        }
+    }
+
+    #[tokio::test]
+    async fn structured_output_does_not_clear_live_session_history() {
+        let structured_session_had_tools = Arc::new(AtomicBool::new(false));
+        let provider = StructuredCallTracker(structured_session_had_tools.clone());
+        let mut runner = ReactLoop::new(provider);
+        let mut agent = Agent::base("test", Model::with_default_temp(ModelName::GptOss120B));
+        let mut session = AgentSession::builder()
+            .system("test")
+            .user("original question")
+            .build();
+        session.add_tool_calls(vec![
+            ToolCall::new("read_file", json!({"path":"file"}), "call-1")
+                .with_thinking_state(Some("provider-signature".into())),
+        ]);
+        session.add_tool_results(vec![ToolResult::new("read_file", "contents", "call-1")]);
+        session.add_user("resumed question");
+        let saved_history = session.events.clone();
+
+        runner
+            .run::<NextCommand>(&mut agent, &mut session)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            &session.events[..saved_history.len()],
+            saved_history.as_slice()
+        );
+        assert!(matches!(
+            session.events.last(),
+            Some(ConversationEvent::Assistant(_))
+        ));
+        assert!(!structured_session_had_tools.load(Ordering::SeqCst));
     }
 }

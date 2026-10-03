@@ -4,7 +4,7 @@ use serde_json::Value;
 pub(crate) fn format_call(call: &AgentToolCall) -> String {
     let name = call.name();
     let args = summarize_args(&call.arguments());
-    return format!("\x1b[32m●\x1b[0m \x1b[1m{name}\x1b[0m\x1b[2m({args})\x1b[0m")
+    return format!("\x1b[32m●\x1b[0m \x1b[1m{name}\x1b[0m\x1b[2m({args})\x1b[0m");
 }
 
 fn summarize_args(args: &Value) -> String {
