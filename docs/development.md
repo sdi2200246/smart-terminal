@@ -83,8 +83,9 @@ cargo install --path .
 Key source directories:
 
 - `src/cli` — command parsing and terminal presentation
-- `src/core` — abstraction layer for capabilities and model contracts
+- `src/core` — domain types and contracts for capabilities, models, and both memory features
 - `src/agent` — workflows, agent loops, and memory orchestration
+- `src/persistence` — adapters implementing core storage contracts
 - `src/providers` — LLM provider implementations
 - `src/tools` — environment interaction tools
 - `scripts/zsh` — shell integration hook
@@ -106,6 +107,11 @@ The codebase intentionally separates layers. When making changes:
 - do not let providers leak directly into workflows unless necessary
 - keep tool functionality consistent with the capability abstraction
 - keep memory flows project-scoped rather than global
+- keep command-memory and investigation-session contracts distinct while grouping related core memory types in `src/core/memory.rs`
+- use `ProjectRootResolver` for registered-root lookup in both next-command and investigator persistence; keep the two stores' data separate
+- preserve the cwd fallback for investigator sessions when no registered project root applies
+- keep persistence adapters dependent on core contracts rather than agent workflows; keep file/database details out of core
+- persist planner and executor `AgentSession` histories, including provider metadata; resumed histories must remain compatible with the current provider
 
 ### Validation before submitting
 

@@ -83,6 +83,15 @@ $ smart-terminal memory delete
 ### `investigate` — answer questions about your project
  
 Pose a question; a planner agent forms a plan, an executor agent runs it against your filesystem and shell, and you get a grounded answer.
+
+Investigation resumes the project's saved planner and executor conversations by default, including their tool calls, results, and Gemini thought signatures. This initial implementation uses the current Gemini provider and does not support switching providers/models for a saved session. Use `--one-off` to avoid loading or changing the saved conversation:
+
+```bash
+$ smart-terminal investigate --one-off "What does this repository do?"
+$ smart-terminal investigate session clear
+```
+
+The conversation is stored separately from `next-cmd` memory and keyed by the project path. A resumed run receives a fresh tool-step budget; old calls do not count against it.
  
 
 https://github.com/user-attachments/assets/5ac577fa-13b1-421b-a1a2-649fb0c95211
@@ -117,16 +126,17 @@ Useful for anything you'd normally answer by poking around — what does this co
 | Layer | Responsibility |
 |---|---|
 | `src/cli` | Parses commands (`investigate`, `next_cmd`, `memory`) and streams tool-call output via `cli::presenters`. |
-| `src/core` | Provider-agnostic contracts: `LLMProvider`, `Capability`, `AgentSession`, `Model`, `Memory`, error types. Never imports `agent`, `tools`, or `providers`. |
-| `src/agent` | `agent::workflows` (NextCmd, Investigator), `agent::agents` (planner/executor/architect/cmd_predictor), `agent::patterns` (ReactLoop, OneShot, hooks), `agent::memory` (FolderMemory). |
+| `src/core` | Provider-agnostic contracts: `LLMProvider`, `Capability`, `AgentSession`, `Model`, `Memory`, `InvestigationSessionStore`, error types. Never imports `agent`, `persistence`, `tools`, or `providers`. |
+| `src/agent` | `agent::workflows` (NextCmd, Investigator), `agent::agents` (planner/executor/architect/cmd_predictor), and reusable loop patterns. |
+| `src/persistence` | File-backed implementations of core memory and investigation-session contracts. |
 | `src/providers` | `groq` and `google` clients, both built on the shared `providers::client::GenericLlmClient<ProviderCodec>` codec layer. |
 | `src/tools` | Bash, ReadDir, ReadFile, Docker, GitDiff/GitLog, AskUser, ReadLastError, Json — all implement `core::Capability`. |
-| `memory/` | Persistent JSON session storage, keyed by project folder. |
+| `memory/` | Persistent JSON storage: next-command memory and separate project-keyed investigator conversations. |
 
 ### High-Level Code Flow
 Every command follows the same call stack. `cli` is the composition root — it constructs the command's configured provider (`GroqClient` for `next-cmd`, `GoogleClient` for `investigate`) and hands it to the workflow. The workflow spins up one or more agents, each agent assembles a tool registry and delegates to a loop. The loop drives everything: it calls the provider, dispatches tool results, and repeats until the model signals completion, at which point it makes a final structured output call and unwinds back up the stack.
  
-Memory is not part of the call chain. The workflow loads it before the loop starts and appends to it after the result returns — nothing below the workflow layer touches it.
+Persistence is composed by the CLI through core contracts. Investigation resumes from serialized planner and executor conversations, while next-command history remains a separate store. Core and workflows do not depend on the file format or storage backend.
  
 The only thing that varies per command is what happens inside the workflow box:
  
@@ -228,7 +238,7 @@ reload
 ## Roadmap
 
 - **Folder-scoped investigation state** — maintain one investigation conversation history per project folder, so the `investigate` agent can preserve context between sessions without mixing unrelated projects.
-- **Conversation management commands** — add commands to compact or erase the stored investigation history when users want to reduce context or start fresh.
+- **Conversation management commands** — add commands to inspect or erase the stored investigation history when users want to start fresh.
 
 Contributions, bug reports, and feature suggestions are welcome.
  
