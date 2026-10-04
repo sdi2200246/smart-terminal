@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use thiserror::Error;
 
 pub use crate::core::folder_index::FolderIndex as MemoryIndex;
 use crate::core::session::AgentSession;
@@ -33,7 +32,7 @@ pub struct Interaction {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum MemoryError {
+pub enum PersistenceError {
     #[error("folder not registered in memory index")]
     NotRegistered,
     #[error("no conversation loaded — call load() first")]
@@ -42,19 +41,17 @@ pub enum MemoryError {
     OverlapsExisting(PathBuf),
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
-    #[error("failed to parse memory file: {0}")]
+    #[error("failed to parse JSON data: {0}")]
     Parse(#[from] serde_json::Error),
-    #[error("failed to resolve project root: {0}")]
-    ProjectRoot(String),
 }
 
 pub trait Memory: Send + Sync {
-    fn load(&mut self, cwd: &Path) -> Result<bool, MemoryError>;
+    fn load(&mut self, cwd: &Path) -> Result<bool, PersistenceError>;
     fn current(&self) -> Option<&Conversation>;
-    fn append(&mut self, entry: Interaction) -> Result<(), MemoryError>;
-    fn register(&mut self, cwd: &Path) -> Result<(), MemoryError>;
-    fn unregister(&mut self, cwd: &Path) -> Result<(), MemoryError>;
-    fn clear(&mut self) -> Result<(), MemoryError>;
+    fn append(&mut self, entry: Interaction) -> Result<(), PersistenceError>;
+    fn register(&mut self, cwd: &Path) -> Result<(), PersistenceError>;
+    fn unregister(&mut self, cwd: &Path) -> Result<(), PersistenceError>;
+    fn clear(&mut self) -> Result<(), PersistenceError>;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -96,34 +93,17 @@ fn merge_agent_history(target: &mut Option<AgentSession>, source: Option<AgentSe
     }
 }
 
-#[derive(Debug, Error)]
-#[error("investigation session storage failed: {message}")]
-pub struct InvestigationStoreError {
-    pub message: String,
-}
-
-impl InvestigationStoreError {
-    pub fn new(message: impl Into<String>) -> Self {
-        Self {
-            message: message.into(),
-        }
-    }
-}
-
 /// Stores investigator conversation history under a project identity.
 /// Histories include provider-specific metadata and currently require the same
 /// compatible provider when they are resumed.
 pub trait InvestigationSessionStore: Send + Sync {
-    fn load(
-        &self,
-        project_key: &str,
-    ) -> Result<Option<InvestigationSession>, InvestigationStoreError>;
+    fn load(&self, project_key: &str) -> Result<Option<InvestigationSession>, PersistenceError>;
     fn save(
         &self,
         project_key: &str,
         session: &InvestigationSession,
-    ) -> Result<(), InvestigationStoreError>;
-    fn clear(&self, project_key: &str) -> Result<(), InvestigationStoreError>;
+    ) -> Result<(), PersistenceError>;
+    fn clear(&self, project_key: &str) -> Result<(), PersistenceError>;
 }
 
 #[cfg(test)]

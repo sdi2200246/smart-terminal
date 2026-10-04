@@ -4,4 +4,4 @@ mod project_roots;
 
 pub use investigation_sessions::FileInvestigationSessionStore;
 pub use next_cmd_memory::NextCmdMemory;
-pub use project_roots::{ProjectRootError, ProjectRootResolver, RegisteredProjectRoot};
+pub use project_roots::{ProjectRootResolver, RegisteredProjectRoot};
