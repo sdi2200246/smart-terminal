@@ -2,17 +2,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::core::folder_index::FolderIndex;
+use crate::core::memory::PersistenceError;
 
 const INDEX_FILENAME: &str = "index.json";
 const MEMORY_DIRNAME: &str = "memory";
-
-#[derive(Debug, thiserror::Error)]
-pub enum ProjectRootError {
-    #[error("failed to read project folder index: {0}")]
-    Io(#[from] std::io::Error),
-    #[error("failed to parse project folder index: {0}")]
-    Parse(#[from] serde_json::Error),
-}
 
 #[derive(Clone)]
 pub struct ProjectRootResolver {
@@ -39,15 +32,18 @@ impl ProjectRootResolver {
         }
     }
 
-    fn load_index(&self) -> Result<FolderIndex, ProjectRootError> {
-        if !self.index_path.exists() {
-            return Ok(FolderIndex::default());
-        }
-        let json = fs::read_to_string(&self.index_path)?;
+    fn load_index(&self) -> Result<FolderIndex, PersistenceError> {
+        let json = match fs::read_to_string(&self.index_path) {
+            Ok(json) => json,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(FolderIndex::default());
+            }
+            Err(error) => return Err(error.into()),
+        };
         Ok(serde_json::from_str(&json)?)
     }
 
-    pub fn resolve_root(&self, cwd: &Path) -> Result<PathBuf, ProjectRootError> {
+    pub fn resolve_root(&self, cwd: &Path) -> Result<PathBuf, PersistenceError> {
         Ok(self
             .resolve_registered_root(cwd)?
             .map(|resolved| resolved.root)
@@ -57,7 +53,7 @@ impl ProjectRootResolver {
     pub fn resolve_registered_root(
         &self,
         cwd: &Path,
-    ) -> Result<Option<RegisteredProjectRoot>, ProjectRootError> {
+    ) -> Result<Option<RegisteredProjectRoot>, PersistenceError> {
         let index = self.load_index()?;
         let Some(root) = index.root_for(cwd) else {
             return Ok(None);
@@ -73,7 +69,7 @@ impl ProjectRootResolver {
         }))
     }
 
-    pub fn historical_roots_for(&self, root: &Path) -> Result<Vec<PathBuf>, ProjectRootError> {
+    pub fn historical_roots_for(&self, root: &Path) -> Result<Vec<PathBuf>, PersistenceError> {
         Ok(self.load_index()?.historical_roots_for(root))
     }
 }
@@ -118,5 +114,18 @@ mod tests {
                 memory_filename: "project.json".into(),
             })
         );
+    }
+
+    #[test]
+    fn preserves_json_errors_when_loading_an_invalid_index() {
+        let temporary = TempDir::new().unwrap();
+        let index_path = temporary.path().join("index.json");
+        fs::write(&index_path, "{").unwrap();
+        let resolver = ProjectRootResolver::new(index_path);
+
+        assert!(matches!(
+            resolver.resolve_root(Path::new("/project")),
+            Err(PersistenceError::Parse(_))
+        ));
     }
 }

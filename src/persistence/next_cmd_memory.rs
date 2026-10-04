@@ -4,7 +4,7 @@ use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
 use crate::core::folder_index::FolderIndex;
-use crate::core::memory::{Conversation, Interaction, Memory, MemoryError};
+use crate::core::memory::{Conversation, Interaction, Memory, PersistenceError};
 use crate::persistence::ProjectRootResolver;
 
 const INDEX_FILENAME: &str = "index.json";
@@ -25,7 +25,7 @@ impl NextCmdMemory {
         }
     }
 
-    pub fn project_local() -> Result<Self, MemoryError> {
+    pub fn project_local() -> Result<Self, PersistenceError> {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(MEMORY_DIRNAME);
         fs::create_dir_all(&root)?;
         Ok(Self::new(root))
@@ -51,28 +51,42 @@ impl NextCmdMemory {
         self.root.join(filename)
     }
 
-    fn load_index(&self) -> Result<FolderIndex, MemoryError> {
-        let path = self.index_path();
-        if !path.exists() {
-            return Ok(FolderIndex::default());
+    fn load_conversation(&self, path: &Path) -> Result<Conversation, PersistenceError> {
+        match fs::read_to_string(path) {
+            Ok(raw) => Ok(serde_json::from_str(&raw)?),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                Ok(Conversation::default())
+            }
+            Err(error) => Err(error.into()),
         }
-        let raw = fs::read_to_string(&path)?;
+    }
+
+    fn load_index(&self) -> Result<FolderIndex, PersistenceError> {
+        let raw = match fs::read_to_string(self.index_path()) {
+            Ok(raw) => raw,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(FolderIndex::default());
+            }
+            Err(error) => return Err(error.into()),
+        };
         Ok(serde_json::from_str(&raw)?)
     }
 
-    fn save_index(&self, index: &FolderIndex) -> Result<(), MemoryError> {
+    fn save_index(&self, index: &FolderIndex) -> Result<(), PersistenceError> {
         let json = serde_json::to_string_pretty(index)?;
         atomic_write(&self.index_path(), &json)
     }
 
-    fn persist(&self) -> Result<(), MemoryError> {
-        let cwd = self.cwd.as_ref().ok_or(MemoryError::NotLoaded)?;
-        let conv = self.conversation.as_ref().ok_or(MemoryError::NotLoaded)?;
+    fn persist(&self) -> Result<(), PersistenceError> {
+        let cwd = self.cwd.as_ref().ok_or(PersistenceError::NotLoaded)?;
+        let conv = self
+            .conversation
+            .as_ref()
+            .ok_or(PersistenceError::NotLoaded)?;
 
         let resolved = ProjectRootResolver::new(self.index_path())
-            .resolve_registered_root(cwd)
-            .map_err(|error| MemoryError::ProjectRoot(error.to_string()))?
-            .ok_or(MemoryError::NotRegistered)?;
+            .resolve_registered_root(cwd)?
+            .ok_or(PersistenceError::NotRegistered)?;
         let path = self.conv_path(&resolved.memory_filename);
 
         let json = serde_json::to_string_pretty(conv)?;
@@ -81,21 +95,15 @@ impl NextCmdMemory {
 }
 
 impl Memory for NextCmdMemory {
-    fn load(&mut self, cwd: &Path) -> Result<bool, MemoryError> {
-        let resolved = ProjectRootResolver::new(self.index_path())
-            .resolve_registered_root(cwd)
-            .map_err(|error| MemoryError::ProjectRoot(error.to_string()))?;
+    fn load(&mut self, cwd: &Path) -> Result<bool, PersistenceError> {
+        let resolved = ProjectRootResolver::new(self.index_path()).resolve_registered_root(cwd)?;
         let Some(resolved) = resolved else {
             self.cwd = Some(cwd.to_path_buf());
             self.conversation = None;
             return Ok(false);
         };
         let path = self.conv_path(&resolved.memory_filename);
-        let conv = if path.exists() {
-            serde_json::from_str(&fs::read_to_string(&path)?)?
-        } else {
-            Conversation::default()
-        };
+        let conv = self.load_conversation(&path)?;
         self.cwd = Some(cwd.to_path_buf());
         self.conversation = Some(conv);
         Ok(true)
@@ -105,33 +113,29 @@ impl Memory for NextCmdMemory {
         self.conversation.as_ref()
     }
 
-    fn append(&mut self, entry: Interaction) -> Result<(), MemoryError> {
+    fn append(&mut self, entry: Interaction) -> Result<(), PersistenceError> {
         let conv = self
             .conversation
             .as_mut()
-            .ok_or(MemoryError::NotRegistered)?;
+            .ok_or(PersistenceError::NotRegistered)?;
         conv.push(entry);
         self.persist()
     }
 
-    fn register(&mut self, cwd: &Path) -> Result<(), MemoryError> {
+    fn register(&mut self, cwd: &Path) -> Result<(), PersistenceError> {
         let mut index = self.load_index()?;
         let cwd_owned = cwd.to_path_buf();
 
         if let Some(filename) = index.folders.get(&cwd_owned).cloned() {
             let conv_path = self.conv_path(&filename);
-            let conv = if conv_path.exists() {
-                serde_json::from_str(&fs::read_to_string(&conv_path)?)?
-            } else {
-                Conversation::default()
-            };
+            let conv = self.load_conversation(&conv_path)?;
             self.cwd = Some(cwd_owned);
             self.conversation = Some(conv);
             return Ok(());
         }
 
         if let Some(existing) = index.ancestor_of(&cwd_owned) {
-            return Err(MemoryError::OverlapsExisting(existing));
+            return Err(PersistenceError::OverlapsExisting(existing));
         }
 
         let descendants = index.descendants_of(&cwd_owned);
@@ -160,7 +164,7 @@ impl Memory for NextCmdMemory {
         Ok(())
     }
 
-    fn unregister(&mut self, cwd: &Path) -> Result<(), MemoryError> {
+    fn unregister(&mut self, cwd: &Path) -> Result<(), PersistenceError> {
         let mut index = self.load_index()?;
         if let Some(filename) = index.folders.remove(cwd) {
             self.save_index(&index)?;
@@ -174,14 +178,17 @@ impl Memory for NextCmdMemory {
         Ok(())
     }
 
-    fn clear(&mut self) -> Result<(), MemoryError> {
-        let conv = self.conversation.as_mut().ok_or(MemoryError::NotLoaded)?;
+    fn clear(&mut self) -> Result<(), PersistenceError> {
+        let conv = self
+            .conversation
+            .as_mut()
+            .ok_or(PersistenceError::NotLoaded)?;
         conv.clear();
         self.persist()
     }
 }
 
-fn atomic_write(path: &Path, contents: &str) -> Result<(), MemoryError> {
+fn atomic_write(path: &Path, contents: &str) -> Result<(), PersistenceError> {
     let tmp = path.with_extension("tmp");
     fs::write(&tmp, contents)?;
     fs::rename(tmp, path)?;
@@ -279,7 +286,7 @@ mod tests {
     fn append_before_register_errors() {
         let (mut mem, _tmp) = fresh();
         let result = mem.append(entry("a", "b"));
-        assert!(matches!(result, Err(MemoryError::NotRegistered)));
+        assert!(matches!(result, Err(PersistenceError::NotRegistered)));
     }
 
     #[test]
@@ -329,7 +336,7 @@ mod tests {
 
         let result = mem.register(Path::new("/proj/foo/src"));
         match result {
-            Err(MemoryError::OverlapsExisting(p)) => assert_eq!(p, Path::new("/proj/foo")),
+            Err(PersistenceError::OverlapsExisting(p)) => assert_eq!(p, Path::new("/proj/foo")),
             other => panic!("expected OverlapsExisting, got {other:?}"),
         }
     }

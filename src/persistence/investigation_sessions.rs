@@ -3,9 +3,7 @@ use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
-use crate::core::memory::{
-    InvestigationSession, InvestigationSessionStore, InvestigationStoreError,
-};
+use crate::core::memory::{InvestigationSession, InvestigationSessionStore, PersistenceError};
 use crate::persistence::ProjectRootResolver;
 
 const INVESTIGATION_SESSIONS_DIR: &str = "investigator-conversations";
@@ -42,7 +40,7 @@ impl FileInvestigationSessionStore {
         &self,
         child_roots: &[PathBuf],
         parent_root: &Path,
-    ) -> Result<(), InvestigationStoreError> {
+    ) -> Result<(), PersistenceError> {
         let mut child_roots = child_roots.to_vec();
         child_roots.sort();
 
@@ -69,15 +67,13 @@ impl FileInvestigationSessionStore {
         &self,
         project_root: &Path,
         resolver: &ProjectRootResolver,
-    ) -> Result<Option<InvestigationSession>, InvestigationStoreError> {
-        let historical_roots = resolver
-            .historical_roots_for(project_root)
-            .map_err(|error| InvestigationStoreError::new(error.to_string()))?;
+    ) -> Result<Option<InvestigationSession>, PersistenceError> {
+        let historical_roots = resolver.historical_roots_for(project_root)?;
         self.migrate_roots(&historical_roots, project_root)?;
         self.load(&project_root.to_string_lossy())
     }
 
-    pub fn clear_roots(&self, child_roots: &[PathBuf]) -> Result<(), InvestigationStoreError> {
+    pub fn clear_roots(&self, child_roots: &[PathBuf]) -> Result<(), PersistenceError> {
         for child_root in child_roots {
             self.clear(&child_root.to_string_lossy())?;
         }
@@ -86,45 +82,37 @@ impl FileInvestigationSessionStore {
 }
 
 impl InvestigationSessionStore for FileInvestigationSessionStore {
-    fn load(
-        &self,
-        project_key: &str,
-    ) -> Result<Option<InvestigationSession>, InvestigationStoreError> {
+    fn load(&self, project_key: &str) -> Result<Option<InvestigationSession>, PersistenceError> {
         let path = self.session_path(project_key);
-        if !path.exists() {
-            return Ok(None);
+        match fs::read_to_string(path) {
+            Ok(contents) => Ok(Some(serde_json::from_str(&contents)?)),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(error) => Err(error.into()),
         }
-        let contents = fs::read_to_string(path).map_err(store_error)?;
-        serde_json::from_str(&contents)
-            .map(Some)
-            .map_err(store_error)
     }
 
     fn save(
         &self,
         project_key: &str,
         session: &InvestigationSession,
-    ) -> Result<(), InvestigationStoreError> {
-        fs::create_dir_all(&self.root).map_err(store_error)?;
+    ) -> Result<(), PersistenceError> {
+        fs::create_dir_all(&self.root)?;
         let path = self.session_path(project_key);
         let temporary = path.with_extension("tmp");
-        let contents = serde_json::to_vec_pretty(session).map_err(store_error)?;
-        fs::write(&temporary, contents).map_err(store_error)?;
-        fs::rename(temporary, path).map_err(store_error)
+        let contents = serde_json::to_vec_pretty(session)?;
+        fs::write(&temporary, contents)?;
+        fs::rename(temporary, path)?;
+        Ok(())
     }
 
-    fn clear(&self, project_key: &str) -> Result<(), InvestigationStoreError> {
+    fn clear(&self, project_key: &str) -> Result<(), PersistenceError> {
         let path = self.session_path(project_key);
         match fs::remove_file(path) {
             Ok(()) => Ok(()),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-            Err(error) => Err(store_error(error)),
+            Err(error) => Err(error.into()),
         }
     }
-}
-
-fn store_error(error: impl std::fmt::Display) -> InvestigationStoreError {
-    InvestigationStoreError::new(error.to_string())
 }
 
 #[cfg(test)]
@@ -160,6 +148,7 @@ mod tests {
             crate::core::session::ConversationEvent::ToolCalls(calls) => {
                 assert_eq!(calls[0].thinking_state.as_deref(), Some("gemini-signature"))
             }
+
             _ => panic!("expected persisted tool call"),
         }
         assert!(loaded.executor.is_some());
@@ -171,6 +160,32 @@ mod tests {
 
         store.clear("/project/a").unwrap();
         assert!(store.load("/project/a").unwrap().is_none());
+    }
+
+    #[test]
+    fn preserves_json_errors_when_loading_invalid_sessions() {
+        let temporary = TempDir::new().unwrap();
+        let store = FileInvestigationSessionStore::new(temporary.path());
+        let path = store.session_path("/project");
+        fs::write(path, "{").unwrap();
+
+        assert!(matches!(
+            store.load("/project"),
+            Err(PersistenceError::Parse(_))
+        ));
+    }
+
+    #[test]
+    fn preserves_io_errors_when_saving_under_a_file() {
+        let temporary = TempDir::new().unwrap();
+        let root = temporary.path().join("not-a-directory");
+        fs::write(&root, "file").unwrap();
+        let store = FileInvestigationSessionStore::new(root);
+
+        assert!(matches!(
+            store.save("/project", &InvestigationSession::default()),
+            Err(PersistenceError::Io(_))
+        ));
     }
 
     #[test]

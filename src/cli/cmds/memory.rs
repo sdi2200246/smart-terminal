@@ -2,7 +2,7 @@ use std::env;
 use std::path::PathBuf;
 
 use crate::cli::cli::{MemoryAction, MemoryArgs};
-use crate::core::memory::{Memory, MemoryError};
+use crate::core::memory::{Memory, PersistenceError};
 use crate::persistence::NextCmdMemory;
 
 pub async fn run(args: MemoryArgs) {
@@ -35,19 +35,19 @@ pub async fn run(args: MemoryArgs) {
     }
 }
 
-fn init(memory: &mut NextCmdMemory, cwd: &PathBuf) -> Result<(), MemoryError> {
+fn init(memory: &mut NextCmdMemory, cwd: &PathBuf) -> Result<(), PersistenceError> {
     memory.register(cwd)?;
     println!("\x1b[32m✓ registered\x1b[0m {}", cwd.display());
     Ok(())
 }
 
-fn delete(memory: &mut NextCmdMemory, cwd: &PathBuf) -> Result<(), MemoryError> {
+fn delete(memory: &mut NextCmdMemory, cwd: &PathBuf) -> Result<(), PersistenceError> {
     memory.unregister(cwd)?;
     println!("\x1b[32m✓ deleted\x1b[0m memory for {}", cwd.display());
     Ok(())
 }
 
-fn clear(memory: &mut NextCmdMemory, cwd: &PathBuf) -> Result<(), MemoryError> {
+fn clear(memory: &mut NextCmdMemory, cwd: &PathBuf) -> Result<(), PersistenceError> {
     if !memory.load(cwd)? {
         eprintln!("not registered — run `memory init` first");
         return Ok(());
@@ -60,7 +60,7 @@ fn clear(memory: &mut NextCmdMemory, cwd: &PathBuf) -> Result<(), MemoryError> {
     Ok(())
 }
 
-fn show(memory: &mut NextCmdMemory, cwd: &PathBuf) -> Result<(), MemoryError> {
+fn show(memory: &mut NextCmdMemory, cwd: &PathBuf) -> Result<(), PersistenceError> {
     if !memory.load(cwd)? {
         println!("not registered — run `memory init` first");
         return Ok(());
