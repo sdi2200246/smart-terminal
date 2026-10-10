@@ -14,13 +14,7 @@ pub async fn run(args: MemoryArgs) {
         }
     };
 
-    let mut memory = match NextCmdMemory::project_local() {
-        Ok(m) => m,
-        Err(e) => {
-            eprintln!("failed to open memory store: {e}");
-            std::process::exit(1);
-        }
-    };
+    let mut memory = NextCmdMemory::project_local();
 
     let result = match args.action {
         MemoryAction::Init => init(&mut memory, &cwd),

@@ -40,6 +40,12 @@ impl Capability for GitDiffStaged {
         }
     }
 
+    fn prompt_guidance(&self) -> Option<&'static str> {
+        Some(
+            "Call this if the input is `git commit -m` (or similar) and a commit message must be generated. Read the staged diff first so the message is accurate.",
+        )
+    }
+
     fn execute(&self, args: Value) -> Result<String, ToolError> {
         git_diff_staged(args)
     }

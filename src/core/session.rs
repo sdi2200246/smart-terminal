@@ -91,6 +91,14 @@ impl AgentSession {
         self.events.push(ConversationEvent::System(message.into()));
     }
 
+    pub fn replace_initial_system_prompt(&mut self, message: impl Into<String>) {
+        let message = message.into();
+        match self.events.first_mut() {
+            Some(ConversationEvent::System(existing)) => *existing = message,
+            _ => self.events.insert(0, ConversationEvent::System(message)),
+        }
+    }
+
     pub fn add_user(&mut self, message: impl Into<String>) {
         self.events.push(ConversationEvent::User(message.into()));
     }
@@ -242,6 +250,25 @@ mod tests {
             }
             _ => panic!("expected tool calls"),
         }
+    }
+
+    #[test]
+    fn replacing_initial_system_prompt_preserves_the_rest_of_the_transcript() {
+        let mut session = AgentSession::builder()
+            .system("old prompt")
+            .context(&serde_json::json!({"cwd":"project"}))
+            .user("first question")
+            .build();
+        session.add_assistant("prior answer");
+        let transcript = session.events[1..].to_vec();
+
+        session.replace_initial_system_prompt("updated prompt");
+
+        assert_eq!(
+            session.events.first(),
+            Some(&ConversationEvent::System("updated prompt".into()))
+        );
+        assert_eq!(&session.events[1..], transcript.as_slice());
     }
 
     #[test]

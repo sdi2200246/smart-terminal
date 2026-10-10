@@ -112,6 +112,7 @@ The codebase intentionally separates layers. When making changes:
 - preserve the cwd fallback for investigator sessions when no registered project root applies
 - keep persistence adapters dependent on core contracts rather than agent workflows; keep file/database details out of core
 - persist planner and executor `AgentSession` histories, including provider metadata; resumed histories must remain compatible with the current provider
+- isolate persistence tests with temporary directories; do not load or write project-local memory/session stores from tests
 
 ### Validation before submitting
 

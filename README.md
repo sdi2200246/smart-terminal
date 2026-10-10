@@ -96,7 +96,9 @@ The conversation is stored separately from `next-cmd` memory and keyed by the pr
 
 https://github.com/user-attachments/assets/5ac577fa-13b1-421b-a1a2-649fb0c95211
  
-The planner uses `read_dir` to orient and emits a structured plan as JSON. The executor consumes that plan and runs it with `bash`, `read_dir`, and `read_file`, then writes the report.
+The planner uses `read_dir` to orient and emits a structured plan as JSON. The executor consumes that plan and runs it with `bash`, `read_dir`, and `read_file`, maintaining a durable scratchpad summary with `update_scratchpad` as it investigates. Its prompt instructs the executor to update the scratchpad before completing; this is prompt guidance, not runtime enforcement.
+
+The saved scratchpad is sent to the model on subsequent requests, but conversation history is not automatically compacted yet. The summary is available to support future compaction; it does not currently replace or truncate older conversation events.
 
 Every investigation includes the command the executor predicts you are most likely to run next, based on the findings and context. It can include state-changing commands when those best match your intent. With the Zsh integration loaded, it appears as ghost text after the report; press `^F` to accept it or `^B` to dismiss it. It is never run automatically: after accepting, review it and press Enter to execute. Without the integration, the command is printed normally after the report.
 
@@ -127,10 +129,10 @@ Useful for anything you'd normally answer by poking around — what does this co
 |---|---|
 | `src/cli` | Parses commands (`investigate`, `next_cmd`, `memory`) and streams tool-call output via `cli::presenters`. |
 | `src/core` | Provider-agnostic contracts: `LLMProvider`, `Capability`, `AgentSession`, `Model`, `Memory`, `InvestigationSessionStore`, error types. Never imports `agent`, `persistence`, `tools`, or `providers`. |
-| `src/agent` | `agent::workflows` (NextCmd, Investigator), `agent::agents` (planner/executor/architect/cmd_predictor), and reusable loop patterns. |
+| `src/agent` | `agent::workflows` (NextCmd, Investigator), `agent::agents` (planner, executor, cmd_predictor), reusable prompt composition in `agent::prompts`, and loop patterns. |
 | `src/persistence` | File-backed implementations of core memory and investigation-session contracts. |
 | `src/providers` | `groq` and `google` clients, both built on the shared `providers::client::GenericLlmClient<ProviderCodec>` codec layer. |
-| `src/tools` | Bash, ReadDir, ReadFile, Docker, GitDiff/GitLog, AskUser, ReadLastError, Json — all implement `core::Capability`. |
+| `src/tools` | Bash, ReadDir, ReadFile, Docker, GitDiff/GitLog, AskUser, ReadLastError, UpdateScratchpad, Json — all implement `core::Capability`. |
 | `memory/` | Persistent JSON storage: next-command memory and separate project-keyed investigator conversations. |
 
 ### High-Level Code Flow

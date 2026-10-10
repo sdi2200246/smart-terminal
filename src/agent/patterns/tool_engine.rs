@@ -101,6 +101,7 @@ mod tests {
     use crate::core::model::{Model, ModelName};
     use crate::core::session::ConversationEvent;
     use crate::tools::error::ToolError;
+    use crate::tools::scratchpad::UpdateScratchpad;
     use serde_json::json;
 
     struct Echo;
@@ -341,7 +342,7 @@ mod tests {
     #[test]
     fn scratchpad_update_success_mutates_session_and_returns_confirmation() {
         let engine = ToolExecutionEngine::new();
-        let mut session = AgentSession::new(5);
+        let mut session = AgentSession::builder().user("investigate").build();
         let mut agent = test_agent(vec![]);
 
         engine.dispatch_tool_batch(
@@ -369,7 +370,7 @@ mod tests {
     #[test]
     fn scratchpad_update_invalid_args_leaves_session_scratchpad_untouched() {
         let engine = ToolExecutionEngine::new();
-        let mut session = AgentSession::new(5);
+        let mut session = AgentSession::builder().user("investigate").build();
         let mut agent = test_agent(vec![]);
 
         // missing required fields -> serde_json::from_value fails
@@ -423,5 +424,20 @@ mod tests {
             &mut agent,
             AgentResponse::single(call("update_scratchpad", "call_1", valid_scratchpad_args())),
         );
+    }
+
+    #[test]
+    fn final_answer_is_not_gated_by_scratchpad_updates() {
+        let engine = ToolExecutionEngine::new();
+        let mut session = AgentSession::builder().user("request").build();
+        let mut agent = test_agent(vec![Box::new(UpdateScratchpad), Box::new(FinalAnswer)]);
+
+        engine.dispatch_tool_batch(
+            &mut session,
+            &mut agent,
+            AgentResponse::single(call("final_answer", "answer_1", json!({"ok": true}))),
+        );
+
+        assert_eq!(session.final_answer, Some(json!({"ok": true})));
     }
 }

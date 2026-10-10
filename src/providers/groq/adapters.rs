@@ -86,12 +86,23 @@ pub fn to_groq_model_string(model: ModelName) -> String {
 
 impl From<&AgentRequest<'_>> for GroqRequest {
     fn from(request: &AgentRequest<'_>) -> Self {
-        let messages = request
+        let mut messages: Vec<Message> = request
             .session
             .events
             .iter()
             .flat_map(Vec::<Message>::from)
             .collect();
+        if let Some(scratchpad) = &request.session.scratchpad {
+            let scratchpad_message = Message::system(Some(format!(
+                "Current scratchpad:\n{}",
+                serde_json::to_string_pretty(scratchpad).expect("scratchpad serializes to JSON")
+            )));
+            let position = messages
+                .iter()
+                .position(|message| message.role != "system")
+                .unwrap_or(messages.len());
+            messages.insert(position, scratchpad_message);
+        }
 
         let tools: Vec<Tool> = request.tools_metadata.iter().map(Tool::from).collect();
 
@@ -109,6 +120,9 @@ impl From<&AgentRequest<'_>> for GroqRequest {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::llm_client::AgentRequest;
+    use crate::core::model::{Model, ModelName};
+    use crate::core::session::{AgentSession, Scratchpad};
     use serde_json::json;
 
     #[test]
@@ -178,5 +192,36 @@ mod tests {
         assert_eq!(messages[1].tool_call_id, Some("call_456".into()));
         assert_eq!(messages[1].name, Some("get_time".into()));
         assert_eq!(messages[1].content, Some("12:00 PM".into()));
+    }
+
+    #[test]
+    fn groq_request_includes_the_current_scratchpad() {
+        let mut session = AgentSession::builder()
+            .system("Investigator prompt")
+            .user("continue investigation")
+            .build();
+        session.update_scratchpad(Scratchpad {
+            main_goal: "answer question".into(),
+            completed_milestones: vec!["inspect config".into()],
+            current_focus: "check tool registration".into(),
+            vital_findings: vec!["executor supports scratchpad".into()],
+        });
+        let model = Model::with_default_temp(ModelName::GptOss120B);
+        let request = AgentRequest {
+            model: &model,
+            session: &session,
+            tools_metadata: &[],
+        };
+
+        let groq_request = GroqRequest::from(&request);
+        let scratchpad_message = &groq_request.messages[1];
+        assert_eq!(scratchpad_message.role, "system");
+        assert!(
+            scratchpad_message
+                .content
+                .as_deref()
+                .unwrap()
+                .contains("check tool registration")
+        );
     }
 }

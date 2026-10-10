@@ -25,10 +25,9 @@ impl NextCmdMemory {
         }
     }
 
-    pub fn project_local() -> Result<Self, PersistenceError> {
+    pub fn project_local() -> Self {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(MEMORY_DIRNAME);
-        fs::create_dir_all(&root)?;
-        Ok(Self::new(root))
+        Self::new(root)
     }
 
     pub fn with_conversation(
@@ -381,13 +380,9 @@ mod tests {
     }
     #[test]
     fn project_local_resolves_under_manifest_dir() {
-        let mem = NextCmdMemory::project_local().unwrap();
+        let mem = NextCmdMemory::project_local();
         let expected_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("memory");
         assert_eq!(mem.root, expected_root);
-        assert!(
-            expected_root.exists(),
-            "project_local should create the directory"
-        );
     }
 
     #[test]

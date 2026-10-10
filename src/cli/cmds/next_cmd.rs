@@ -11,8 +11,7 @@ use std::io::{self, Write};
 const OUTPUT_PROTOCOL: &str = "SMART_TERMINAL_NEXT_CMD_V1";
 
 pub async fn run(args: NextCmdArgs) {
-    let mut memory =
-        NextCmdMemory::project_local().unwrap_or_else(|_| NextCmdMemory::new(env::temp_dir()));
+    let mut memory = NextCmdMemory::project_local();
 
     if let Ok(cwd) = env::current_dir() {
         let _ = memory.load(&cwd);
