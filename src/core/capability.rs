@@ -28,6 +28,18 @@ impl ToolRegistry {
     pub fn metadata(&self) -> &Vec<ToolMetaData> {
         return &self.metadata;
     }
+
+    pub fn prompt_guidance(&self) -> Vec<String> {
+        self.metadata
+            .iter()
+            .filter_map(|metadata| {
+                self.tools
+                    .get(metadata.name.as_str())
+                    .and_then(|tool| tool.prompt_guidance())
+                    .map(|guidance| format!("Tool '{}': {}", metadata.name, guidance))
+            })
+            .collect()
+    }
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
@@ -40,6 +52,9 @@ pub struct ToolMetaData {
 pub trait Capability: Send + Sync {
     fn name(&self) -> &'static str;
     fn metadata(&self) -> ToolMetaData;
+    fn prompt_guidance(&self) -> Option<&'static str> {
+        None
+    }
     fn execute(&self, args: Value) -> Result<String, ToolError>;
 }
 
@@ -89,6 +104,35 @@ mod tests {
         let reg = ToolRegistry::new(vec![Box::new(FakeTool("docker"))]);
         let names: Vec<&str> = reg.metadata().iter().map(|m| m.name.as_str()).collect();
         assert_eq!(names, vec!["docker"]);
+    }
+
+    struct GuidedTool;
+    impl Capability for GuidedTool {
+        fn name(&self) -> &'static str {
+            "guided"
+        }
+        fn metadata(&self) -> ToolMetaData {
+            ToolMetaData {
+                name: self.name().into(),
+                description: "guided tool".into(),
+                parameters: json!({"type": "object", "properties": {}}),
+            }
+        }
+        fn prompt_guidance(&self) -> Option<&'static str> {
+            Some("Use for its specialized task.")
+        }
+        fn execute(&self, _args: Value) -> Result<String, ToolError> {
+            Ok(String::new())
+        }
+    }
+
+    #[test]
+    fn prompt_guidance_is_collected_from_registered_tools() {
+        let registry = ToolRegistry::new(vec![Box::new(GuidedTool), Box::new(FakeTool("plain"))]);
+        assert_eq!(
+            registry.prompt_guidance(),
+            vec!["Tool 'guided': Use for its specialized task."]
+        );
     }
 
     #[test]

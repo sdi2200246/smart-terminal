@@ -36,6 +36,12 @@ impl Capability for ReadLastError {
         }
     }
 
+    fn prompt_guidance(&self) -> Option<&'static str> {
+        Some(
+            "Read the captured stderr before answering when the user asks why a command failed, retries a likely failed command, or says a previously suggested command did not work. Base the correction on the captured error rather than guessing.",
+        )
+    }
+
     fn execute(&self, _args: Value) -> Result<String, ToolError> {
         let path = std::env::var("ERR_LAST").map_err(|_| ToolError::ToolExecution {
             source: anyhow::anyhow!(

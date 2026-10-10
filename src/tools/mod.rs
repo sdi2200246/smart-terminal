@@ -3,7 +3,6 @@ pub mod bash;
 pub mod docker;
 pub mod error;
 pub mod git_diff;
-pub mod git_log;
 pub mod json;
 pub mod last_error;
 pub mod read_dir;

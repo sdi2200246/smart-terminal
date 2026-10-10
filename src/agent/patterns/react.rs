@@ -154,10 +154,11 @@ mod tests {
     use crate::core::model::{Model, ModelName};
     use crate::core::responce::{AgentResponse, AgentToolCall};
     use crate::core::session::{ConversationEvent, ToolCall, ToolResult};
+    use crate::tools::scratchpad::UpdateScratchpad;
     use serde_json::{Value, json};
     use std::sync::{
         Arc,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     };
 
     #[derive(Clone)]
@@ -224,5 +225,56 @@ mod tests {
             Some(ConversationEvent::Assistant(_))
         ));
         assert!(!structured_session_had_tools.load(Ordering::SeqCst));
+    }
+
+    #[derive(Clone, Default)]
+    struct StopBeforeScratchpad(Arc<AtomicUsize>);
+
+    impl LLMProvider for StopBeforeScratchpad {
+        async fn complete(
+            &self,
+            _request: AgentRequest<'_>,
+        ) -> Result<AgentResponse, ProviderError> {
+            let call_index = self.0.fetch_add(1, Ordering::SeqCst);
+            let call = match call_index {
+                0 => AgentToolCall::new(
+                    "stop".into(),
+                    format!("stop_{call_index}"),
+                    json!({"cmd":"echo done","man":"Print done.","scale":"Full"}),
+                    None,
+                ),
+                _ => panic!("unexpected model call"),
+            };
+            Ok(AgentResponse::single(call))
+        }
+
+        async fn complete_structured(
+            &self,
+            _session: &AgentSession,
+            _schema: Value,
+        ) -> Result<Value, ProviderError> {
+            Ok(json!({"cmd":"echo done","man":"Print done.","scale":"Full"}))
+        }
+    }
+
+    #[tokio::test]
+    async fn structured_stop_is_not_gated_by_scratchpad_updates() {
+        let provider = StopBeforeScratchpad::default();
+        let calls = provider.0.clone();
+        let mut runner = ReactLoop::new(provider);
+        let mut agent = Agent::base("test", Model::with_default_temp(ModelName::GptOss120B))
+            .with_tools(vec![Box::new(UpdateScratchpad)]);
+        let mut session = AgentSession::builder()
+            .system("test")
+            .user("request")
+            .build();
+
+        runner
+            .run::<NextCommand>(&mut agent, &mut session)
+            .await
+            .unwrap();
+
+        assert!(session.scratchpad.is_none());
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
 }

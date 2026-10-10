@@ -1,6 +1,6 @@
 use super::message::Message;
 use super::tool::Tool;
-use crate::core::session::{AgentSession, ConversationEvent, Scratchpad};
+use crate::core::session::{AgentSession, ConversationEvent};
 use crate::providers::google::adapters::to_gemini_schema;
 
 use serde::Serialize;

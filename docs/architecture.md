@@ -120,6 +120,14 @@ Examples:
 
 Each tool implements the project capability abstraction, allowing the agent loop to treat them uniformly.
 
+Capabilities may also provide optional agent-facing prompt guidance through the core capability contract. The prompt builder reads guidance only from tools registered for that agent; this is separate from provider-facing tool metadata. Concrete tools and agent orchestration therefore share only the core contract and do not import each other.
+
+Each role prompt is a constant composed of selected instruction blocks in `src/agent/prompts/roles.rs`. Reusable policy text such as tool-call ordering, environment-context handling, and completion lives in `src/agent/prompts/policies.rs`. Completion policies support `FINAL_ANSWER_TOOL`, `STRUCTURED_STOP`, or `FINAL_ANSWER_OR_STRUCTURED_STOP` according to the agent's output path. Available-tool names and descriptions are rendered from registered capability metadata; the final-answer schema is generated from the registered `final_answer` capability's parameter schema. Tool-specific supplemental instructions come from each registered capability's `prompt_guidance`.
+
+The scratchpad capability is registered by the CLI executor factory and its prompt guidance instructs the executor to update the complete summary before completing. This is prompt-only guidance; the runtime does not reject completion when the tool is not called. Google and Groq requests include the current scratchpad state. This provides durable summary state, but conversation-event history is not currently compacted or truncated; implementing compaction must preserve the system prompt, current request, and scratchpad while removing only older history. Do not confuse maintaining a summary with actually compacting history.
+
+Do not duplicate tool inventories, output schemas, or tool guidance in role prompts. Only role-specific objectives and workflow constraints belong in a role's constants. `src/agent/prompts/builder.rs` assembles selected parts in a canonical order. The shared tool-call policy reflects the current sequential batch executor; do not add a parallel-call policy unless runtime execution is concurrent. To print fully assembled active prompts, run `cargo test print_complete_active_role_prompts_for_inspection -- --nocapture`. This prompt-preview test builds agents in memory using the CLI's real tool factory; it does not load or modify persisted investigation sessions. When introducing instructions about execution behavior, ensure they describe behavior the runtime actually supports.
+
 ## Runtime flow
 
 The runtime entrypoint is `src/main.rs`.
@@ -137,7 +145,7 @@ The runtime entrypoint is `src/main.rs`.
    - receives plan/tool calls
    - executes tools
    - sends results back into the model
-   - stops when the model signals completion
+   - accepts completion when the agent submits it; scratchpad updates are prompt guidance, not a runtime gate
 7. The workflow converts the final agent response into user-facing output.
 
 ## Command-level behavior
@@ -195,6 +203,7 @@ The dependency direction is intentionally layered:
 - agents depend on the core contracts and providers
 - providers depend on the generic transport and response codecs
 - tools depend on shell and filesystem primitives
+- prompt composition is contained in the agent layer; optional tool prompt guidance crosses from tools through a core capability contract
 
 This helps keep concrete implementation choices isolated and easier to replace.
 

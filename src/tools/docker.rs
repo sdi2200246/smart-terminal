@@ -44,6 +44,12 @@ impl Capability for Docker {
         }
     }
 
+    fn prompt_guidance(&self) -> Option<&'static str> {
+        Some(
+            "Call this tool if the user's intent involves Docker, Compose, containers, or names that act like containers (for example, 'restart db').",
+        )
+    }
+
     fn execute(&self, args: Value) -> Result<String, ToolError> {
         docker_status(args)
     }

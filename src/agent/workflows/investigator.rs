@@ -97,6 +97,7 @@ impl<'a, P: LLMProvider + Clone, F: InvestigatorToolFactory> Investigator<P, F> 
             }
             None => planner_agent.build_session(planner_prompt),
         };
+        planner_session.replace_initial_system_prompt(planner_agent.system_prompt.clone());
 
         let plan: Plan = self
             .runner
@@ -123,6 +124,7 @@ impl<'a, P: LLMProvider + Clone, F: InvestigatorToolFactory> Investigator<P, F> 
             }
             None => executor_agent.build_session(user_prompt),
         };
+        executor_session.replace_initial_system_prompt(executor_agent.system_prompt.clone());
 
         let report: Report = self
             .runner
