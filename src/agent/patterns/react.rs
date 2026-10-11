@@ -1,6 +1,7 @@
 use crate::agent::agents::{Agent, AgentState};
 use crate::agent::error::AgentError;
 use crate::agent::patterns::tool_engine::ToolExecutionEngine;
+use crate::agent::patterns::tool_engine::ToolExecutionPolicy;
 use crate::core::error::ProviderError;
 use crate::core::llm_client::{AgentRequest, LLMProvider};
 use crate::core::responce::AgentResponse;
@@ -18,9 +19,13 @@ pub struct ReactLoop<P: LLMProvider> {
 
 impl<P: LLMProvider> ReactLoop<P> {
     pub fn new(provider: P) -> Self {
+        Self::new_with_policy(provider, ToolExecutionPolicy::default())
+    }
+
+    pub fn new_with_policy(provider: P, policy: ToolExecutionPolicy) -> Self {
         ReactLoop {
             provider,
-            tool_engine: ToolExecutionEngine::new(),
+            tool_engine: ToolExecutionEngine::new_with_policy(policy),
         }
     }
 
@@ -82,7 +87,8 @@ impl<P: LLMProvider> ReactLoop<P> {
 
             agent.update_state(AgentState::ExecutingTool);
             self.tool_engine
-                .dispatch_tool_batch(session, agent, response);
+                .dispatch_tool_batch(session, agent, response)
+                .await;
         }
         self.structure_output::<T>(session, &stop_args, agent).await
     }
