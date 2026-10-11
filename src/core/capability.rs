@@ -42,11 +42,21 @@ impl ToolRegistry {
     }
 }
 
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Copy, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolSafety {
+    #[default]
+    Safe,
+    Mutating,
+}
+
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct ToolMetaData {
     pub name: String,
     pub description: String,
     pub parameters: Value,
+    #[serde(default)]
+    pub safety: ToolSafety,
 }
 
 pub trait Capability: Send + Sync {
@@ -73,6 +83,7 @@ mod tests {
                 name: self.0.into(),
                 description: format!("{} tool", self.0),
                 parameters: json!({"type": "object", "properties": {}}),
+                safety: ToolSafety::Safe,
             }
         }
         fn execute(&self, _args: Value) -> Result<String, ToolError> {
@@ -116,6 +127,7 @@ mod tests {
                 name: self.name().into(),
                 description: "guided tool".into(),
                 parameters: json!({"type": "object", "properties": {}}),
+                safety: ToolSafety::Safe,
             }
         }
         fn prompt_guidance(&self) -> Option<&'static str> {
