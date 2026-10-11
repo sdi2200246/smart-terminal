@@ -1,6 +1,8 @@
 use crate::agent::agents::{AgentEvent, AgentState};
+use crate::agent::patterns::tool_engine::PermissionDecision;
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
+use std::io::Write;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
@@ -53,6 +55,15 @@ impl Presenter {
                                 let line = render::format_call(&call);
                                 pb.suspend(|| println!("{line}"));
                             }
+                            Some(AgentEvent::ToolApprovalRequest { call, responder }) => {
+                                let line = render::format_approval_request(&call);
+                                pb.suspend(|| {
+                                    println!();
+                                    println!("{line}");
+                                });
+                                let decision = prompt_for_approval(&call);
+                                let _ = responder.send(decision);
+                            }
                             None => break,
                         }
                     }
@@ -73,6 +84,50 @@ impl Presenter {
 
             pb.finish();
         })
+    }
+}
+
+fn prompt_for_approval(call: &crate::core::responce::AgentToolCall) -> PermissionDecision {
+    println!();
+    print!("  Approve {}? [y/N]: ", call.name());
+    let _ = std::io::stdout().flush();
+
+    let mut input = String::new();
+    if std::io::stdin().read_line(&mut input).is_err() {
+        return PermissionDecision::Denied(format!(
+            "Tool '{}' requires approval but the approval input could not be read.",
+            call.name()
+        ));
+    }
+
+    let response = input.trim().to_ascii_lowercase();
+    if matches!(response.as_str(), "y" | "yes") {
+        println!("  approved");
+        PermissionDecision::Approved
+    } else {
+        print!("  reason: ");
+        let _ = std::io::stdout().flush();
+
+        let mut reason = String::new();
+        if std::io::stdin().read_line(&mut reason).is_err() {
+            return PermissionDecision::Denied(format!(
+                "User denied approval for tool '{}': no reason provided.",
+                call.name()
+            ));
+        }
+
+        let reason = reason.trim();
+        let reason = if reason.is_empty() {
+            "no reason provided".to_string()
+        } else {
+            reason.to_string()
+        };
+
+        println!("  denied");
+        PermissionDecision::Denied(format!(
+            "User denied approval for tool '{}': {}",
+            call.name(), reason
+        ))
     }
 }
 
