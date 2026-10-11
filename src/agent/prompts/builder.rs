@@ -180,11 +180,13 @@ mod tests {
                     "title": "CommandAnswer",
                     "properties": {"cmd": {"type": "string"}}
                 }),
+                safety: crate::core::capability::ToolSafety::Safe,
             },
             ToolMetaData {
                 name: "inspect".into(),
                 description: "Inspect current state.".into(),
                 parameters: serde_json::json!({"type": "object"}),
+                safety: crate::core::capability::ToolSafety::Safe,
             },
         ];
         let prompt = SystemPromptBuilder::new(AgentPrompt::new("predictor", &PARTS))
@@ -221,6 +223,7 @@ mod tests {
             name: "sample".into(),
             description: "A task-specific tool.".into(),
             parameters: serde_json::json!({"type":"object"}),
+            safety: crate::core::capability::ToolSafety::Safe,
         }];
         let prompt = SystemPromptBuilder::new(AgentPrompt::new("worker", &[]))
             .available_tools(&metadata)
