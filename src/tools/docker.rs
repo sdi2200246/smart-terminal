@@ -1,5 +1,5 @@
 use super::error::ToolError;
-use crate::core::capability::{Capability, ToolMetaData};
+use crate::core::capability::{Capability, ToolMetaData, ToolSafety};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::Path;
@@ -41,6 +41,7 @@ impl Capability for Docker {
                 "type": "object",
                 "properties": {}
             }),
+            safety: ToolSafety::Safe,
         }
     }
 

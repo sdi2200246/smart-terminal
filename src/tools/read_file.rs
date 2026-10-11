@@ -1,5 +1,5 @@
 use super::error::ToolError;
-use crate::core::capability::{Capability, ToolMetaData};
+use crate::core::capability::{Capability, ToolMetaData, ToolSafety};
 use crate::utils::FlatSchema;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -39,6 +39,7 @@ impl Capability for ReadFile {
                 Lines are 1-indexed and inclusive."
                 .into(),
             parameters: ReadFileArgs::schema(),
+            safety: ToolSafety::Safe,
         }
     }
 

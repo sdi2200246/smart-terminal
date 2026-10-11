@@ -1,5 +1,5 @@
 use super::error::ToolError;
-use crate::core::capability::{Capability, ToolMetaData};
+use crate::core::capability::{Capability, ToolMetaData, ToolSafety};
 use crate::utils::FlatSchema;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -103,6 +103,7 @@ impl Capability for Bash {
                 Destructive commands are blocked (rm, mv, cp, chmod, sudo, install, write redirects). \
                 Output capped at 250 lines".into(),
             parameters: BashArgs::schema(),
+            safety: ToolSafety::Mutating,
         }
     }
 

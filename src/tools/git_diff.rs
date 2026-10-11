@@ -1,5 +1,5 @@
 use super::error::ToolError;
-use crate::core::capability::{Capability, ToolMetaData};
+use crate::core::capability::{Capability, ToolMetaData, ToolSafety};
 use serde_json::Value;
 use std::process::Command;
 
@@ -37,6 +37,7 @@ impl Capability for GitDiffStaged {
                 "type": "object",
                 "properties": {}
             }),
+            safety: ToolSafety::Safe,
         }
     }
 

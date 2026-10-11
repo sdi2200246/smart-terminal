@@ -1,5 +1,5 @@
 use super::error::ToolError;
-use crate::core::capability::{Capability, ToolMetaData};
+use crate::core::capability::{Capability, ToolMetaData, ToolSafety};
 use crate::core::session::Scratchpad;
 use crate::utils::FlatSchema;
 use serde_json::Value;
@@ -18,6 +18,7 @@ impl Capability for UpdateScratchpad {
             name: self.name().into(),
             description: "Overwrite the working scratchpad with its complete updated state.".into(),
             parameters: Scratchpad::schema(),
+            safety: ToolSafety::Safe,
         }
     }
 
