@@ -1,5 +1,6 @@
 use crate::agent::patterns::react::ReactLoop;
 use crate::agent::workflows::next_cmd::{NextCmd, NextCommand, Reversibility};
+use crate::agent::patterns::tool_engine::ToolPermissionMode;
 use crate::cli::agent_setup::CliToolProvider;
 use crate::cli::cli::NextCmdArgs;
 use crate::core::memory::Memory;
@@ -18,7 +19,7 @@ pub async fn run(args: NextCmdArgs) {
     }
 
     let provider = GroqClient::pooled();
-    let runner = ReactLoop::new(provider);
+    let runner = ReactLoop::new_with_policy(provider, ToolPermissionMode::Allow.to_policy());
 
     let prediction = {
         let mut workflow = NextCmd::new(runner, &mut memory, CliToolProvider);

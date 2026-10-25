@@ -1,5 +1,5 @@
 use super::error::ToolError;
-use crate::core::capability::{Capability, ToolMetaData};
+use crate::core::capability::{Capability, ToolMetaData, ToolSafety};
 use serde_json::Value;
 
 pub struct Json {
@@ -16,6 +16,7 @@ impl Capability for Json {
             name: self.name().into(),
             description: "Submits the final, structured JSON response to the user. Use this tool when you have successfully gathered all required information and are ready to end the loop.".into(),
             parameters: self.properties.clone(),
+            safety: ToolSafety::Safe,
         }
     }
 

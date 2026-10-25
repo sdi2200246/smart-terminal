@@ -1,5 +1,5 @@
 use super::error::ToolError;
-use crate::core::capability::{Capability, ToolMetaData};
+use crate::core::capability::{Capability, ToolMetaData, ToolSafety};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
@@ -33,6 +33,7 @@ impl Capability for ReadLastError {
                 "type": "object",
                 "properties": {}
             }),
+            safety: ToolSafety::Safe,
         }
     }
 

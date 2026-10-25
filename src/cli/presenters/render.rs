@@ -4,7 +4,23 @@ use serde_json::Value;
 pub(crate) fn format_call(call: &AgentToolCall) -> String {
     let name = call.name();
     let args = summarize_args(&call.arguments());
-    return format!("\x1b[32m●\x1b[0m \x1b[1m{name}\x1b[0m\x1b[2m({args})\x1b[0m");
+    if args.is_empty() {
+        format!("\x1b[32m●\x1b[0m \x1b[1m{name}\x1b[0m")
+    } else {
+        format!("\x1b[32m●\x1b[0m \x1b[1m{name}\x1b[0m \x1b[2m{args}\x1b[0m")
+    }
+}
+
+pub(crate) fn format_approval_request(call: &AgentToolCall) -> String {
+    let name = call.name();
+    let args = summarize_args(&call.arguments());
+    if args.is_empty() {
+        format!("\x1b[33m!\x1b[0m approval required for \x1b[1m{name}\x1b[0m")
+    } else {
+        format!(
+            "\x1b[33m!\x1b[0m approval required for \x1b[1m{name}\x1b[0m\n  \x1b[2m{args}\x1b[0m"
+        )
+    }
 }
 
 fn summarize_args(args: &Value) -> String {

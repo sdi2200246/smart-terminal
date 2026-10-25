@@ -1,5 +1,5 @@
 use super::error::ToolError;
-use crate::core::capability::{Capability, ToolMetaData};
+use crate::core::capability::{Capability, ToolMetaData, ToolSafety};
 use crate::utils::FlatSchema;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -27,6 +27,7 @@ impl Capability for AskUser {
               Do not use this tool for information you can infer yourself."
                 .into(),
             parameters: ModelQuestion::schema(),
+            safety: ToolSafety::Safe,
         }
     }
     fn execute(&self, args: Value) -> Result<String, ToolError> {

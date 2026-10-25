@@ -2,7 +2,7 @@
 mod integration {
     use std::print;
 
-    use smart_terminal::core::capability::ToolMetaData;
+    use smart_terminal::core::capability::{ToolMetaData, ToolSafety};
     use smart_terminal::core::llm_client::{AgentRequest, LLMProvider};
     use smart_terminal::core::model::{Model, ModelName};
     use smart_terminal::core::session::AgentSession;
@@ -60,6 +60,7 @@ mod integration {
                 "properties": { "city": { "type": "string" } },
                 "required": ["city"]
             }),
+            safety: ToolSafety::Safe,
         }];
 
         let request = AgentRequest {

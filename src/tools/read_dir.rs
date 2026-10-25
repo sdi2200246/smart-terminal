@@ -1,5 +1,5 @@
 use super::error::ToolError;
-use crate::core::capability::{Capability, ToolMetaData};
+use crate::core::capability::{Capability, ToolMetaData, ToolSafety};
 use crate::utils::FlatSchema;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -31,6 +31,7 @@ impl Capability for ReadDir {
                 Returns an error if the path is a file;"
                 .into(),
             parameters: ReadDirArgs::schema(),
+            safety: ToolSafety::Safe,
         }
     }
 

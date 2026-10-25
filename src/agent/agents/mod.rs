@@ -4,6 +4,7 @@ use std::vec;
 
 use crate::agent::agents::hooks::{DefaultAgentHook, ToolsRegulator};
 use crate::agent::patterns::hook::AgentLoopHook;
+use crate::agent::patterns::tool_engine::PermissionDecision;
 use crate::agent::prompts::{
     AgentPrompt, CMD_PREDICTOR_PROMPT, EXECUTOR_PROMPT, PLANNER_PROMPT, SystemPromptBuilder,
 };
@@ -12,7 +13,7 @@ use crate::core::model::Model;
 use crate::core::responce::AgentToolCall;
 use crate::core::session::AgentSession;
 use serde::Serialize;
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::{mpsc::UnboundedSender, oneshot};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AgentState {
@@ -26,6 +27,10 @@ pub enum AgentState {
 pub enum AgentEvent {
     StateUpdate(AgentState),
     ToolCall(AgentToolCall),
+    ToolApprovalRequest {
+        call: AgentToolCall,
+        responder: oneshot::Sender<PermissionDecision>,
+    },
 }
 
 impl AgentState {
@@ -94,6 +99,26 @@ impl Agent {
             if let Err(error) = stream.send(AgentEvent::StateUpdate(state)) {
                 tracing::warn!(state = state.label(), error = %error, "failed to stream agent state");
             }
+        }
+    }
+
+    pub(crate) fn request_tool_approval(
+        &self,
+        call: &AgentToolCall,
+        responder: oneshot::Sender<PermissionDecision>,
+    ) {
+        if let Some(stream) = &self.event_stream {
+            if let Err(error) = stream.send(AgentEvent::ToolApprovalRequest {
+                call: call.clone(),
+                responder,
+            }) {
+                tracing::warn!(tool = %call.name(), error = %error, "failed to stream tool approval request");
+            }
+        } else {
+            let _ = responder.send(PermissionDecision::Denied(format!(
+                "Tool '{}' requires approval but no approval presenter is connected.",
+                call.name()
+            )));
         }
     }
 

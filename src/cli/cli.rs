@@ -1,4 +1,33 @@
+use crate::agent::patterns::tool_engine::ToolPermissionMode;
 use clap::{Args, Parser, Subcommand};
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CliPermissionMode {
+    Manual,
+    Auto,
+}
+
+impl clap::ValueEnum for CliPermissionMode {
+    fn value_variants<'a>() -> &'a [Self] {
+        &[Self::Manual, Self::Auto]
+    }
+
+    fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
+        match self {
+            Self::Manual => Some(clap::builder::PossibleValue::new("manual")),
+            Self::Auto => Some(clap::builder::PossibleValue::new("auto")),
+        }
+    }
+}
+
+impl From<CliPermissionMode> for ToolPermissionMode {
+    fn from(value: CliPermissionMode) -> Self {
+        match value {
+            CliPermissionMode::Manual => ToolPermissionMode::Prompt,
+            CliPermissionMode::Auto => ToolPermissionMode::Allow,
+        }
+    }
+}
 
 #[derive(Parser)]
 #[command(name = "agent")]
@@ -19,7 +48,7 @@ pub enum Commands {
 
 #[derive(Args)]
 pub struct NextCmdArgs {
-    ///Terminal buffer or a promt describing the expected command
+    /// Terminal buffer or a prompt describing the expected command.
     pub buffer: String,
 }
 
@@ -46,6 +75,9 @@ pub struct InvestigateArgs {
     /// Investigate once without loading or changing the project's main session
     #[arg(long)]
     pub one_off: bool,
+    /// Default permission mode for mutating tool calls during this run.
+    #[arg(long = "perms", value_enum, default_value_t = CliPermissionMode::Manual)]
+    pub tool_permission: CliPermissionMode,
     /// The question to investigate
     pub question: Option<String>,
     #[command(subcommand)]
@@ -76,11 +108,12 @@ mod tests {
 
     #[test]
     fn parses_one_off_investigation() {
-        let cli = Cli::try_parse_from(["agent", "investigate", "--one-off", "question"]).unwrap();
+        let cli = Cli::try_parse_from(["agent", "investigate", "--one-off", "--perms", "auto", "question"]).unwrap();
         assert!(matches!(
             cli.command,
             Commands::Investigate(InvestigateArgs {
                 one_off: true,
+                tool_permission: CliPermissionMode::Auto,
                 question: Some(question),
                 action: None,
             }) if question == "question"
@@ -89,10 +122,11 @@ mod tests {
 
     #[test]
     fn parses_investigation_session_actions() {
-        let cli = Cli::try_parse_from(["agent", "investigate", "session", "clear"]).unwrap();
+        let cli = Cli::try_parse_from(["agent", "investigate", "--perms", "manual", "session", "clear"]).unwrap();
         assert!(matches!(
             cli.command,
             Commands::Investigate(InvestigateArgs {
+                tool_permission: CliPermissionMode::Manual,
                 action: Some(InvestigateAction::Session(InvestigationSessionArgs {
                     action: InvestigationSessionAction::Clear
                 })),

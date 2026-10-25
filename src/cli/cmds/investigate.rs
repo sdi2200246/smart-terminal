@@ -5,6 +5,8 @@ use std::path::PathBuf;
 use crate::agent::error::AgentError;
 use crate::agent::patterns::react::ReactLoop;
 use crate::agent::workflows::investigator::{Investigator, Plan, Report};
+use crate::agent::patterns::tool_engine::ToolPermissionMode;
+use crate::agent::workflows::next_cmd::NextCommand;
 use crate::cli::presenters::Presenter;
 use crate::cli::suggestion_handoff::write_recommendation;
 use crate::cli::{
@@ -73,7 +75,7 @@ pub async fn run(args: InvestigateArgs) {
             }
         }
     };
-    let outcome = run_workflow(&question, snapshot).await;
+    let outcome = run_workflow(&question, snapshot, args.tool_permission.into()).await;
 
     match outcome {
         Ok(Some((plan, report, updated_session))) => {
@@ -114,10 +116,11 @@ fn load_snapshot(
 async fn run_workflow(
     question: &str,
     saved_session: InvestigationSession,
+    permission_mode: ToolPermissionMode,
 ) -> Result<Option<(Plan, Report, InvestigationSession)>, RunError> {
     let (presenter, tx) = Presenter::new();
     let handle = presenter.spawn();
-    let outcome = invoke_workflow(question, saved_session, tx.clone()).await;
+    let outcome = invoke_workflow(question, saved_session, tx.clone(), permission_mode).await;
     drop(tx);
 
     if let Err(error) = handle.await {
@@ -131,9 +134,10 @@ async fn invoke_workflow(
     question: &str,
     saved_session: InvestigationSession,
     tx: UnboundedSender<crate::agent::agents::AgentEvent>,
+    permission_mode: ToolPermissionMode,
 ) -> Result<Option<(Plan, Report, InvestigationSession)>, RunError> {
     let provider = GoogleClient::pooled();
-    let runner = ReactLoop::new(provider);
+    let runner = ReactLoop::new_with_policy(provider, permission_mode.to_policy());
     let mut workflow = Investigator::new(runner, CliToolProvider).with_events_streaming(tx);
     tokio::select! {
         result = workflow.run_with_session(question, saved_session) => {
@@ -169,7 +173,7 @@ fn print_result(plan: &Plan, report: &Report) {
     }
 }
 
-fn print_recommendation(command: &crate::agent::workflows::next_cmd::NextCommand) {
+fn print_recommendation(command: &NextCommand) {
     println!("\n─── Suggested Command ───");
     println!("{}", command.cmd);
     println!("{} ({:?})", command.man, command.scale);
