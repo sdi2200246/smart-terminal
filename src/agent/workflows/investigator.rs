@@ -1,9 +1,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
-use crate::agent::agents::Agent;
-use crate::agent::agents::AgentEvent;
+use crate::agent::agents::{AgentBuilder, AgentEvent};
 use crate::agent::error::AgentError;
 use crate::agent::patterns::react::ReactLoop;
 use crate::agent::workflows::next_cmd::NextCommand;
@@ -15,8 +13,8 @@ use crate::utils::FlatSchema;
 use tokio::sync::mpsc::UnboundedSender;
 
 pub trait InvestigatorToolFactory {
-    fn planner_tools(&self, schema: Value) -> Vec<Box<dyn Capability>>;
-    fn executor_tools(&self, schema: Value) -> Vec<Box<dyn Capability>>;
+    fn planner_tools(&self) -> Vec<Box<dyn Capability>>;
+    fn executor_tools(&self) -> Vec<Box<dyn Capability>>;
 }
 
 #[derive(JsonSchema, Deserialize, Serialize, Debug)]
@@ -82,13 +80,13 @@ impl<'a, P: LLMProvider + Clone, F: InvestigatorToolFactory> Investigator<P, F> 
     ) -> Result<(Plan, Report, InvestigationSession), AgentError> {
         let question = question.into();
 
-        let mut planner_agent = Agent::planner(
+        let mut planner_agent = AgentBuilder::planner(
             Model::with_default_temp(ModelName::GptOss120B),
-            self.factory.planner_tools(Plan::schema()),
-        );
-        if let Some(stream) = &self.event_stream {
-            planner_agent = planner_agent.with_events_streaming(stream.clone());
-        }
+            self.factory.planner_tools(),
+            Plan::schema(),
+        )
+        .with_events_streaming_opt(self.event_stream.clone())
+        .build();
         let planner_prompt = planner_prompt(&question, &saved_session.completed_reports);
         let mut planner_session = match saved_session.planner.take() {
             Some(mut session) => {
@@ -110,13 +108,13 @@ impl<'a, P: LLMProvider + Clone, F: InvestigatorToolFactory> Investigator<P, F> 
             question, plan_json
         );
 
-        let mut executor_agent = Agent::executor(
+        let mut executor_agent = AgentBuilder::executor(
             Model::creative(ModelName::GptOss120B),
-            self.factory.executor_tools(Report::schema()),
-        );
-        if let Some(stream) = &self.event_stream {
-            executor_agent = executor_agent.with_events_streaming(stream.clone());
-        }
+            self.factory.executor_tools(),
+            Report::schema(),
+        )
+        .with_events_streaming_opt(self.event_stream.clone())
+        .build();
         let mut executor_session = match saved_session.executor.take() {
             Some(mut session) => {
                 session.add_user(user_prompt);
@@ -171,11 +169,11 @@ mod tests {
     struct EmptyToolFactory;
 
     impl InvestigatorToolFactory for EmptyToolFactory {
-        fn planner_tools(&self, _schema: Value) -> Vec<Box<dyn Capability>> {
+        fn planner_tools(&self) -> Vec<Box<dyn Capability>> {
             Vec::new()
         }
 
-        fn executor_tools(&self, _schema: Value) -> Vec<Box<dyn Capability>> {
+        fn executor_tools(&self) -> Vec<Box<dyn Capability>> {
             Vec::new()
         }
     }

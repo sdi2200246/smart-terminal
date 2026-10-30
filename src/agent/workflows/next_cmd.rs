@@ -4,9 +4,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
-use crate::agent::agents::Agent;
+use crate::agent::agents::AgentBuilder;
 use crate::agent::error::AgentError;
 use crate::agent::patterns::react::ReactLoop;
 use crate::core::capability::Capability;
@@ -16,7 +15,7 @@ use crate::core::model::{Model, ModelName};
 use crate::utils::FlatSchema;
 
 pub trait NextCmdToolFactory {
-    fn cmd_predictor_tools(&self, schema: Value) -> Vec<Box<dyn Capability>>;
+    fn cmd_predictor_tools(&self) -> Vec<Box<dyn Capability>>;
 }
 
 #[derive(JsonSchema, Deserialize, Serialize, Debug)]
@@ -65,10 +64,12 @@ impl<'a, P: LLMProvider + Clone, M: Memory, F: NextCmdToolFactory> NextCmd<'a, P
 
         let user_prompt = build_user_prompt(&input, history);
 
-        let mut agent = Agent::cmd_predictor(
+        let mut agent = AgentBuilder::cmd_predictor(
             Model::with_default_temp(ModelName::GptOss120B),
-            self.factory.cmd_predictor_tools(NextCommand::schema()),
-        );
+            self.factory.cmd_predictor_tools(),
+            NextCommand::schema(),
+        )
+        .build();
         let mut session = agent.build_session(user_prompt);
 
         let prediction: NextCommand = self.runner.run(&mut agent, &mut session).await?;
@@ -118,7 +119,6 @@ fn now_secs() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::capability::Capability;
     use crate::core::error::ProviderError;
     use crate::core::llm_client::AgentRequest;
     use crate::core::responce::{AgentResponse, AgentToolCall};
@@ -133,8 +133,8 @@ mod tests {
     struct MockToolFactory;
 
     impl NextCmdToolFactory for MockToolFactory {
-        fn cmd_predictor_tools(&self, _schema: Value) -> Vec<Box<dyn Capability>> {
-            return vec![];
+        fn cmd_predictor_tools(&self) -> Vec<Box<dyn Capability>> {
+            Vec::new()
         }
     }
 

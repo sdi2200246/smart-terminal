@@ -98,10 +98,11 @@ impl<P: LLMProvider> ReactLoop<P> {
         session: &mut AgentSession,
         agent: &mut Agent,
     ) -> Result<Option<AgentResponse>, AgentError> {
+        let schemas = agent.action_space.model_schemas();
         let request = AgentRequest {
             model: &agent.model,
             session,
-            tools_metadata: agent.registry.metadata(),
+            tools_metadata: &schemas,
         };
 
         match self.provider.complete(request).await {
@@ -156,11 +157,12 @@ impl<P: LLMProvider> ReactLoop<P> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agent::agents::AgentBuilder;
+    use crate::agent::signals::{FinalAnswerSignal, UpdateScratchpadSignal};
     use crate::agent::workflows::next_cmd::NextCommand;
     use crate::core::model::{Model, ModelName};
     use crate::core::responce::{AgentResponse, AgentToolCall};
     use crate::core::session::{ConversationEvent, ToolCall, ToolResult};
-    use crate::tools::scratchpad::UpdateScratchpad;
     use serde_json::{Value, json};
     use std::sync::{
         Arc,
@@ -204,7 +206,8 @@ mod tests {
         let structured_session_had_tools = Arc::new(AtomicBool::new(false));
         let provider = StructuredCallTracker(structured_session_had_tools.clone());
         let mut runner = ReactLoop::new(provider);
-        let mut agent = Agent::base("test", Model::with_default_temp(ModelName::GptOss120B));
+        let mut agent =
+            AgentBuilder::base("test", Model::with_default_temp(ModelName::GptOss120B)).build();
         let mut session = AgentSession::builder()
             .system("test")
             .user("original question")
@@ -268,8 +271,9 @@ mod tests {
         let provider = StopBeforeScratchpad::default();
         let calls = provider.0.clone();
         let mut runner = ReactLoop::new(provider);
-        let mut agent = Agent::base("test", Model::with_default_temp(ModelName::GptOss120B))
-            .with_tools(vec![Box::new(UpdateScratchpad)]);
+        let mut agent = AgentBuilder::base("test", Model::with_default_temp(ModelName::GptOss120B))
+            .with_signals(vec![Box::new(UpdateScratchpadSignal)])
+            .build();
         let mut session = AgentSession::builder()
             .system("test")
             .user("request")
@@ -282,5 +286,48 @@ mod tests {
 
         assert!(session.scratchpad.is_none());
         assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[derive(Clone)]
+    struct FinalAnswerSignalProvider;
+
+    impl LLMProvider for FinalAnswerSignalProvider {
+        async fn complete(
+            &self,
+            _request: AgentRequest<'_>,
+        ) -> Result<AgentResponse, ProviderError> {
+            Ok(AgentResponse::single(AgentToolCall::new(
+                "final_answer".into(),
+                "call_fa".into(),
+                json!({"cmd":"git status","man":"Check status.","scale":"Full"}),
+                None,
+            )))
+        }
+
+        async fn complete_structured(
+            &self,
+            _session: &AgentSession,
+            _schema: Value,
+        ) -> Result<Value, ProviderError> {
+            panic!("complete_structured should not be called when final_answer signal finishes loop");
+        }
+    }
+
+    #[tokio::test]
+    async fn final_answer_signal_ends_react_loop_with_value() {
+        let mut runner = ReactLoop::new(FinalAnswerSignalProvider);
+        let mut agent = AgentBuilder::base("test", Model::with_default_temp(ModelName::GptOss120B))
+            .with_signals(vec![Box::new(FinalAnswerSignal {
+                properties: NextCommand::schema(),
+            })])
+            .build();
+        let mut session = AgentSession::builder()
+            .system("test")
+            .user("status")
+            .build();
+
+        let result: NextCommand = runner.run(&mut agent, &mut session).await.unwrap();
+        assert_eq!(result.cmd, "git status");
+        assert_eq!(result.man, "Check status.");
     }
 }

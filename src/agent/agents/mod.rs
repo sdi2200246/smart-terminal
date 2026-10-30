@@ -1,91 +1,29 @@
+pub mod builder;
 mod contexts;
+pub mod events;
 pub mod hooks;
-use std::vec;
 
-use crate::agent::agents::hooks::{DefaultAgentHook, ToolsRegulator};
+pub use builder::AgentBuilder;
+pub use events::{AgentEvent, AgentState};
+
 use crate::agent::patterns::hook::AgentLoopHook;
 use crate::agent::patterns::tool_engine::PermissionDecision;
-use crate::agent::prompts::{
-    AgentPrompt, CMD_PREDICTOR_PROMPT, EXECUTOR_PROMPT, PLANNER_PROMPT, SystemPromptBuilder,
-};
-use crate::core::capability::{Capability, ToolRegistry};
+use crate::agent::signals::AgentActionSpace;
 use crate::core::model::Model;
 use crate::core::responce::AgentToolCall;
 use crate::core::session::AgentSession;
-use serde::Serialize;
 use tokio::sync::{mpsc::UnboundedSender, oneshot};
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum AgentState {
-    Thinking,
-    ExecutingTool,
-    StructuringOutput,
-    Completed,
-    Failed,
-}
-
-pub enum AgentEvent {
-    StateUpdate(AgentState),
-    ToolCall(AgentToolCall),
-    ToolApprovalRequest {
-        call: AgentToolCall,
-        responder: oneshot::Sender<PermissionDecision>,
-    },
-}
-
-impl AgentState {
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Thinking => "Thinking",
-            Self::ExecutingTool => "Executing tool",
-            Self::StructuringOutput => "Structuring output",
-            Self::Completed => "Completed",
-            Self::Failed => "Failed",
-        }
-    }
-}
-
 pub struct Agent {
-    pub registry: ToolRegistry,
+    pub action_space: AgentActionSpace,
     pub system_prompt: String,
     pub model: Model,
     pub hooks: Box<dyn AgentLoopHook>,
     pub context: Option<String>,
-    event_stream: Option<UnboundedSender<AgentEvent>>,
+    pub(crate) event_stream: Option<UnboundedSender<AgentEvent>>,
 }
 
 impl Agent {
-    pub fn base(system_prompt: impl Into<String>, model: Model) -> Self {
-        Self {
-            registry: ToolRegistry::new(vec![]),
-            system_prompt: system_prompt.into(),
-            model,
-            hooks: Box::new(DefaultAgentHook),
-            context: None,
-            event_stream: None,
-        }
-    }
-
-    pub fn with_tools(mut self, tools: Vec<Box<dyn Capability>>) -> Self {
-        self.registry = ToolRegistry::new(tools);
-        self
-    }
-
-    pub fn with_context<C: Serialize>(mut self, ctx: &C) -> Self {
-        self.context = Some(serde_json::to_string_pretty(ctx).expect("context serializes"));
-        self
-    }
-
-    pub fn with_hook(mut self, hook: Box<dyn AgentLoopHook>) -> Self {
-        self.hooks = hook;
-        self
-    }
-
-    pub fn with_events_streaming(mut self, tx: UnboundedSender<AgentEvent>) -> Self {
-        self.event_stream = Some(tx);
-        self
-    }
-
     pub(crate) fn stream_tool_call(&self, call: &AgentToolCall) {
         if let Some(stream) = &self.event_stream {
             if let Err(error) = stream.send(AgentEvent::ToolCall(call.clone())) {
@@ -122,32 +60,6 @@ impl Agent {
         }
     }
 
-    pub fn planner(model: Model, tools: Vec<Box<dyn Capability>>) -> Self {
-        Self::for_prompt(PLANNER_PROMPT, model, tools)
-            .with_context(&contexts::ShellEnv::gather())
-            .with_hook(Box::new(ToolsRegulator::new()))
-    }
-
-    pub fn executor(model: Model, tools: Vec<Box<dyn Capability>>) -> Self {
-        Self::for_prompt(EXECUTOR_PROMPT, model, tools)
-            .with_context(&contexts::ShellEnv::gather())
-            .with_hook(Box::new(ToolsRegulator::new()))
-    }
-
-    pub fn cmd_predictor(model: Model, tools: Vec<Box<dyn Capability>>) -> Self {
-        Self::for_prompt(CMD_PREDICTOR_PROMPT, model, tools)
-            .with_context(&contexts::ShellEnv::gather())
-    }
-
-    fn for_prompt(prompt: AgentPrompt, model: Model, tools: Vec<Box<dyn Capability>>) -> Self {
-        let mut agent = Self::base("", model).with_tools(tools);
-        agent.system_prompt = SystemPromptBuilder::new(prompt)
-            .available_tools(agent.registry.metadata())
-            .tool_guidance(agent.registry.prompt_guidance())
-            .build();
-        agent
-    }
-
     pub fn build_session(&self, user_prompt: impl Into<String>) -> AgentSession {
         let mut builder = AgentSession::builder().system(self.system_prompt.clone());
         if let Some(ctx) = &self.context {
@@ -165,11 +77,12 @@ mod tests {
     #[test]
     fn state_updates_are_sent_to_the_presenter() {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-        let agent = Agent::base(
+        let agent = AgentBuilder::base(
             "test prompt",
             Model::with_default_temp(ModelName::GptOss120B),
         )
-        .with_events_streaming(tx);
+        .with_events_streaming(tx)
+        .build();
 
         agent.update_state(AgentState::ExecutingTool);
 

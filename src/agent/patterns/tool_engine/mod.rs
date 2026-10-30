@@ -1,65 +1,21 @@
+mod policy;
+mod signal_dispatcher;
+mod tool_dispatcher;
+
+pub use policy::{PermissionDecision, ToolExecutionPolicy, ToolPermissionMode};
+pub use signal_dispatcher::SignalDispatcher;
+pub use tool_dispatcher::ToolDispatcher;
+
 use crate::agent::agents::Agent;
-use crate::core::capability::ToolSafety;
+use crate::agent::signals::{AgentAction, ModelCall};
 use crate::core::responce::{AgentResponse, AgentToolCall};
-use crate::core::session::{AgentSession, Scratchpad, ToolCall, ToolResult};
+use crate::core::session::{AgentSession, ToolCall, ToolResult};
 use serde_json::Value;
-use tokio::sync::oneshot;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum PermissionDecision {
-    Approved,
-    Denied(String),
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
-pub enum ToolPermissionMode {
-    Prompt,
-    Allow,
-    Deny,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ToolExecutionPolicy {
-    pub allow_safe_tools_without_prompt: bool,
-    pub auto_execute_mutating_tools: bool,
-    pub deny_mutating_tools: bool,
-    pub blacklisted_tools: Vec<String>,
-}
-
-impl Default for ToolExecutionPolicy {
-    fn default() -> Self {
-        Self {
-            allow_safe_tools_without_prompt: true,
-            auto_execute_mutating_tools: false,
-            deny_mutating_tools: false,
-            blacklisted_tools: Vec::new(),
-        }
-    }
-}
-
-impl ToolPermissionMode {
-    pub fn to_policy(self) -> ToolExecutionPolicy {
-        match self {
-            Self::Prompt => ToolExecutionPolicy::default(),
-            Self::Allow => ToolExecutionPolicy {
-                allow_safe_tools_without_prompt: true,
-                auto_execute_mutating_tools: true,
-                deny_mutating_tools: false,
-                blacklisted_tools: Vec::new(),
-            },
-            Self::Deny => ToolExecutionPolicy {
-                allow_safe_tools_without_prompt: true,
-                auto_execute_mutating_tools: false,
-                deny_mutating_tools: true,
-                blacklisted_tools: Vec::new(),
-            },
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct ToolExecutionEngine {
-    policy: ToolExecutionPolicy,
+    signal_dispatcher: SignalDispatcher,
+    tool_dispatcher: ToolDispatcher,
 }
 
 impl ToolExecutionEngine {
@@ -68,11 +24,14 @@ impl ToolExecutionEngine {
     }
 
     pub fn new_with_policy(policy: ToolExecutionPolicy) -> Self {
-        Self { policy }
+        Self {
+            signal_dispatcher: SignalDispatcher,
+            tool_dispatcher: ToolDispatcher::new(policy),
+        }
     }
 
     pub fn policy(&self) -> &ToolExecutionPolicy {
-        &self.policy
+        self.tool_dispatcher.policy()
     }
 
     pub async fn dispatch_tool_batch(
@@ -97,7 +56,10 @@ impl ToolExecutionEngine {
     fn notify_and_stream_calls(&self, agent: &mut Agent, calls: &[AgentToolCall]) {
         for call in calls {
             agent.hooks.on_tool_received(call);
-            if call.name() != "update_scratchpad" && call.name() != "final_answer" {
+            if !matches!(
+                agent.action_space.get(call.name()),
+                Some(AgentAction::Signal(_))
+            ) {
                 agent.stream_tool_call(call);
             }
         }
@@ -120,131 +82,82 @@ impl ToolExecutionEngine {
         agent: &mut Agent,
         calls: &[AgentToolCall],
     ) -> (Vec<ToolResult>, Option<Value>) {
-        let mut results = Vec::with_capacity(calls.len());
-        let mut final_answer = None;
+        // Pre-sized so every call keeps its position.
+        let mut results: Vec<Option<ToolResult>> = (0..calls.len()).map(|_| None).collect();
 
-        for call in calls {
-            let (payload, _) = self.execute_single_tool(session, agent, call, &mut final_answer).await;
-            results.push(ToolResult::new(call.name(), payload, call.id()));
-        }
-
-        (results, final_answer)
-    }
-
-    async fn check_tool_permissions(&self, agent: &mut Agent, call: &AgentToolCall) -> PermissionDecision {
-        let Some(tool) = agent.registry.get(call.name()) else {
-            return PermissionDecision::Denied(format!("Unknown tool: {}", call.name()));
-        };
-
-        let metadata = tool.metadata();
-        if self.policy.blacklisted_tools.iter().any(|name| name == call.name()) {
-            return PermissionDecision::Denied(format!(
-                "Tool '{}' is disabled by policy.",
-                call.name()
-            ));
-        }
-
-        if metadata.safety == ToolSafety::Safe && self.policy.allow_safe_tools_without_prompt {
-            return PermissionDecision::Approved;
-        }
-
-        if matches!(metadata.safety, ToolSafety::Mutating) {
-            if self.policy.deny_mutating_tools {
-                return PermissionDecision::Denied(format!(
-                    "Tool '{}' is blocked by the current run permission policy.",
-                    call.name()
-                ));
-            }
-
-            if self.policy.auto_execute_mutating_tools {
-                return PermissionDecision::Approved;
-            }
-
-            let (tx, rx) = oneshot::channel();
-            agent.request_tool_approval(call, tx);
-            match rx.await {
-                Ok(decision) => decision,
-                Err(_) => PermissionDecision::Denied(format!(
-                    "Tool '{}' requires approval but the approval request was cancelled.",
-                    call.name()
-                )),
-            }
-        } else {
-            PermissionDecision::Approved
-        }
-    }
-
-    async fn execute_single_tool(
-        &self,
-        session: &mut AgentSession,
-        agent: &mut Agent,
-        call: &AgentToolCall,
-        final_answer: &mut Option<Value>,
-    ) -> (String, bool) {
-        match call.name() {
-            "update_scratchpad" => (self.execute_scratchpad_update(session, call.clone()), false),
-            _ => {
-                match self.check_tool_permissions(agent, call).await {
-                    PermissionDecision::Approved => match self.execute_tool(agent, call) {
-                        Ok(result) => {
-                            if call.name() == "final_answer" {
-                                *final_answer = Some(call.arguments().clone());
-                            }
-                            (result, false)
-                        }
-                        Err(e) => {
-                            let msg = format!("Tool '{}' failed: {}", call.name(), e);
-                            agent.hooks.on_tool_failed(call, &msg);
-                            (msg, false)
-                        }
-                    },
-                    PermissionDecision::Denied(reason) => {
-                        let msg = format!("Tool '{}' failed: {}", call.name(), reason);
-                        agent.hooks.on_tool_failed(call, &reason);
-                        (msg, true)
-                    }
+        // 1. Decode once, at the boundary.
+        let mut signals = Vec::new();
+        let mut tools = Vec::new();
+        for call in agent.action_space.decode(calls) {
+            match call {
+                ModelCall::Signal(s) => signals.push(s),
+                ModelCall::Tool(t) => tools.push(t),
+                ModelCall::Unknown { pos, name } => {
+                    let orig = &calls[pos];
+                    let reason = format!("Unknown tool: {}", name);
+                    let msg = format!("Tool '{}' failed: {}", name, reason);
+                    agent.hooks.on_tool_failed(orig, &reason);
+                    results[pos] = Some(ToolResult::new(name, msg, orig.id()));
                 }
             }
         }
-    }
 
-    fn execute_tool(&self, agent: &mut Agent, call: &AgentToolCall) -> Result<String, String> {
-        agent
-            .registry
-            .get(call.name())
-            .expect("correct_tool_name")
-            .execute(call.arguments().clone())
-            .map_err(|e| {
-                let msg = e.to_string();
-                agent.hooks.on_tool_failed(call, &msg);
-                msg
-            })
-    }
-
-    fn execute_scratchpad_update(&self, session: &mut AgentSession, call: AgentToolCall) -> String {
-        match serde_json::from_value::<Scratchpad>(call.arguments()) {
-            Ok(sp) => {
-                session.update_scratchpad(sp);
-                "scratchpad updated successfully".to_string()
-            }
-            Err(e) => format!(
-                "Tool 'update_scratchpad' failed: invalid scratchpad — {}",
-                e
-            ),
+        // 2. Signals first. Sequential, main thread.
+        let (signal_results, final_answer) = self
+            .signal_dispatcher
+            .run(signals, calls, session, agent);
+        for (pos, r) in signal_results {
+            results[pos] = Some(r);
         }
+
+        // 3. Tools: authorize on the main thread, then execute.
+        let (permitted, denied) = self
+            .tool_dispatcher
+            .authorize(tools, calls, session, agent)
+            .await;
+        for (pos, r) in denied {
+            results[pos] = Some(r);
+        }
+        for (pos, r) in self.tool_dispatcher.execute(permitted, calls, agent).await {
+            results[pos] = Some(r);
+        }
+
+        // 4. Every call has exactly one result, in the original order.
+        let results = results
+            .into_iter()
+            .enumerate()
+            .map(|(pos, r)| {
+                r.unwrap_or_else(|| {
+                    let orig = &calls[pos];
+                    ToolResult::new(
+                        orig.name(),
+                        "internal error: no result for call",
+                        orig.id(),
+                    )
+                })
+            })
+            .collect();
+        (results, final_answer)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::agents::Agent;
+    use crate::agent::agents::{Agent, AgentBuilder};
+    use crate::agent::signals::{
+        AgentLoopControl, AgentSignal, AgentSignalContext, AgentSignalOutcome,
+        UpdateScratchpadSignal,
+    };
     use crate::core::capability::{Capability, ToolMetaData, ToolSafety};
     use crate::core::model::{Model, ModelName};
     use crate::core::session::ConversationEvent;
     use crate::tools::error::ToolError;
-    use crate::tools::scratchpad::UpdateScratchpad;
     use serde_json::json;
+    use std::sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    };
 
     struct Echo;
     impl Capability for Echo {
@@ -285,7 +198,7 @@ mod tests {
     }
 
     struct FinalAnswer;
-    impl Capability for FinalAnswer {
+    impl AgentSignal for FinalAnswer {
         fn name(&self) -> &'static str {
             "final_answer"
         }
@@ -297,8 +210,15 @@ mod tests {
                 safety: ToolSafety::Safe,
             }
         }
-        fn execute(&self, args: Value) -> Result<String, ToolError> {
-            Ok(args.to_string())
+        fn handle(
+            &self,
+            args: Value,
+            _ctx: &mut AgentSignalContext<'_>,
+        ) -> Result<AgentSignalOutcome, ToolError> {
+            Ok(AgentSignalOutcome {
+                result: args.to_string(),
+                control: AgentLoopControl::Finish(args),
+            })
         }
     }
 
@@ -320,12 +240,16 @@ mod tests {
         }
     }
 
-    fn test_agent(tools: Vec<Box<dyn Capability>>) -> Agent {
-        Agent::base(
+    fn test_agent_builder(tools: Vec<Box<dyn Capability>>) -> AgentBuilder {
+        AgentBuilder::base(
             "test prompt",
             Model::with_default_temp(ModelName::GptOss120B),
         )
         .with_tools(tools)
+    }
+
+    fn test_agent(tools: Vec<Box<dyn Capability>>) -> Agent {
+        test_agent_builder(tools).build()
     }
 
     fn call(name: &str, id: &str, args: Value) -> AgentToolCall {
@@ -381,7 +305,6 @@ mod tests {
             }
             other => panic!("expected ToolResults, got {other:?}"),
         }
-
     }
 
     #[tokio::test]
@@ -439,7 +362,9 @@ mod tests {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let engine = ToolExecutionEngine::new();
         let mut session = AgentSession::new(5);
-        let mut agent = test_agent(vec![Box::new(Boom)]).with_events_streaming(tx);
+        let mut agent = test_agent_builder(vec![Box::new(Boom)])
+            .with_events_streaming(tx)
+            .build();
 
         engine
             .dispatch_tool_batch(
@@ -459,7 +384,9 @@ mod tests {
     async fn final_answer_call_sets_session_final_answer() {
         let engine = ToolExecutionEngine::new();
         let mut session = AgentSession::new(5);
-        let mut agent = test_agent(vec![Box::new(FinalAnswer)]);
+        let mut agent = test_agent_builder(vec![])
+            .with_signals(vec![Box::new(FinalAnswer)])
+            .build();
 
         engine
             .dispatch_tool_batch(
@@ -477,7 +404,9 @@ mod tests {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let engine = ToolExecutionEngine::new();
         let mut session = AgentSession::new(5);
-        let mut agent = test_agent(vec![Box::new(Echo)]).with_events_streaming(tx);
+        let mut agent = test_agent_builder(vec![Box::new(Echo)])
+            .with_events_streaming(tx)
+            .build();
 
         engine
             .dispatch_tool_batch(
@@ -499,7 +428,10 @@ mod tests {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let engine = ToolExecutionEngine::new();
         let mut session = AgentSession::new(5);
-        let mut agent = test_agent(vec![Box::new(FinalAnswer)]).with_events_streaming(tx);
+        let mut agent = test_agent_builder(vec![])
+            .with_signals(vec![Box::new(FinalAnswer)])
+            .with_events_streaming(tx)
+            .build();
 
         engine
             .dispatch_tool_batch(
@@ -551,7 +483,9 @@ mod tests {
         let mut response = AgentResponse::new();
         response.push(call("echo", "call_1", json!({})));
         response.push(call("boom", "call_2", json!({})));
-        engine.dispatch_tool_batch(&mut session, &mut agent, response).await;
+        engine
+            .dispatch_tool_batch(&mut session, &mut agent, response)
+            .await;
 
         match session.events().last().unwrap() {
             ConversationEvent::ToolResults(rs) => {
@@ -576,7 +510,9 @@ mod tests {
     async fn scratchpad_update_success_mutates_session_and_returns_confirmation() {
         let engine = ToolExecutionEngine::new();
         let mut session = AgentSession::builder().user("investigate").build();
-        let mut agent = test_agent(vec![]);
+        let mut agent = test_agent_builder(vec![])
+            .with_signals(vec![Box::new(UpdateScratchpadSignal)])
+            .build();
 
         engine
             .dispatch_tool_batch(
@@ -606,7 +542,9 @@ mod tests {
     async fn scratchpad_update_invalid_args_leaves_session_scratchpad_untouched() {
         let engine = ToolExecutionEngine::new();
         let mut session = AgentSession::builder().user("investigate").build();
-        let mut agent = test_agent(vec![]);
+        let mut agent = test_agent_builder(vec![])
+            .with_signals(vec![Box::new(UpdateScratchpadSignal)])
+            .build();
 
         // missing required fields -> serde_json::from_value fails
         let bad_args = json!({ "main_goal": "only this field" });
@@ -635,7 +573,10 @@ mod tests {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let engine = ToolExecutionEngine::new();
         let mut session = AgentSession::new(5);
-        let mut agent = test_agent(vec![]).with_events_streaming(tx);
+        let mut agent = test_agent_builder(vec![])
+            .with_signals(vec![Box::new(UpdateScratchpadSignal)])
+            .with_events_streaming(tx)
+            .build();
 
         engine
             .dispatch_tool_batch(
@@ -653,10 +594,12 @@ mod tests {
 
     #[tokio::test]
     async fn scratchpad_update_does_not_go_through_registry() {
-        // empty registry — if execute_tool were hit, `.expect("correct_tool_name")` would panic
-        let engine = ToolExecutionEngine::new();
+        // Registered as a signal, not a tool capability; even under deny policy it skips tool permission check
+        let engine = ToolExecutionEngine::new_with_policy(ToolPermissionMode::Deny.to_policy());
         let mut session = AgentSession::new(5);
-        let mut agent = test_agent(vec![]);
+        let mut agent = test_agent_builder(vec![])
+            .with_signals(vec![Box::new(UpdateScratchpadSignal)])
+            .build();
 
         engine
             .dispatch_tool_batch(
@@ -665,13 +608,17 @@ mod tests {
                 AgentResponse::single(call("update_scratchpad", "call_1", valid_scratchpad_args())),
             )
             .await;
+
+        assert!(session.scratchpad.is_some());
     }
 
     #[tokio::test]
     async fn final_answer_is_not_gated_by_scratchpad_updates() {
         let engine = ToolExecutionEngine::new();
         let mut session = AgentSession::builder().user("request").build();
-        let mut agent = test_agent(vec![Box::new(UpdateScratchpad), Box::new(FinalAnswer)]);
+        let mut agent = test_agent_builder(vec![])
+            .with_signals(vec![Box::new(UpdateScratchpadSignal), Box::new(FinalAnswer)])
+            .build();
 
         engine
             .dispatch_tool_batch(
@@ -683,4 +630,257 @@ mod tests {
 
         assert_eq!(session.final_answer, Some(json!({"ok": true})));
     }
+
+    struct FailingSignal;
+    impl AgentSignal for FailingSignal {
+        fn name(&self) -> &'static str {
+            "failing_sig"
+        }
+        fn metadata(&self) -> ToolMetaData {
+            ToolMetaData {
+                name: self.name().into(),
+                description: "always fails".into(),
+                parameters: json!({"type":"object","properties":{}}),
+                safety: ToolSafety::Safe,
+            }
+        }
+        fn handle(
+            &self,
+            _args: Value,
+            _ctx: &mut AgentSignalContext<'_>,
+        ) -> Result<AgentSignalOutcome, ToolError> {
+            Err(ToolError::ArgumentsParsing {
+                source: anyhow::anyhow!("signal bad input"),
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn signal_returning_error_becomes_error_result_not_panic() {
+        let engine = ToolExecutionEngine::new();
+        let mut session = AgentSession::new(5);
+        let mut agent = test_agent_builder(vec![])
+            .with_signals(vec![Box::new(FailingSignal)])
+            .build();
+
+        engine
+            .dispatch_tool_batch(
+                &mut session,
+                &mut agent,
+                AgentResponse::single(call("failing_sig", "call_1", json!({}))),
+            )
+            .await;
+
+        match session.events().last().unwrap() {
+            ConversationEvent::ToolResults(rs) => {
+                assert_eq!(rs[0].id, "call_1");
+                assert!(rs[0].result.contains("Tool 'failing_sig' failed"));
+                assert!(rs[0].result.contains("signal bad input"));
+            }
+            other => panic!("expected ToolResults, got {other:?}"),
+        }
+    }
+
+    struct LoggedTool {
+        name: &'static str,
+        log: Arc<Mutex<Vec<&'static str>>>,
+    }
+    impl Capability for LoggedTool {
+        fn name(&self) -> &'static str {
+            self.name
+        }
+        fn metadata(&self) -> ToolMetaData {
+            ToolMetaData {
+                name: self.name.into(),
+                description: "logged tool".into(),
+                parameters: json!({"type":"object","properties":{}}),
+                safety: ToolSafety::Safe,
+            }
+        }
+        fn execute(&self, _args: Value) -> Result<String, ToolError> {
+            self.log.lock().unwrap().push(self.name);
+            Ok(format!("tool:{}", self.name))
+        }
+    }
+
+    struct LoggedSignal {
+        name: &'static str,
+        log: Arc<Mutex<Vec<&'static str>>>,
+    }
+    impl AgentSignal for LoggedSignal {
+        fn name(&self) -> &'static str {
+            self.name
+        }
+        fn metadata(&self) -> ToolMetaData {
+            ToolMetaData {
+                name: self.name.into(),
+                description: "logged signal".into(),
+                parameters: json!({"type":"object","properties":{}}),
+                safety: ToolSafety::Safe,
+            }
+        }
+        fn handle(
+            &self,
+            _args: Value,
+            _ctx: &mut AgentSignalContext<'_>,
+        ) -> Result<AgentSignalOutcome, ToolError> {
+            self.log.lock().unwrap().push(self.name);
+            Ok(AgentSignalOutcome {
+                result: format!("sig:{}", self.name),
+                control: AgentLoopControl::Continue,
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn mixed_batch_runs_signals_before_tools_and_preserves_call_order() {
+        let log = Arc::new(Mutex::new(Vec::new()));
+        let engine = ToolExecutionEngine::new();
+        let mut session = AgentSession::new(5);
+        let mut agent = test_agent_builder(vec![
+            Box::new(LoggedTool {
+                name: "tool_a",
+                log: log.clone(),
+            }),
+            Box::new(LoggedTool {
+                name: "tool_b",
+                log: log.clone(),
+            }),
+        ])
+        .with_signals(vec![Box::new(LoggedSignal {
+            name: "sig_s",
+            log: log.clone(),
+        })])
+        .build();
+
+        let mut response = AgentResponse::new();
+        response.push(call("tool_a", "id_a", json!({})));
+        response.push(call("sig_s", "id_s", json!({})));
+        response.push(call("tool_b", "id_b", json!({})));
+
+        engine
+            .dispatch_tool_batch(&mut session, &mut agent, response)
+            .await;
+
+        // S ran before A and B
+        assert_eq!(*log.lock().unwrap(), vec!["sig_s", "tool_a", "tool_b"]);
+
+        // Results returned in original call order [A, S, B]
+        match session.events().last().unwrap() {
+            ConversationEvent::ToolResults(rs) => {
+                assert_eq!(rs.len(), 3);
+                assert_eq!(rs[0].id, "id_a");
+                assert_eq!(rs[0].name, "tool_a");
+                assert_eq!(rs[0].result, "tool:tool_a");
+
+                assert_eq!(rs[1].id, "id_s");
+                assert_eq!(rs[1].name, "sig_s");
+                assert_eq!(rs[1].result, "sig:sig_s");
+
+                assert_eq!(rs[2].id, "id_b");
+                assert_eq!(rs[2].name, "tool_b");
+                assert_eq!(rs[2].result, "tool:tool_b");
+            }
+            other => panic!("expected ToolResults, got {other:?}"),
+        }
+    }
+
+    struct TrackedMutatingTool {
+        executed: Arc<AtomicBool>,
+    }
+    impl Capability for TrackedMutatingTool {
+        fn name(&self) -> &'static str {
+            "mutating_op"
+        }
+        fn metadata(&self) -> ToolMetaData {
+            ToolMetaData {
+                name: self.name().into(),
+                description: "mutating op".into(),
+                parameters: json!({"type":"object","properties":{}}),
+                safety: ToolSafety::Mutating,
+            }
+        }
+        fn execute(&self, _args: Value) -> Result<String, ToolError> {
+            self.executed.store(true, Ordering::SeqCst);
+            Ok("ran mutating_op".into())
+        }
+    }
+
+    #[tokio::test]
+    async fn denied_tool_never_reaches_execute_and_result_is_in_right_position() {
+        let executed = Arc::new(AtomicBool::new(false));
+        let engine = ToolExecutionEngine::new_with_policy(ToolPermissionMode::Deny.to_policy());
+        let mut session = AgentSession::new(5);
+        let mut agent = test_agent_builder(vec![
+            Box::new(Echo),
+            Box::new(TrackedMutatingTool {
+                executed: executed.clone(),
+            }),
+        ])
+        .with_signals(vec![Box::new(UpdateScratchpadSignal)])
+        .build();
+
+        let mut response = AgentResponse::new();
+        response.push(call("echo", "id_0", json!({"n": 1})));
+        response.push(call("mutating_op", "id_1", json!({})));
+        response.push(call("update_scratchpad", "id_2", valid_scratchpad_args()));
+
+        engine
+            .dispatch_tool_batch(&mut session, &mut agent, response)
+            .await;
+
+        assert!(
+            !executed.load(Ordering::SeqCst),
+            "denied tool must never reach execute"
+        );
+
+        match session.events().last().unwrap() {
+            ConversationEvent::ToolResults(rs) => {
+                assert_eq!(rs.len(), 3);
+                assert_eq!(rs[0].id, "id_0");
+                assert!(rs[0].result.starts_with("echo:"));
+
+                assert_eq!(rs[1].id, "id_1");
+                assert_eq!(rs[1].name, "mutating_op");
+                assert!(rs[1].result.contains("Tool 'mutating_op' failed"));
+                assert!(rs[1].result.contains("blocked by the current run permission policy"));
+
+                assert_eq!(rs[2].id, "id_2");
+                assert_eq!(rs[2].result, "scratchpad updated successfully");
+            }
+            other => panic!("expected ToolResults, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn unknown_tool_name_behaves_as_before() {
+        let engine = ToolExecutionEngine::new();
+        let mut session = AgentSession::new(5);
+        let mut agent = test_agent(vec![Box::new(Echo)]);
+
+        let mut response = AgentResponse::new();
+        response.push(call("echo", "id_0", json!({})));
+        response.push(call("nonexistent_tool", "id_1", json!({})));
+
+        engine
+            .dispatch_tool_batch(&mut session, &mut agent, response)
+            .await;
+
+        match session.events().last().unwrap() {
+            ConversationEvent::ToolResults(rs) => {
+                assert_eq!(rs.len(), 2);
+                assert_eq!(rs[0].id, "id_0");
+                assert!(rs[0].result.starts_with("echo:"));
+
+                assert_eq!(rs[1].id, "id_1");
+                assert_eq!(rs[1].name, "nonexistent_tool");
+                assert_eq!(
+                    rs[1].result,
+                    "Tool 'nonexistent_tool' failed: Unknown tool: nonexistent_tool"
+                );
+            }
+            other => panic!("expected ToolResults, got {other:?}"),
+        }
+    }
 }
+

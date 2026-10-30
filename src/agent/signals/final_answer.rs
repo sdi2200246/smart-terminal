@@ -1,12 +1,13 @@
-use super::error::ToolError;
-use crate::core::capability::{Capability, ToolMetaData, ToolSafety};
+use super::{AgentLoopControl, AgentSignal, AgentSignalContext, AgentSignalOutcome};
+use crate::core::capability::{ToolMetaData, ToolSafety};
+use crate::tools::error::ToolError;
 use serde_json::Value;
 
-pub struct Json {
+pub struct FinalAnswerSignal {
     pub properties: Value,
 }
 
-impl Capability for Json {
+impl AgentSignal for FinalAnswerSignal {
     fn name(&self) -> &'static str {
         "final_answer"
     }
@@ -20,7 +21,11 @@ impl Capability for Json {
         }
     }
 
-    fn execute(&self, args: Value) -> Result<String, ToolError> {
+    fn handle(
+        &self,
+        args: Value,
+        _ctx: &mut AgentSignalContext<'_>,
+    ) -> Result<AgentSignalOutcome, ToolError> {
         let validator = jsonschema::validator_for(&self.properties).map_err(|e| {
             ToolError::ArgumentsParsing {
                 source: anyhow::anyhow!("Invalid contract schema: {}", e),
@@ -28,7 +33,11 @@ impl Capability for Json {
         })?;
 
         if validator.is_valid(&args) {
-            Ok(args.to_string())
+            let result = args.to_string();
+            Ok(AgentSignalOutcome {
+                result,
+                control: AgentLoopControl::Finish(args),
+            })
         } else {
             let errors: Vec<String> = validator
                 .iter_errors(&args)
@@ -44,6 +53,9 @@ impl Capability for Json {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agent::agents::AgentBuilder;
+    use crate::core::model::{Model, ModelName};
+    use crate::core::session::AgentSession;
     use crate::utils::FlatSchema;
     use schemars::JsonSchema;
     use serde::Deserialize;
@@ -64,49 +76,64 @@ mod tests {
     }
     impl FlatSchema for NextCommand {}
 
-    fn json_tool(schema: Value) -> Json {
-        Json { properties: schema }
+    fn final_answer_signal(schema: Value) -> FinalAnswerSignal {
+        FinalAnswerSignal { properties: schema }
+    }
+
+    fn run_signal(
+        signal: &FinalAnswerSignal,
+        args: Value,
+    ) -> Result<AgentSignalOutcome, ToolError> {
+        let mut session = AgentSession::new(5);
+        let mut agent =
+            AgentBuilder::base("test", Model::with_default_temp(ModelName::GptOss120B)).build();
+        let mut ctx = AgentSignalContext {
+            session: &mut session,
+            agent: &mut agent,
+        };
+        signal.handle(args, &mut ctx)
     }
 
     #[test]
     fn accepts_valid_args() {
-        let tool = json_tool(Script::schema());
+        let signal = final_answer_signal(Script::schema());
         let args = json!({ "_script": "#!/bin/bash\necho hello" });
-        let result = tool.execute(args.clone());
+        let result = run_signal(&signal, args.clone());
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), args.to_string());
+        let outcome = result.unwrap();
+        assert_eq!(outcome.result, args.to_string());
+        assert_eq!(outcome.control, AgentLoopControl::Finish(args));
     }
 
     #[test]
     fn rejects_missing_required_field() {
-        let tool = json_tool(NextCommand::schema());
+        let signal = final_answer_signal(NextCommand::schema());
         let args = json!({ "_cmd": "ls -la" });
-        let result = tool.execute(args);
+        let result = run_signal(&signal, args);
         assert!(matches!(result, Err(ToolError::ArgumentsParsing { .. })));
     }
 
     #[test]
     fn rejects_wrong_type() {
-        let tool = json_tool(Script::schema());
+        let signal = final_answer_signal(Script::schema());
         let args = json!({ "_script": 42 });
-        let result = tool.execute(args);
+        let result = run_signal(&signal, args);
         assert!(matches!(result, Err(ToolError::ArgumentsParsing { .. })));
     }
 
     #[test]
     fn rejects_unknown_field() {
-        let tool = json_tool(Script::schema());
+        let signal = final_answer_signal(Script::schema());
         let args = json!({ "_script": "echo hi", "extra": "nope" });
-        let result = tool.execute(args);
+        let result = run_signal(&signal, args);
         assert!(matches!(result, Err(ToolError::ArgumentsParsing { .. })));
     }
 
     #[test]
     fn error_message_includes_validation_detail() {
-        let tool = json_tool(NextCommand::schema());
+        let signal = final_answer_signal(NextCommand::schema());
         let args = json!({ "cmd": "ls" });
-        let err = tool.execute(args).unwrap_err();
-        // The wrapped anyhow error should mention what went wrong.
+        let err = run_signal(&signal, args).unwrap_err();
         let source = std::error::Error::source(&err)
             .map(|s| s.to_string())
             .unwrap_or_default();
@@ -119,9 +146,10 @@ mod tests {
     #[test]
     fn metadata_exposes_schema() {
         let schema = Script::schema();
-        let tool = json_tool(schema.clone());
-        let meta = tool.metadata();
+        let signal = final_answer_signal(schema.clone());
+        let meta = signal.metadata();
         assert_eq!(meta.name, "final_answer");
         assert_eq!(meta.parameters, schema);
     }
 }
+
