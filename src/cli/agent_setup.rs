@@ -1,5 +1,3 @@
-use serde_json::Value;
-
 use crate::agent::workflows::investigator::InvestigatorToolFactory;
 use crate::agent::workflows::next_cmd::NextCmdToolFactory;
 use crate::core::capability::Capability;
@@ -7,45 +5,36 @@ use crate::core::capability::Capability;
 use crate::tools::bash::Bash;
 use crate::tools::docker::Docker;
 use crate::tools::git_diff::GitDiffStaged;
-use crate::tools::json::Json;
 use crate::tools::last_error::ReadLastError;
 use crate::tools::read_dir::ReadDir;
 use crate::tools::read_file::ReadFile;
-use crate::tools::scratchpad::UpdateScratchpad;
 
 pub struct CliToolProvider;
 
 impl InvestigatorToolFactory for CliToolProvider {
-    fn planner_tools(&self, schema: Value) -> Vec<Box<dyn Capability>> {
-        return vec![Box::new(ReadDir), Box::new(Json { properties: schema })];
+    fn planner_tools(&self) -> Vec<Box<dyn Capability>> {
+        vec![Box::new(ReadDir)]
     }
 
-    fn executor_tools(&self, schema: Value) -> Vec<Box<dyn Capability>> {
-        return vec![
-            Box::new(ReadDir),
-            Box::new(Bash),
-            Box::new(ReadFile),
-            Box::new(UpdateScratchpad),
-            Box::new(Json { properties: schema }),
-        ];
+    fn executor_tools(&self) -> Vec<Box<dyn Capability>> {
+        vec![Box::new(ReadDir), Box::new(Bash), Box::new(ReadFile)]
     }
 }
 
 impl NextCmdToolFactory for CliToolProvider {
-    fn cmd_predictor_tools(&self, schema: Value) -> Vec<Box<dyn Capability>> {
-        return vec![
+    fn cmd_predictor_tools(&self) -> Vec<Box<dyn Capability>> {
+        vec![
             Box::new(GitDiffStaged),
             Box::new(Docker),
-            Box::new(Json { properties: schema }),
             Box::new(ReadLastError),
-        ];
+        ]
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::agents::Agent;
+    use crate::agent::agents::{Agent, AgentBuilder};
     use crate::agent::workflows::investigator::{Plan, Report};
     use crate::agent::workflows::next_cmd::NextCommand;
     use crate::core::model::{Model, ModelName};
@@ -65,18 +54,24 @@ mod tests {
     #[test]
     fn print_complete_active_role_prompts_for_inspection() {
         let provider = CliToolProvider;
-        let planner = Agent::planner(
+        let planner = AgentBuilder::planner(
             Model::with_default_temp(ModelName::GptOss120B),
-            provider.planner_tools(Plan::schema()),
-        );
-        let executor = Agent::executor(
+            provider.planner_tools(),
+            Plan::schema(),
+        )
+        .build();
+        let executor = AgentBuilder::executor(
             Model::with_default_temp(ModelName::GptOss120B),
-            provider.executor_tools(Report::schema()),
-        );
-        let predictor = Agent::cmd_predictor(
+            provider.executor_tools(),
+            Report::schema(),
+        )
+        .build();
+        let predictor = AgentBuilder::cmd_predictor(
             Model::with_default_temp(ModelName::GptOss120B),
-            provider.cmd_predictor_tools(NextCommand::schema()),
-        );
+            provider.cmd_predictor_tools(),
+            NextCommand::schema(),
+        )
+        .build();
 
         for (agent, schema_name) in [
             (&planner, "Plan"),
@@ -118,12 +113,14 @@ mod tests {
     #[test]
     fn executor_prompt_requires_scratchpad_updates_before_final_answer() {
         let provider = CliToolProvider;
-        let executor = Agent::executor(
+        let executor = AgentBuilder::executor(
             Model::with_default_temp(ModelName::GptOss120B),
-            provider.executor_tools(Report::schema()),
-        );
+            provider.executor_tools(),
+            Report::schema(),
+        )
+        .build();
 
-        assert!(executor.registry.get("update_scratchpad").is_some());
+        assert!(executor.action_space.get("update_scratchpad").is_some());
         assert!(
             executor
                 .system_prompt
