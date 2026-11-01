@@ -85,6 +85,8 @@ mod tests {
                     .contains(&format!("\"title\": \"{schema_name}\""))
             );
             assert!(agent.system_prompt.contains("[AVAILABLE TOOLS]"));
+            assert!(agent.system_prompt.contains("`wait_job`"));
+            assert!(agent.action_space.get("wait_job").is_some());
         }
         assert!(executor.system_prompt.contains("`update_scratchpad`"));
         assert!(executor.system_prompt.contains("[AVAILABLE-TOOL GUIDANCE]"));

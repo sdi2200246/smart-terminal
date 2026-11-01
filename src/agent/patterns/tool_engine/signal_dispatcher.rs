@@ -2,6 +2,7 @@ use crate::agent::agents::Agent;
 use crate::agent::signals::{AgentLoopControl, AgentSignalContext, AgentSignalInvocation};
 use crate::core::responce::AgentToolCall;
 use crate::core::session::{AgentSession, ToolResult};
+use crate::multithreading::JobStore;
 use serde_json::Value;
 
 #[derive(Clone, Debug, Default)]
@@ -14,6 +15,7 @@ impl SignalDispatcher {
         calls: &[AgentToolCall],
         session: &mut AgentSession,
         agent: &mut Agent,
+        job_store: &JobStore,
     ) -> (Vec<(usize, ToolResult)>, Option<Value>) {
         let mut out = Vec::with_capacity(signals.len());
         let mut final_answer = None;
@@ -24,6 +26,7 @@ impl SignalDispatcher {
             let mut ctx = AgentSignalContext {
                 session: &mut *session,
                 agent: &mut *agent,
+                job_store,
             };
             match call.sig.handle(call.args, &mut ctx) {
                 Ok(o) => {

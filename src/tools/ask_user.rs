@@ -1,4 +1,5 @@
 use super::error::ToolError;
+use super::prompts::ASK_USER_DESCRIPTION;
 use crate::core::capability::{Capability, ToolMetaData, ToolSafety};
 use crate::utils::FlatSchema;
 use schemars::JsonSchema;
@@ -22,10 +23,7 @@ impl Capability for AskUser {
     fn metadata(&self) -> ToolMetaData {
         ToolMetaData {
             name: self.name().into(),
-            description: "Use this tool to achieve alignment with the user when their intent, \
-              preferences, or context are unclear. Ask one focused question at a time. \
-              Do not use this tool for information you can infer yourself."
-                .into(),
+            description: ASK_USER_DESCRIPTION.into(),
             parameters: ModelQuestion::schema(),
             safety: ToolSafety::Safe,
         }

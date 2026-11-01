@@ -1,4 +1,5 @@
 use super::error::ToolError;
+use super::prompts::READ_FILE_DESCRIPTION;
 use crate::core::capability::{Capability, ToolMetaData, ToolSafety};
 use crate::utils::FlatSchema;
 use schemars::JsonSchema;
@@ -34,10 +35,7 @@ impl Capability for ReadFile {
     fn metadata(&self) -> ToolMetaData {
         ToolMetaData {
             name: self.name().into(),
-            description: "Read lines from a file. Returns the content within the requested \
-                line range and the total line count. Use start/end to window into large files. \
-                Lines are 1-indexed and inclusive."
-                .into(),
+            description: READ_FILE_DESCRIPTION.into(),
             parameters: ReadFileArgs::schema(),
             safety: ToolSafety::Safe,
         }

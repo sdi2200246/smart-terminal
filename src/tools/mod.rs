@@ -4,5 +4,6 @@ pub mod docker;
 pub mod error;
 pub mod git_diff;
 pub mod last_error;
+pub mod prompts;
 pub mod read_dir;
 pub mod read_file;
