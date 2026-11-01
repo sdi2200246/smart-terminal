@@ -14,6 +14,7 @@ use crate::agent::prompts::{
 };
 use crate::agent::signals::{
     AgentAction, AgentActionSpace, AgentSignal, FinalAnswerSignal, UpdateScratchpadSignal,
+    WAIT_JOB_NAME, WaitJobSignal,
 };
 use crate::core::capability::Capability;
 use crate::core::model::Model;
@@ -97,16 +98,25 @@ impl AgentBuilder {
     }
 
     pub fn with_tools(mut self, tools: Vec<Box<dyn Capability>>) -> Self {
+        let has_tools = !tools.is_empty();
         for tool in tools {
             self.action_space
                 .register_tool(Arc::from(tool))
                 .expect("duplicate tool registration");
+        }
+        if has_tools && self.action_space.get(WAIT_JOB_NAME).is_none() {
+            self.action_space
+                .register_signal(Arc::new(WaitJobSignal))
+                .expect("wait_job signal registration");
         }
         self
     }
 
     pub fn with_signals(mut self, signals: Vec<Box<dyn AgentSignal>>) -> Self {
         for sig in signals {
+            if sig.name() == WAIT_JOB_NAME && self.action_space.get(WAIT_JOB_NAME).is_some() {
+                continue;
+            }
             self.action_space
                 .register_signal(Arc::from(sig))
                 .expect("duplicate signal registration");
@@ -115,17 +125,30 @@ impl AgentBuilder {
     }
 
     pub fn with_actions(mut self, actions: Vec<AgentAction>) -> Self {
+        let mut added_tool = false;
         for item in actions {
             match item {
-                AgentAction::Tool(cap) => self
-                    .action_space
-                    .register_tool(cap)
-                    .expect("duplicate tool registration"),
-                AgentAction::Signal(sig) => self
-                    .action_space
-                    .register_signal(sig)
-                    .expect("duplicate signal registration"),
+                AgentAction::Tool(cap) => {
+                    added_tool = true;
+                    self.action_space
+                        .register_tool(cap)
+                        .expect("duplicate tool registration");
+                }
+                AgentAction::Signal(sig) => {
+                    if sig.name() == WAIT_JOB_NAME && self.action_space.get(WAIT_JOB_NAME).is_some()
+                    {
+                        continue;
+                    }
+                    self.action_space
+                        .register_signal(sig)
+                        .expect("duplicate signal registration");
+                }
             }
+        }
+        if added_tool && self.action_space.get(WAIT_JOB_NAME).is_none() {
+            self.action_space
+                .register_signal(Arc::new(WaitJobSignal))
+                .expect("wait_job signal registration");
         }
         self
     }

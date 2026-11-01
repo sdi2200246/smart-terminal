@@ -1,4 +1,5 @@
 use super::error::ToolError;
+use super::prompts::BASH_DESCRIPTION;
 use crate::core::capability::{Capability, ToolMetaData, ToolSafety};
 use crate::utils::FlatSchema;
 use schemars::JsonSchema;
@@ -96,12 +97,7 @@ impl Capability for Bash {
     fn metadata(&self) -> ToolMetaData {
         ToolMetaData {
             name: self.name().into(),
-            description: "Execute a read-only shell command and return stdout, stderr, and exit code. \
-                Use for investigation: grep, find, cat, head, tail, awk, sed, wc, sort, uniq, \
-                git (log, diff, blame, show, branch), docker (ps, logs, inspect), \
-                ps, lsof, df, du, env, uname, ping, curl (GET/HEAD only), dig, ss. \
-                Destructive commands are blocked (rm, mv, cp, chmod, sudo, install, write redirects). \
-                Output capped at 250 lines".into(),
+            description: BASH_DESCRIPTION.into(),
             parameters: BashArgs::schema(),
             safety: ToolSafety::Mutating,
         }

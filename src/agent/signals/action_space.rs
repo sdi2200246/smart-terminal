@@ -35,7 +35,6 @@ impl AgentAction {
     }
 }
 
-/// One decoded call. `pos` is the call's index in the original batch.
 #[derive(Clone)]
 pub struct ToolInvocation {
     pub pos: usize,
@@ -100,7 +99,6 @@ impl AgentActionSpace {
         self.entries.get(name)
     }
 
-    /// Outbound: both kinds, merged. This is the list the model sees.
     pub fn model_schemas(&self) -> Vec<ToolMetaData> {
         self.metadata.clone()
     }
@@ -121,8 +119,6 @@ impl AgentActionSpace {
             .collect()
     }
 
-    /// Inbound: classify every call once. The result has one entry per call and
-    /// each entry carries its original position.
     pub fn decode(&self, calls: &[AgentToolCall]) -> Vec<ModelCall> {
         calls
             .iter()

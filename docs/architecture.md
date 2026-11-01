@@ -56,15 +56,20 @@ Location: `src/agent`
 Responsibilities:
 
 - define workflows such as `NextCmd` and `Investigate`
-- hold agent orchestration logic
-- operate the main reasoning loop that invokes providers and tools
+- build configured agents via `AgentBuilder` (`src/agent/agents/builder.rs`)
+- unify external tools (`Capability`) and internal control-plane signals (`AgentSignal`) inside `ActionSpace` (`src/agent/signals/action_space.rs`)
+- operate the main reasoning loop (`ReactLoop`) and segmented batch execution engine (`ToolExecutionEngine`, `SignalDispatcher`, `ToolDispatcher`)
+- centralize all agent-level role personas, policies, and signal descriptions/guidance in `src/agent/prompts`
 
 Important files:
 
 - `src/agent/workflows/next_cmd.rs`
 - `src/agent/workflows/investigator.rs`
+- `src/agent/agents/builder.rs`
+- `src/agent/signals/mod.rs`, `src/agent/signals/action_space.rs`, `src/agent/signals/final_answer.rs`, `src/agent/signals/scratchpad.rs`, `src/agent/signals/wait_job.rs`
 - `src/agent/patterns/react.rs`
-- `src/agent/patterns/tool_engine.rs`
+- `src/agent/patterns/tool_engine/mod.rs`, `src/agent/patterns/tool_engine/signal_dispatcher.rs`, `src/agent/patterns/tool_engine/tool_dispatcher.rs`, `src/agent/patterns/tool_engine/policy.rs`
+- `src/agent/prompts/roles.rs`, `src/agent/prompts/policies.rs`, `src/agent/prompts/builder.rs`
 
 ### 4. Persistence layer
 Location: `src/persistence`
@@ -106,8 +111,9 @@ Location: `src/tools`
 
 Responsibilities:
 
-- provide concrete capabilities available to agents
-- perform actions like shell execution, directory reads, file reads, git inspection, and Docker inspection
+- provide concrete external capabilities available to agents
+- perform actions like shell execution, directory reads, file reads, git inspection, error log inspection, user prompting, and Docker inspection
+- centralize all tool descriptions and supplementary prompt guidance in `src/tools/prompts.rs`
 
 Examples:
 
@@ -115,18 +121,32 @@ Examples:
 - `src/tools/read_dir.rs`
 - `src/tools/read_file.rs`
 - `src/tools/git_diff.rs`
-- `src/tools/git_log.rs`
+- `src/tools/last_error.rs`
+- `src/tools/ask_user.rs`
 - `src/tools/docker.rs`
+- `src/tools/prompts.rs`
 
-Each tool implements the project capability abstraction, allowing the agent loop to treat them uniformly.
+Each external tool implements `core::Capability`, while internal control-plane signals (`final_answer`, `update_scratchpad`, `wait_job`) live in `src/agent/signals` and implement `AgentSignal`. `ActionSpace` presents both to the LLM as callable schemas and routes incoming calls to `SignalDispatcher` or `ToolDispatcher`.
 
-Capabilities may also provide optional agent-facing prompt guidance through the core capability contract. The prompt builder reads guidance only from tools registered for that agent; this is separate from provider-facing tool metadata. Concrete tools and agent orchestration therefore share only the core contract and do not import each other.
+Capabilities and signals may also provide optional agent-facing prompt guidance. The prompt builder reads guidance only from actions registered in that agent's `ActionSpace`; this is separate from provider-facing tool metadata. Concrete tools and agent orchestration therefore share only the core contract and do not import each other.
 
-Each role prompt is a constant composed of selected instruction blocks in `src/agent/prompts/roles.rs`. Reusable policy text such as tool-call ordering, environment-context handling, and completion lives in `src/agent/prompts/policies.rs`. Completion policies support `FINAL_ANSWER_TOOL`, `STRUCTURED_STOP`, or `FINAL_ANSWER_OR_STRUCTURED_STOP` according to the agent's output path. Available-tool names and descriptions are rendered from registered capability metadata; the final-answer schema is generated from the registered `final_answer` capability's parameter schema. Tool-specific supplemental instructions come from each registered capability's `prompt_guidance`.
+Each role prompt is a constant composed of selected instruction blocks in `src/agent/prompts/roles.rs`. Reusable policy text, signal descriptions, signal guidance, and runtime feedback formatters live in `src/agent/prompts/policies.rs`, while external tool descriptions and guidance live in `src/tools/prompts.rs`. Completion policies support `FINAL_ANSWER_TOOL`, `STRUCTURED_STOP`, or `FINAL_ANSWER_OR_STRUCTURED_STOP` according to the agent's output path. Available-tool names and descriptions are rendered dynamically from registered action metadata; the final-answer schema is generated from the registered `final_answer` signal's parameter schema.
 
-The scratchpad capability is registered by the CLI executor factory and its prompt guidance instructs the executor to update the complete summary before completing. This is prompt-only guidance; the runtime does not reject completion when the tool is not called. Google and Groq requests include the current scratchpad state. This provides durable summary state, but conversation-event history is not currently compacted or truncated; implementing compaction must preserve the system prompt, current request, and scratchpad while removing only older history. Do not confuse maintaining a summary with actually compacting history.
+The `update_scratchpad` signal is registered on the executor agent (`with_scratchpad()`) and its prompt guidance instructs the executor to update the complete summary before completing. Whenever an agent registers at least one external tool, `AgentBuilder` automatically registers the `wait_job` signal (`WaitJobSignal`) so the agent can collect backgrounded tool calls. Google and Groq requests include the current scratchpad state. This provides durable summary state, but conversation-event history is not currently compacted or truncated; implementing compaction must preserve the system prompt, current request, and scratchpad while removing only older history. Do not confuse maintaining a summary with actually compacting history.
 
-Do not duplicate tool inventories, output schemas, or tool guidance in role prompts. Only role-specific objectives and workflow constraints belong in a role's constants. `src/agent/prompts/builder.rs` assembles selected parts in a canonical order. The shared tool-call policy reflects the current sequential batch executor; do not add a parallel-call policy unless runtime execution is concurrent. To print fully assembled active prompts, run `cargo test print_complete_active_role_prompts_for_inspection -- --nocapture`. This prompt-preview test builds agents in memory using the CLI's real tool factory; it does not load or modify persisted investigation sessions. When introducing instructions about execution behavior, ensure they describe behavior the runtime actually supports.
+Do not duplicate tool inventories, output schemas, or tool guidance in role prompts. Only role-specific objectives and workflow constraints belong in a role's constants. `src/agent/prompts/builder.rs` assembles selected parts in a canonical order. The shared tool-call policy reflects the concurrent background job engine (`JobEngine` / `JobStore` in `src/multithreading/job_pool`); fast tools return inline within the 1-second threshold while slower tools return a pending `Job ID` that the agent can collect later via the exclusive `wait_job` signal. To print fully assembled active prompts, run `cargo test print_complete_active_role_prompts_for_inspection -- --nocapture`. This prompt-preview test builds agents in memory using the CLI's real tool factory; it does not load or modify persisted investigation sessions. When introducing instructions about execution behavior, ensure they describe behavior the runtime actually supports.
+
+### 7. Multithreading & Background Job Engine
+Location: `src/multithreading/job_pool`
+
+Responsibilities:
+
+- execute blocking tool calls concurrently on Tokio's blocking thread pool via `JobEngine`
+- track in-flight, completed, and failed job states in `JobStore` with read-once eviction (`take_if_finished`)
+- allow `ToolDispatcher` to wait up to `TOOL_WAIT_THRESHOLD` (1s) and return a pending `Job ID` if a tool call is still running, so the agent can continue independent investigation steps before calling `wait_job`
+
+#### Known Shutdown Limitation (Orphaned Subprocesses)
+At process exit, `src/main.rs` calls `runtime.shutdown_background()` so the CLI returns control to the user's shell immediately without blocking on any uncollected `spawn_blocking` tasks still running in `JobEngine`. However, `JobEngine` is decoupled from OS-level child process management: if an agent finishes a session early (or exits on error) without calling `wait_job` on a still-running external command (e.g., a long-running `bash -c` subprocess), dropping the Tokio runtime detaches the `spawn_blocking` thread without sending `SIGTERM`/`SIGKILL` to the spawned OS child process group. Any such uncollected subprocess will continue running in the OS background until it finishes naturally.
 
 ## Runtime flow
 
@@ -138,15 +158,15 @@ The runtime entrypoint is `src/main.rs`.
    - `memory`
    - `investigate`
 3. The CLI uses the shared project-root resolver to identify the registered project root. Investigations load planner/executor history from their separate session store; `next-cmd` loads its own interaction memory through its persistence adapter.
-4. The workflow sets up one or more agents.
-5. Each agent assembles a tool registry and runs a loop.
+4. The workflow sets up one or more agents via `AgentBuilder`.
+5. Each agent assembles an `ActionSpace` (combining registered `Capability` tools and `AgentSignal` control signals) and runs `ReactLoop`.
 6. The loop:
    - calls the selected LLM
    - receives plan/tool calls
-   - executes tools
-   - sends results back into the model
-   - accepts completion when the agent submits it; scratchpad updates are prompt guidance, not a runtime gate
-7. The workflow converts the final agent response into user-facing output.
+   - partitions calls through `ToolExecutionEngine` into control-plane signals (`SignalDispatcher`) and concurrent background tool jobs (`ToolDispatcher` + `JobEngine`)
+   - returns inline outputs for fast tools or pending `Job ID` handles for tools exceeding 1s (collected later via `wait_job`)
+   - accepts completion when the agent submits `final_answer` (or structured stop); scratchpad updates are prompt guidance, not a runtime gate
+7. The workflow converts the final agent response into user-facing output, and `main.rs` invokes `runtime.shutdown_background()` so the CLI exits without waiting on any uncollected background tasks.
 
 ## Command-level behavior
 

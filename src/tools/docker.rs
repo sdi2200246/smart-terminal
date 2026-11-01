@@ -1,4 +1,5 @@
 use super::error::ToolError;
+use super::prompts::{DOCKER_DESCRIPTION, DOCKER_GUIDANCE};
 use crate::core::capability::{Capability, ToolMetaData, ToolSafety};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -33,10 +34,7 @@ impl Capability for Docker {
     fn metadata(&self) -> ToolMetaData {
         ToolMetaData {
             name: self.name().into(),
-            description: "Get the current Docker state on this machine: running and stopped \
-                containers (name, image, status, ports), whether the docker daemon is up, \
-                and whether a docker-compose file exists in the current directory."
-                .into(),
+            description: DOCKER_DESCRIPTION.into(),
             parameters: serde_json::json!({
                 "type": "object",
                 "properties": {}
@@ -46,9 +44,7 @@ impl Capability for Docker {
     }
 
     fn prompt_guidance(&self) -> Option<&'static str> {
-        Some(
-            "Call this tool if the user's intent involves Docker, Compose, containers, or names that act like containers (for example, 'restart db').",
-        )
+        Some(DOCKER_GUIDANCE)
     }
 
     fn execute(&self, args: Value) -> Result<String, ToolError> {

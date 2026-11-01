@@ -21,8 +21,7 @@ impl Router {
         }
     }
 }
-#[tokio::main]
-async fn main() {
+fn main() {
     let log_dir = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|p| p.to_path_buf()))
@@ -44,7 +43,13 @@ async fn main() {
         .ok();
 
     let cli = Cli::parse();
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("Failed to initialize Tokio runtime");
+
     tracing::info!("CMD Task Started");
-    Router::dispatch(cli).await;
+    runtime.block_on(Router::dispatch(cli));
     tracing::info!("CMD Task Ended");
+    runtime.shutdown_background();
 }

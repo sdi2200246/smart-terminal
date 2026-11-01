@@ -1,4 +1,5 @@
 use super::{AgentLoopControl, AgentSignal, AgentSignalContext, AgentSignalOutcome};
+use crate::agent::prompts::FINAL_ANSWER_DESCRIPTION;
 use crate::core::capability::{ToolMetaData, ToolSafety};
 use crate::tools::error::ToolError;
 use serde_json::Value;
@@ -15,7 +16,7 @@ impl AgentSignal for FinalAnswerSignal {
     fn metadata(&self) -> ToolMetaData {
         ToolMetaData {
             name: self.name().into(),
-            description: "Submits the final, structured JSON response to the user. Use this tool when you have successfully gathered all required information and are ready to end the loop.".into(),
+            description: FINAL_ANSWER_DESCRIPTION.into(),
             parameters: self.properties.clone(),
             safety: ToolSafety::Safe,
         }
@@ -87,9 +88,11 @@ mod tests {
         let mut session = AgentSession::new(5);
         let mut agent =
             AgentBuilder::base("test", Model::with_default_temp(ModelName::GptOss120B)).build();
+        let job_store = crate::multithreading::JobStore::new();
         let mut ctx = AgentSignalContext {
             session: &mut session,
             agent: &mut agent,
+            job_store: &job_store,
         };
         signal.handle(args, &mut ctx)
     }

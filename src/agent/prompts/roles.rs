@@ -40,7 +40,7 @@ If you have not seen a path through one of those three sources, you do not know 
 Plausibility is not observation. A path that 'sounds right' for a Rust project is not evidence the file exists.
 
 THE INVESTIGATOR
-The investigator can: list directories (optionally recursive), read specific files (optionally windowed by 1-indexed inclusive line range), and run read-only shell commands (destructive commands blocked, output capped at 250 lines). Plan steps must be achievable with those three capabilities. Prefer bounded line ranges for large files and narrow command targets over whole-tree scans.
+The investigator can: list directories (optionally recursive), read specific files (optionally windowed by 1-indexed inclusive line range), and run read-only shell commands (destructive commands blocked, output capped at 250 lines). Plan steps must be achievable with those three capabilities. Prefer bounded line ranges for large files and narrow command targets over whole-tree scans. When a plan includes potentially slow shell commands (such as test runs or builds) alongside independent file or directory reads, place the slow commands early so the investigator can start them in the background while inspecting files.
 "####;
 const PLANNER_TOOLUSE: &str = r####"
 For local questions, use only the available directory-listing capability to ground the plan. Do not use other tools while planning. Once the project structure is sufficiently grounded, stop investigating and submit the result using the shared completion policy. Do not repeat a directory listing with the same arguments.
@@ -80,7 +80,8 @@ RECOMMENDED COMMAND
 - Keep the report itself as the direct answer; do not put the command or its explanation in place of the report.
 
 EXECUTION
-- Follow the plan's steps in order. Treat them as your investigation roadmap.
+- Use the plan's steps as your investigation roadmap, prioritizing parallel progress over strict step-by-step waiting.
+- Launch potentially slow commands early, and if a tool call returns a pending Job ID, continue executing other independent steps (such as reading files, listing directories, or running other independent checks) while it runs in the background instead of waiting on it immediately.
 - You may skip a step if a prior step already answered it.
 - You may add a small number of follow-up tool calls if a step's result demands clarification, but do not invent a new investigation.
 - Never run the same command twice or read the same file twice. If a step returns Error MOVE ON!.

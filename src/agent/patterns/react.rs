@@ -2,6 +2,7 @@ use crate::agent::agents::{Agent, AgentState};
 use crate::agent::error::AgentError;
 use crate::agent::patterns::tool_engine::ToolExecutionEngine;
 use crate::agent::patterns::tool_engine::ToolExecutionPolicy;
+use crate::agent::prompts::STRUCTURING_SYSTEM_PROMPT;
 use crate::core::error::ProviderError;
 use crate::core::llm_client::{AgentRequest, LLMProvider};
 use crate::core::responce::AgentResponse;
@@ -135,9 +136,7 @@ impl<P: LLMProvider> ReactLoop<P> {
     {
         agent.update_state(AgentState::StructuringOutput);
         let output_session = AgentSession::builder()
-            .system(
-                "Your one and ONLY job is to return the following text into the scheema provided to you",
-            )
+            .system(STRUCTURING_SYSTEM_PROMPT)
             .user(stop_args.to_string())
             .build();
 

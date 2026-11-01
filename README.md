@@ -129,14 +129,19 @@ Useful for anything you'd normally answer by poking around — what does this co
 |---|---|
 | `src/cli` | Parses commands (`investigate`, `next_cmd`, `memory`) and streams tool-call output via `cli::presenters`. |
 | `src/core` | Provider-agnostic contracts: `LLMProvider`, `Capability`, `AgentSession`, `Model`, `Memory`, `InvestigationSessionStore`, error types. Never imports `agent`, `persistence`, `tools`, or `providers`. |
-| `src/agent` | `agent::workflows` (NextCmd, Investigator), `agent::agents` (planner, executor, cmd_predictor), reusable prompt composition in `agent::prompts`, and loop patterns. |
+| `src/agent` | `agent::workflows` (NextCmd, Investigator), `agent::agents` (`AgentBuilder`, planner, executor, cmd_predictor), `agent::signals` (`ActionSpace`, `final_answer`, `update_scratchpad`, `wait_job`), reusable prompt composition in `agent::prompts`, and loop/execution patterns (`ReactLoop`, `ToolExecutionEngine`, `SignalDispatcher`, `ToolDispatcher`). |
+| `src/multithreading` | Standalone producer-consumer background job pool (`JobEngine`, `JobStore`) executing blocking tool closures concurrently with semaphore bounding, panic isolation, and read-once eviction. |
 | `src/persistence` | File-backed implementations of core memory and investigation-session contracts. |
 | `src/providers` | `groq` and `google` clients, both built on the shared `providers::client::GenericLlmClient<ProviderCodec>` codec layer. |
-| `src/tools` | Bash, ReadDir, ReadFile, Docker, GitDiff/GitLog, AskUser, ReadLastError, UpdateScratchpad, Json — all implement `core::Capability`. |
+| `src/tools` | `Bash`, `ReadDir`, `ReadFile`, `Docker`, `GitDiff`, `AskUser`, `ReadLastError` — all implement `core::Capability`, with centralized LLM prompt descriptions and guidance in `src/tools/prompts.rs`. |
 | `memory/` | Persistent JSON storage: next-command memory and separate project-keyed investigator conversations. |
 
 ### High-Level Code Flow
-Every command follows the same call stack. `cli` is the composition root — it constructs the command's configured provider (`GroqClient` for `next-cmd`, `GoogleClient` for `investigate`) and hands it to the workflow. The workflow spins up one or more agents, each agent assembles a tool registry and delegates to a loop. The loop drives everything: it calls the provider, dispatches tool results, and repeats until the model signals completion, at which point it makes a final structured output call and unwinds back up the stack.
+Every command follows the same call stack. `cli` is the composition root — it constructs the command's configured provider (`GroqClient` for `next-cmd`, `GoogleClient` for `investigate`) and hands it to the workflow. The workflow builds its agents via `AgentBuilder`, registering external tools (`Capability`) and internal control-plane signals (`AgentSignal`) into a unified `ActionSpace`, and delegates execution to `ReactLoop`.
+
+Inside each turn, `ToolExecutionEngine` decodes incoming model calls through `ActionSpace` and partitions the batch into control-plane signals (`SignalDispatcher`) and external tools (`ToolDispatcher`):
+- **Control-Plane Signals (`src/agent/signals`)**: Built-in runtime transitions (`final_answer`, `update_scratchpad`, `wait_job`) that mutate `AgentSession` or query `JobStore` directly without going through external tool permissions. Signals with `must_run_alone` (like `wait_job`) are enforced as synchronization barriers at decode time.
+- **Concurrent Background Tool Execution (`src/multithreading/job_pool`)**: `ToolDispatcher` dispatches approved tool calls concurrently to `JobEngine` and waits up to a 1-second threshold (`TOOL_WAIT_THRESHOLD`). Fast tools return their output in the same turn; slow tools (such as test suites or builds) stay running in the background and return a `Job ID` immediately, allowing the agent to continue reading files and advancing the investigation before calling `wait_job` to collect the result.
  
 Persistence is composed by the CLI through core contracts. Investigation resumes from serialized planner and executor conversations, while next-command history remains a separate store. Core and workflows do not depend on the file format or storage backend.
  

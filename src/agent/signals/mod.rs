@@ -1,6 +1,7 @@
 pub mod action_space;
 pub mod final_answer;
 pub mod scratchpad;
+pub mod wait_job;
 
 pub use action_space::{
     ActionSpaceError, AgentAction, AgentActionSpace, AgentSignalInvocation, ModelCall,
@@ -8,16 +9,19 @@ pub use action_space::{
 };
 pub use final_answer::FinalAnswerSignal;
 pub use scratchpad::UpdateScratchpadSignal;
+pub use wait_job::{WAIT_JOB_NAME, WaitJobSignal};
 
 use crate::agent::agents::Agent;
 use crate::core::capability::ToolMetaData;
 use crate::core::session::AgentSession;
+use crate::multithreading::JobStore;
 use crate::tools::error::ToolError;
 use serde_json::Value;
 
 pub struct AgentSignalContext<'a> {
     pub session: &'a mut AgentSession,
     pub agent: &'a mut Agent,
+    pub job_store: &'a JobStore,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -38,6 +42,9 @@ pub trait AgentSignal: Send + Sync {
     fn metadata(&self) -> ToolMetaData;
     fn prompt_guidance(&self) -> Option<&'static str> {
         None
+    }
+    fn must_run_alone(&self) -> bool {
+        false
     }
     fn handle(
         &self,

@@ -1,4 +1,5 @@
 use super::error::ToolError;
+use super::prompts::{READ_LAST_ERROR_DESCRIPTION, READ_LAST_ERROR_GUIDANCE};
 use crate::core::capability::{Capability, ToolMetaData, ToolSafety};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -24,11 +25,7 @@ impl Capability for ReadLastError {
     fn metadata(&self) -> ToolMetaData {
         ToolMetaData {
             name: self.name().into(),
-            description: "Read the stderr output of the user's last shell command,\
-                Returns the last 200 characters at most. `truncated` indicates \
-                whether earlier output was cut off. Empty content means the last \
-                command produced no errors."
-                .into(),
+            description: READ_LAST_ERROR_DESCRIPTION.into(),
             parameters: serde_json::json!({
                 "type": "object",
                 "properties": {}
@@ -38,9 +35,7 @@ impl Capability for ReadLastError {
     }
 
     fn prompt_guidance(&self) -> Option<&'static str> {
-        Some(
-            "Read the captured stderr before answering when the user asks why a command failed, retries a likely failed command, or says a previously suggested command did not work. Base the correction on the captured error rather than guessing.",
-        )
+        Some(READ_LAST_ERROR_GUIDANCE)
     }
 
     fn execute(&self, _args: Value) -> Result<String, ToolError> {

@@ -1,4 +1,5 @@
 use super::error::ToolError;
+use super::prompts::{GIT_DIFF_STAGED_DESCRIPTION, GIT_DIFF_STAGED_GUIDANCE};
 use crate::core::capability::{Capability, ToolMetaData, ToolSafety};
 use serde_json::Value;
 use std::process::Command;
@@ -31,8 +32,7 @@ impl Capability for GitDiffStaged {
     fn metadata(&self) -> ToolMetaData {
         ToolMetaData {
             name: self.name().into(),
-            description: "Returns the staged changes (git diff --staged) of the current repository"
-                .into(),
+            description: GIT_DIFF_STAGED_DESCRIPTION.into(),
             parameters: serde_json::json!({
                 "type": "object",
                 "properties": {}
@@ -42,9 +42,7 @@ impl Capability for GitDiffStaged {
     }
 
     fn prompt_guidance(&self) -> Option<&'static str> {
-        Some(
-            "Call this if the input is `git commit -m` (or similar) and a commit message must be generated. Read the staged diff first so the message is accurate.",
-        )
+        Some(GIT_DIFF_STAGED_GUIDANCE)
     }
 
     fn execute(&self, args: Value) -> Result<String, ToolError> {

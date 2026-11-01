@@ -82,12 +82,13 @@ cargo install --path .
 
 Key source directories:
 
-- `src/cli` — command parsing and terminal presentation
+- `src/cli` — command parsing, agent wiring (`agent_setup.rs`), and terminal presentation
 - `src/core` — domain types and contracts for capabilities, models, and both memory features
-- `src/agent` — workflows, agent loops, and memory orchestration
+- `src/agent` — workflows, `AgentBuilder`, `ActionSpace` signals (`final_answer`, `update_scratchpad`, `wait_job`), centralized agent prompts (`src/agent/prompts`), and execution engines (`ReactLoop`, `ToolExecutionEngine`, `SignalDispatcher`, `ToolDispatcher`)
+- `src/multithreading` — concurrent background job pool (`JobEngine`) and state store (`JobStore`)
 - `src/persistence` — adapters implementing core storage contracts
 - `src/providers` — LLM provider implementations
-- `src/tools` — environment interaction tools
+- `src/tools` — environment interaction tools and centralized tool prompts (`src/tools/prompts.rs`)
 - `scripts/zsh` — shell integration hook
 
 ## Contribution conventions

@@ -1,4 +1,5 @@
 use super::error::ToolError;
+use super::prompts::READ_DIR_DESCRIPTION;
 use crate::core::capability::{Capability, ToolMetaData, ToolSafety};
 use crate::utils::FlatSchema;
 use schemars::JsonSchema;
@@ -24,12 +25,7 @@ impl Capability for ReadDir {
     fn metadata(&self) -> ToolMetaData {
         ToolMetaData {
             name: self.name().into(),
-            description: "Read the contents of a directory. \
-                Set recursive to true to include all subdirectories. \
-                Automatically excludes target/ and .git/ directories. \
-                Only for reading directory structure — not for reading file contents. \
-                Returns an error if the path is a file;"
-                .into(),
+            description: READ_DIR_DESCRIPTION.into(),
             parameters: ReadDirArgs::schema(),
             safety: ToolSafety::Safe,
         }
