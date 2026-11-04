@@ -4,7 +4,7 @@ use super::error::GoogleError;
 use crate::core::error::ProviderError;
 use crate::core::llm_client::{AgentRequest, LLMProvider};
 use crate::core::responce::{AgentResponse, AgentToolCall};
-use crate::core::session::AgentSession;
+use crate::core::session::CoreAgentSession;
 use crate::providers::client::{ClientConfig, GenericLlmClient, ProviderCodec};
 use reqwest::StatusCode;
 use serde_json::Value;
@@ -25,7 +25,7 @@ impl ProviderCodec for GoogleProtocol {
         GeminiRequest::from(req)
     }
 
-    fn build_structured_request(&self, session: &AgentSession, schema: Value) -> Self::Request {
+    fn build_structured_request(&self, session: &CoreAgentSession, schema: Value) -> Self::Request {
         GeminiRequest::structured(session, schema, "gemini-3.6-flash".into())
     }
 
@@ -83,9 +83,9 @@ impl GoogleClient {
     }
 
     fn build(_max_idle: usize) -> Self {
-        let api_key = std::env::var("GEMINI_API_KEY")
-            .or_else(|_| std::env::var("GOOGLE_API_KEY"))
-            .expect("GEMINI_API_KEY or GOOGLE_API_KEY must be set");
+         let api_key =  "AQ.Ab8RN6JCtUwUc8iIISw2UKPaXJYW4nd-Kl_nrW64xLMaitcWdA"; //std::env::var("GEMINI_API_KEY")
+        //     .or_else(|_| std::env::var("GOOGLE_API_KEY"))
+        //     .expect("GEMINI_API_KEY or GOOGLE_API_KEY must be set");
 
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -117,7 +117,7 @@ impl LLMProvider for GoogleClient {
 
     async fn complete_structured(
         &self,
-        session: &AgentSession,
+        session: &CoreAgentSession,
         schema: Value,
     ) -> Result<Value, ProviderError> {
         self.inner.run_complete_structured(session, schema).await
