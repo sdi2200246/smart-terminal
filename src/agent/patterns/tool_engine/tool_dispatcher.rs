@@ -4,7 +4,7 @@ use crate::agent::prompts::pending_job_message;
 use crate::agent::signals::{ToolInvocation, WAIT_JOB_NAME};
 use crate::core::capability::ToolSafety;
 use crate::core::responce::AgentToolCall;
-use crate::core::session::{AgentSession, ToolResult};
+use crate::core::session::ToolResult;
 use crate::multithreading::{JobEngine, JobState, JobStore};
 use std::fmt;
 use std::sync::Arc;
@@ -77,7 +77,6 @@ impl ToolDispatcher {
         &self,
         tools: Vec<ToolInvocation>,
         calls: &[AgentToolCall],
-        _session: &mut AgentSession,
         agent: &mut Agent,
     ) -> (Vec<ToolInvocation>, Vec<(usize, ToolResult)>) {
         let mut permitted = Vec::new();

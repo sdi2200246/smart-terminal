@@ -12,7 +12,7 @@ use crate::agent::signals::{
     AgentAction, AgentSignalInvocation, ModelCall, ToolInvocation,
 };
 use crate::core::responce::{AgentResponse, AgentToolCall};
-use crate::core::session::{AgentSession, ToolCall, ToolResult};
+use crate::core::session::{ToolCall, ToolResult};
 use crate::multithreading::JobStore;
 use serde_json::Value;
 use std::time::Duration;
@@ -58,20 +58,19 @@ impl ToolExecutionEngine {
 
     pub async fn dispatch_tool_batch(
         &self,
-        session: &mut AgentSession,
         agent: &mut Agent,
         response: AgentResponse,
     ) {
         let calls = response.into_calls();
 
         self.notify_and_stream_calls(agent, &calls);
-        self.record_tool_calls(session, &calls);
+        self.record_tool_calls(agent, &calls);
 
-        let (results, final_answer) = self.execute_tool_batch(session, agent, &calls).await;
+        let (results, final_answer) = self.execute_tool_batch(agent, &calls).await;
 
-        session.add_tool_results(results);
+        agent.session.add_tool_results(results);
         if let Some(value) = final_answer {
-            session.set_final_answer(value);
+            agent.session.set_final_answer(value);
         }
     }
 
@@ -87,7 +86,7 @@ impl ToolExecutionEngine {
         }
     }
 
-    fn record_tool_calls(&self, session: &mut AgentSession, calls: &[AgentToolCall]) {
+    fn record_tool_calls(&self, agent: &mut Agent, calls: &[AgentToolCall]) {
         let session_calls = calls
             .iter()
             .map(|c| {
@@ -95,12 +94,11 @@ impl ToolExecutionEngine {
                     .with_thinking_state(c.thinking_state())
             })
             .collect();
-        session.add_tool_calls(session_calls);
+        agent.session.add_tool_calls(session_calls);
     }
 
     async fn execute_tool_batch(
         &self,
-        session: &mut AgentSession,
         agent: &mut Agent,
         calls: &[AgentToolCall],
     ) -> (Vec<ToolResult>, Option<Value>) {
@@ -112,7 +110,6 @@ impl ToolExecutionEngine {
         let (signal_results, final_answer) = self.signal_dispatcher.run(
             partitioned.signals,
             calls,
-            session,
             agent,
             self.tool_dispatcher.job_store(),
         );
@@ -120,7 +117,7 @@ impl ToolExecutionEngine {
 
         let (permitted, denied) = self
             .tool_dispatcher
-            .authorize(partitioned.tools, calls, session, agent)
+            .authorize(partitioned.tools, calls, agent)
             .await;
         Self::place_results(&mut results, denied);
 
@@ -340,18 +337,16 @@ mod tests {
     #[tokio::test]
     async fn successful_tool_produces_matching_result() {
         let engine = ToolExecutionEngine::new();
-        let mut session = AgentSession::new(5);
         let mut agent = test_agent(vec![Box::new(Echo)]);
 
         engine
             .dispatch_tool_batch(
-                &mut session,
                 &mut agent,
                 AgentResponse::single(call("echo", "call_1", json!({"x": 1}))),
             )
             .await;
 
-        match session.events().last().unwrap() {
+        match agent.session.events().last().unwrap() {
             ConversationEvent::ToolResults(rs) => {
                 assert_eq!(rs[0].id, "call_1");
                 assert!(rs[0].result.starts_with("echo:"));
@@ -363,18 +358,17 @@ mod tests {
     #[tokio::test]
     async fn mutating_tool_requires_approval_by_default() {
         let engine = ToolExecutionEngine::new();
-        let mut session = AgentSession::new(5);
         let mut agent = test_agent(vec![Box::new(Dangerous)]);
 
         engine
             .dispatch_tool_batch(
-                &mut session,
                 &mut agent,
                 AgentResponse::single(call("bash", "call_1", json!({}))),
             )
             .await;
 
-        let result_event = session
+        let result_event = agent
+            .session
             .events()
             .iter()
             .find(|event| matches!(event, ConversationEvent::ToolResults(_)))
@@ -396,18 +390,16 @@ mod tests {
             deny_mutating_tools: false,
             blacklisted_tools: vec![],
         });
-        let mut session = AgentSession::new(5);
         let mut agent = test_agent(vec![Box::new(Dangerous)]);
 
         engine
             .dispatch_tool_batch(
-                &mut session,
                 &mut agent,
                 AgentResponse::single(call("bash", "call_1", json!({}))),
             )
             .await;
 
-        match session.events().last().unwrap() {
+        match agent.session.events().last().unwrap() {
             ConversationEvent::ToolResults(rs) => {
                 assert!(rs[0].result.contains("executed dangerous command"));
             }
@@ -418,18 +410,16 @@ mod tests {
     #[tokio::test]
     async fn failed_tool_wraps_error_message_in_result() {
         let engine = ToolExecutionEngine::new();
-        let mut session = AgentSession::new(5);
         let mut agent = test_agent(vec![Box::new(Boom)]);
 
         engine
             .dispatch_tool_batch(
-                &mut session,
                 &mut agent,
                 AgentResponse::single(call("boom", "call_1", json!({}))),
             )
             .await;
 
-        match session.events().last().unwrap() {
+        match agent.session.events().last().unwrap() {
             ConversationEvent::ToolResults(rs) => {
                 assert!(rs[0].result.contains("Tool 'boom' failed"));
                 assert!(rs[0].result.contains("boom failed"));
@@ -442,14 +432,12 @@ mod tests {
     async fn failed_tool_call_is_still_streamed_for_activity_logging() {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let engine = ToolExecutionEngine::new();
-        let mut session = AgentSession::new(5);
         let mut agent = test_agent_builder(vec![Box::new(Boom)])
             .with_events_streaming(tx)
             .build();
 
         engine
             .dispatch_tool_batch(
-                &mut session,
                 &mut agent,
                 AgentResponse::single(call("boom", "call_1", json!({}))),
             )
@@ -464,34 +452,33 @@ mod tests {
     #[tokio::test]
     async fn final_answer_call_sets_session_final_answer() {
         let engine = ToolExecutionEngine::new();
-        let mut session = AgentSession::new(5);
         let mut agent = test_agent_builder(vec![])
             .with_signals(vec![Box::new(FinalAnswer)])
             .build();
 
         engine
             .dispatch_tool_batch(
-                &mut session,
                 &mut agent,
                 AgentResponse::single(call("final_answer", "call_1", json!({"result": "42"}))),
             )
             .await;
 
-        assert_eq!(session.take_final_answer(), Some(json!({"result": "42"})));
+        assert_eq!(
+            agent.session.take_final_answer(),
+            Some(json!({"result": "42"}))
+        );
     }
 
     #[tokio::test]
     async fn non_final_tool_call_is_streamed_when_configured() {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let engine = ToolExecutionEngine::new();
-        let mut session = AgentSession::new(5);
         let mut agent = test_agent_builder(vec![Box::new(Echo)])
             .with_events_streaming(tx)
             .build();
 
         engine
             .dispatch_tool_batch(
-                &mut session,
                 &mut agent,
                 AgentResponse::single(call("echo", "call_1", json!({}))),
             )
@@ -508,7 +495,6 @@ mod tests {
     async fn final_answer_call_is_not_streamed() {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let engine = ToolExecutionEngine::new();
-        let mut session = AgentSession::new(5);
         let mut agent = test_agent_builder(vec![])
             .with_signals(vec![Box::new(FinalAnswer)])
             .with_events_streaming(tx)
@@ -516,7 +502,6 @@ mod tests {
 
         engine
             .dispatch_tool_batch(
-                &mut session,
                 &mut agent,
                 AgentResponse::single(call("final_answer", "call_1", json!({"result": "ok"}))),
             )
@@ -531,7 +516,6 @@ mod tests {
     #[tokio::test]
     async fn thinking_state_is_carried_into_tool_call_event() {
         let engine = ToolExecutionEngine::new();
-        let mut session = AgentSession::new(5);
         let mut agent = test_agent(vec![Box::new(Echo)]);
 
         let signed = AgentToolCall::new(
@@ -541,10 +525,11 @@ mod tests {
             Some("sig-a".into()),
         );
         engine
-            .dispatch_tool_batch(&mut session, &mut agent, AgentResponse::single(signed))
+            .dispatch_tool_batch(&mut agent, AgentResponse::single(signed))
             .await;
 
-        let calls = session
+        let calls = agent
+            .session
             .events()
             .iter()
             .find_map(|e| match e {
@@ -558,17 +543,14 @@ mod tests {
     #[tokio::test]
     async fn multiple_calls_produce_matching_ordered_results() {
         let engine = ToolExecutionEngine::new();
-        let mut session = AgentSession::new(5);
         let mut agent = test_agent(vec![Box::new(Echo), Box::new(Boom)]);
 
         let mut response = AgentResponse::new();
         response.push(call("echo", "call_1", json!({})));
         response.push(call("boom", "call_2", json!({})));
-        engine
-            .dispatch_tool_batch(&mut session, &mut agent, response)
-            .await;
+        engine.dispatch_tool_batch(&mut agent, response).await;
 
-        match session.events().last().unwrap() {
+        match agent.session.events().last().unwrap() {
             ConversationEvent::ToolResults(rs) => {
                 assert_eq!(rs[0].id, "call_1");
                 assert!(rs[0].result.starts_with("echo:"));
@@ -578,6 +560,7 @@ mod tests {
             other => panic!("expected ToolResults, got {other:?}"),
         }
     }
+
     fn valid_scratchpad_args() -> Value {
         json!({
             "main_goal": "ship the scratchpad tool",
@@ -590,27 +573,27 @@ mod tests {
     #[tokio::test]
     async fn scratchpad_update_success_mutates_session_and_returns_confirmation() {
         let engine = ToolExecutionEngine::new();
-        let mut session = AgentSession::builder().user("investigate").build();
         let mut agent = test_agent_builder(vec![])
             .with_signals(vec![Box::new(UpdateScratchpadSignal)])
+            .with_user_prompt("investigate")
             .build();
 
         engine
             .dispatch_tool_batch(
-                &mut session,
                 &mut agent,
                 AgentResponse::single(call("update_scratchpad", "call_1", valid_scratchpad_args())),
             )
             .await;
 
-        let sp = session
+        let sp = agent
+            .session
             .scratchpad
             .as_ref()
             .expect("scratchpad should be Some after update");
         assert_eq!(sp.main_goal, "ship the scratchpad tool");
         assert_eq!(sp.current_focus, "wiring the engine");
 
-        match session.events().last().unwrap() {
+        match agent.session.events().last().unwrap() {
             ConversationEvent::ToolResults(rs) => {
                 assert_eq!(rs[0].id, "call_1");
                 assert_eq!(rs[0].result, "scratchpad updated successfully");
@@ -622,9 +605,9 @@ mod tests {
     #[tokio::test]
     async fn scratchpad_update_invalid_args_leaves_session_scratchpad_untouched() {
         let engine = ToolExecutionEngine::new();
-        let mut session = AgentSession::builder().user("investigate").build();
         let mut agent = test_agent_builder(vec![])
             .with_signals(vec![Box::new(UpdateScratchpadSignal)])
+            .with_user_prompt("investigate")
             .build();
 
         // missing required fields -> serde_json::from_value fails
@@ -632,15 +615,14 @@ mod tests {
 
         engine
             .dispatch_tool_batch(
-                &mut session,
                 &mut agent,
                 AgentResponse::single(call("update_scratchpad", "call_1", bad_args)),
             )
             .await;
 
-        assert_eq!(session.scratchpad, None);
+        assert_eq!(agent.session.scratchpad, None);
 
-        match session.events().last().unwrap() {
+        match agent.session.events().last().unwrap() {
             ConversationEvent::ToolResults(rs) => {
                 assert!(rs[0].result.contains("Tool 'update_scratchpad' failed"));
                 assert!(rs[0].result.contains("invalid scratchpad"));
@@ -653,7 +635,6 @@ mod tests {
     async fn scratchpad_update_is_never_streamed() {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let engine = ToolExecutionEngine::new();
-        let mut session = AgentSession::new(5);
         let mut agent = test_agent_builder(vec![])
             .with_signals(vec![Box::new(UpdateScratchpadSignal)])
             .with_events_streaming(tx)
@@ -661,7 +642,6 @@ mod tests {
 
         engine
             .dispatch_tool_batch(
-                &mut session,
                 &mut agent,
                 AgentResponse::single(call("update_scratchpad", "call_1", valid_scratchpad_args())),
             )
@@ -677,39 +657,36 @@ mod tests {
     async fn scratchpad_update_does_not_go_through_registry() {
         // Registered as a signal, not a tool capability; even under deny policy it skips tool permission check
         let engine = ToolExecutionEngine::new_with_policy(ToolPermissionMode::Deny.to_policy());
-        let mut session = AgentSession::new(5);
         let mut agent = test_agent_builder(vec![])
             .with_signals(vec![Box::new(UpdateScratchpadSignal)])
             .build();
 
         engine
             .dispatch_tool_batch(
-                &mut session,
                 &mut agent,
                 AgentResponse::single(call("update_scratchpad", "call_1", valid_scratchpad_args())),
             )
             .await;
 
-        assert!(session.scratchpad.is_some());
+        assert!(agent.session.scratchpad.is_some());
     }
 
     #[tokio::test]
     async fn final_answer_is_not_gated_by_scratchpad_updates() {
         let engine = ToolExecutionEngine::new();
-        let mut session = AgentSession::builder().user("request").build();
         let mut agent = test_agent_builder(vec![])
             .with_signals(vec![Box::new(UpdateScratchpadSignal), Box::new(FinalAnswer)])
+            .with_user_prompt("request")
             .build();
 
         engine
             .dispatch_tool_batch(
-                &mut session,
                 &mut agent,
                 AgentResponse::single(call("final_answer", "answer_1", json!({"ok": true}))),
             )
             .await;
 
-        assert_eq!(session.final_answer, Some(json!({"ok": true})));
+        assert_eq!(agent.session.final_answer, Some(json!({"ok": true})));
     }
 
     struct FailingSignal;
@@ -739,20 +716,18 @@ mod tests {
     #[tokio::test]
     async fn signal_returning_error_becomes_error_result_not_panic() {
         let engine = ToolExecutionEngine::new();
-        let mut session = AgentSession::new(5);
         let mut agent = test_agent_builder(vec![])
             .with_signals(vec![Box::new(FailingSignal)])
             .build();
 
         engine
             .dispatch_tool_batch(
-                &mut session,
                 &mut agent,
                 AgentResponse::single(call("failing_sig", "call_1", json!({}))),
             )
             .await;
 
-        match session.events().last().unwrap() {
+        match agent.session.events().last().unwrap() {
             ConversationEvent::ToolResults(rs) => {
                 assert_eq!(rs[0].id, "call_1");
                 assert!(rs[0].result.contains("Tool 'failing_sig' failed"));
@@ -817,7 +792,6 @@ mod tests {
     async fn mixed_batch_runs_signals_before_tools_and_preserves_call_order() {
         let log = Arc::new(Mutex::new(Vec::new()));
         let engine = ToolExecutionEngine::new();
-        let mut session = AgentSession::new(5);
         let mut agent = test_agent_builder(vec![
             Box::new(LoggedTool {
                 name: "tool_a",
@@ -839,18 +813,19 @@ mod tests {
         response.push(call("sig_s", "id_s", json!({})));
         response.push(call("tool_b", "id_b", json!({})));
 
-        engine
-            .dispatch_tool_batch(&mut session, &mut agent, response)
-            .await;
+        engine.dispatch_tool_batch(&mut agent, response).await;
 
         let recorded = log.lock().unwrap().clone();
         assert_eq!(recorded.len(), 3);
-        assert_eq!(recorded[0], "sig_s", "signal must always execute before tools");
+        assert_eq!(
+            recorded[0], "sig_s",
+            "signal must always execute before tools"
+        );
         assert!(recorded[1..].contains(&"tool_a"));
         assert!(recorded[1..].contains(&"tool_b"));
 
         // Results returned in original call order [A, S, B]
-        match session.events().last().unwrap() {
+        match agent.session.events().last().unwrap() {
             ConversationEvent::ToolResults(rs) => {
                 assert_eq!(rs.len(), 3);
                 assert_eq!(rs[0].id, "id_a");
@@ -894,7 +869,6 @@ mod tests {
     async fn denied_tool_never_reaches_execute_and_result_is_in_right_position() {
         let executed = Arc::new(AtomicBool::new(false));
         let engine = ToolExecutionEngine::new_with_policy(ToolPermissionMode::Deny.to_policy());
-        let mut session = AgentSession::new(5);
         let mut agent = test_agent_builder(vec![
             Box::new(Echo),
             Box::new(TrackedMutatingTool {
@@ -909,16 +883,14 @@ mod tests {
         response.push(call("mutating_op", "id_1", json!({})));
         response.push(call("update_scratchpad", "id_2", valid_scratchpad_args()));
 
-        engine
-            .dispatch_tool_batch(&mut session, &mut agent, response)
-            .await;
+        engine.dispatch_tool_batch(&mut agent, response).await;
 
         assert!(
             !executed.load(Ordering::SeqCst),
             "denied tool must never reach execute"
         );
 
-        match session.events().last().unwrap() {
+        match agent.session.events().last().unwrap() {
             ConversationEvent::ToolResults(rs) => {
                 assert_eq!(rs.len(), 3);
                 assert_eq!(rs[0].id, "id_0");
@@ -927,7 +899,11 @@ mod tests {
                 assert_eq!(rs[1].id, "id_1");
                 assert_eq!(rs[1].name, "mutating_op");
                 assert!(rs[1].result.contains("Tool 'mutating_op' failed"));
-                assert!(rs[1].result.contains("blocked by the current run permission policy"));
+                assert!(
+                    rs[1]
+                        .result
+                        .contains("blocked by the current run permission policy")
+                );
 
                 assert_eq!(rs[2].id, "id_2");
                 assert_eq!(rs[2].result, "scratchpad updated successfully");
@@ -939,18 +915,15 @@ mod tests {
     #[tokio::test]
     async fn unknown_tool_name_behaves_as_before() {
         let engine = ToolExecutionEngine::new();
-        let mut session = AgentSession::new(5);
         let mut agent = test_agent(vec![Box::new(Echo)]);
 
         let mut response = AgentResponse::new();
         response.push(call("echo", "id_0", json!({})));
         response.push(call("nonexistent_tool", "id_1", json!({})));
 
-        engine
-            .dispatch_tool_batch(&mut session, &mut agent, response)
-            .await;
+        engine.dispatch_tool_batch(&mut agent, response).await;
 
-        match session.events().last().unwrap() {
+        match agent.session.events().last().unwrap() {
             ConversationEvent::ToolResults(rs) => {
                 assert_eq!(rs.len(), 2);
                 assert_eq!(rs[0].id, "id_0");
@@ -1034,7 +1007,6 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn slow_tool_returns_job_id_and_later_wait_job_fetches_result_once() {
         let engine = fast_engine(40);
-        let mut session = AgentSession::new(10);
         let mut agent = test_agent(vec![Box::new(SleepTool {
             name: "slow_op",
             delay: Duration::from_millis(120),
@@ -1043,13 +1015,12 @@ mod tests {
 
         engine
             .dispatch_tool_batch(
-                &mut session,
                 &mut agent,
                 AgentResponse::single(call("slow_op", "call_slow", json!({}))),
             )
             .await;
 
-        let job_id = match session.events().last().unwrap() {
+        let job_id = match agent.session.events().last().unwrap() {
             ConversationEvent::ToolResults(rs) => {
                 assert_eq!(rs[0].id, "call_slow");
                 assert_eq!(rs[0].name, "slow_op");
@@ -1066,7 +1037,6 @@ mod tests {
 
         engine
             .dispatch_tool_batch(
-                &mut session,
                 &mut agent,
                 AgentResponse::single(call(
                     "wait_job",
@@ -1076,7 +1046,7 @@ mod tests {
             )
             .await;
 
-        match session.events().last().unwrap() {
+        match agent.session.events().last().unwrap() {
             ConversationEvent::ToolResults(rs) => {
                 assert_eq!(rs[0].id, "call_wait_1");
                 assert_eq!(rs[0].name, "wait_job");
@@ -1090,7 +1060,6 @@ mod tests {
 
         engine
             .dispatch_tool_batch(
-                &mut session,
                 &mut agent,
                 AgentResponse::single(call(
                     "wait_job",
@@ -1100,7 +1069,7 @@ mod tests {
             )
             .await;
 
-        match session.events().last().unwrap() {
+        match agent.session.events().last().unwrap() {
             ConversationEvent::ToolResults(rs) => {
                 assert_eq!(
                     rs[0].result,
@@ -1114,7 +1083,6 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn wait_job_rejected_when_called_with_other_calls_while_others_still_run() {
         let engine = fast_engine(40);
-        let mut session = AgentSession::new(10);
         let mut agent = test_agent(vec![Box::new(Echo)]);
 
         let mut batch = AgentResponse::new();
@@ -1125,11 +1093,9 @@ mod tests {
             json!({"job_ids": ["some-id"]}),
         ));
 
-        engine
-            .dispatch_tool_batch(&mut session, &mut agent, batch)
-            .await;
+        engine.dispatch_tool_batch(&mut agent, batch).await;
 
-        match session.events().last().unwrap() {
+        match agent.session.events().last().unwrap() {
             ConversationEvent::ToolResults(rs) => {
                 assert_eq!(rs.len(), 2);
                 assert_eq!(rs[0].id, "call_echo");
@@ -1152,13 +1118,11 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn wait_job_alone_does_not_pay_tool_threshold() {
         let engine = fast_engine(2000);
-        let mut session = AgentSession::new(10);
         let mut agent = test_agent(vec![Box::new(Echo)]);
 
         let start = std::time::Instant::now();
         engine
             .dispatch_tool_batch(
-                &mut session,
                 &mut agent,
                 AgentResponse::single(call(
                     "wait_job",
@@ -1178,18 +1142,15 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn panicking_tool_returns_error_result_and_does_not_crash_engine() {
         let engine = fast_engine(50);
-        let mut session = AgentSession::new(10);
         let mut agent = test_agent(vec![Box::new(PanicTool), Box::new(Echo)]);
 
         let mut batch = AgentResponse::new();
         batch.push(call("panic_tool", "call_panic", json!({})));
         batch.push(call("echo", "call_echo", json!({"ok": true})));
 
-        engine
-            .dispatch_tool_batch(&mut session, &mut agent, batch)
-            .await;
+        engine.dispatch_tool_batch(&mut agent, batch).await;
 
-        match session.events().last().unwrap() {
+        match agent.session.events().last().unwrap() {
             ConversationEvent::ToolResults(rs) => {
                 assert_eq!(rs.len(), 2);
                 assert_eq!(rs[0].id, "call_panic");
@@ -1210,7 +1171,6 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn mixed_batch_fast_slow_signal_fast_preserves_exact_order() {
         let engine = fast_engine(50);
-        let mut session = AgentSession::new(10);
         let mut agent = test_agent_builder(vec![
             Box::new(Echo),
             Box::new(SleepTool {
@@ -1228,11 +1188,9 @@ mod tests {
         batch.push(call("update_scratchpad", "c2", valid_scratchpad_args()));
         batch.push(call("echo", "c3", json!({"n": 2})));
 
-        engine
-            .dispatch_tool_batch(&mut session, &mut agent, batch)
-            .await;
+        engine.dispatch_tool_batch(&mut agent, batch).await;
 
-        let job_id = match session.events().last().unwrap() {
+        let job_id = match agent.session.events().last().unwrap() {
             ConversationEvent::ToolResults(rs) => {
                 assert_eq!(rs.len(), 4);
                 assert_eq!(rs[0].id, "c0");
@@ -1254,13 +1212,12 @@ mod tests {
 
         engine
             .dispatch_tool_batch(
-                &mut session,
                 &mut agent,
                 AgentResponse::single(call("wait_job", "c4", json!({"job_ids": [job_id]}))),
             )
             .await;
 
-        match session.events().last().unwrap() {
+        match agent.session.events().last().unwrap() {
             ConversationEvent::ToolResults(rs) => {
                 assert_eq!(rs[0].result, format!("Job {job_id}: completed\neventual"));
             }
@@ -1271,7 +1228,6 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn tools_in_one_batch_run_concurrently_and_same_named_tools_keep_order() {
         let engine = fast_engine(200);
-        let mut session = AgentSession::new(10);
         let mut agent = test_agent(vec![Box::new(SleepTool {
             name: "work",
             delay: Duration::from_millis(120),
@@ -1283,9 +1239,7 @@ mod tests {
         batch.push(call("work", "id_second", json!({"tag": "B"})));
 
         let start = std::time::Instant::now();
-        engine
-            .dispatch_tool_batch(&mut session, &mut agent, batch)
-            .await;
+        engine.dispatch_tool_batch(&mut agent, batch).await;
         let elapsed = start.elapsed();
 
         assert!(
@@ -1293,7 +1247,7 @@ mod tests {
             "Expected concurrent execution near 200ms threshold, took {elapsed:?}"
         );
 
-        match session.events().last().unwrap() {
+        match agent.session.events().last().unwrap() {
             ConversationEvent::ToolResults(rs) => {
                 assert_eq!(rs.len(), 2);
                 assert_eq!(rs[0].id, "id_first");
@@ -1309,7 +1263,6 @@ mod tests {
     async fn same_named_slow_tools_across_turns_get_distinct_job_ids_and_merge_in_requested_order()
     {
         let engine = fast_engine(30);
-        let mut session = AgentSession::new(10);
         let mut agent = test_agent(vec![Box::new(SleepTool {
             name: "bash_sim",
             delay: Duration::from_millis(120),
@@ -1318,24 +1271,22 @@ mod tests {
 
         engine
             .dispatch_tool_batch(
-                &mut session,
                 &mut agent,
                 AgentResponse::single(call("bash_sim", "t1_call", json!({"tag": "turn1"}))),
             )
             .await;
-        let id_turn1 = match session.events().last().unwrap() {
+        let id_turn1 = match agent.session.events().last().unwrap() {
             ConversationEvent::ToolResults(rs) => extract_job_id(&rs[0].result),
             other => panic!("expected ToolResults, got {other:?}"),
         };
 
         engine
             .dispatch_tool_batch(
-                &mut session,
                 &mut agent,
                 AgentResponse::single(call("bash_sim", "t2_call", json!({"tag": "turn2"}))),
             )
             .await;
-        let id_turn2 = match session.events().last().unwrap() {
+        let id_turn2 = match agent.session.events().last().unwrap() {
             ConversationEvent::ToolResults(rs) => extract_job_id(&rs[0].result),
             other => panic!("expected ToolResults, got {other:?}"),
         };
@@ -1344,7 +1295,6 @@ mod tests {
 
         engine
             .dispatch_tool_batch(
-                &mut session,
                 &mut agent,
                 AgentResponse::single(call(
                     "wait_job",
@@ -1354,7 +1304,7 @@ mod tests {
             )
             .await;
 
-        match session.events().last().unwrap() {
+        match agent.session.events().last().unwrap() {
             ConversationEvent::ToolResults(rs) => {
                 assert_eq!(
                     rs[0].result,
@@ -1370,7 +1320,6 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn permission_prompt_does_not_stall_already_submitted_background_jobs() {
         let engine = fast_engine(30);
-        let mut session = AgentSession::new(10);
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
 
         let mut agent = test_agent_builder(vec![
@@ -1386,12 +1335,11 @@ mod tests {
 
         engine
             .dispatch_tool_batch(
-                &mut session,
                 &mut agent,
                 AgentResponse::single(call("bg_job", "c_bg", json!({}))),
             )
             .await;
-        let bg_id = match session.events().last().unwrap() {
+        let bg_id = match agent.session.events().last().unwrap() {
             ConversationEvent::ToolResults(rs) => extract_job_id(&rs[0].result),
             other => panic!("expected ToolResults, got {other:?}"),
         };
@@ -1409,7 +1357,6 @@ mod tests {
 
         engine
             .dispatch_tool_batch(
-                &mut session,
                 &mut agent,
                 AgentResponse::single(call("bash", "c_mut", json!({}))),
             )
@@ -1445,7 +1392,12 @@ mod tests {
 
         assert_eq!(partitioned.rejected.len(), 2);
         assert_eq!(partitioned.rejected[0].0, 1);
-        assert!(partitioned.rejected[0].1.result.contains("must be called on its own"));
+        assert!(
+            partitioned.rejected[0]
+                .1
+                .result
+                .contains("must be called on its own")
+        );
         assert_eq!(partitioned.rejected[1].0, 3);
         assert!(partitioned.rejected[1].1.result.contains("Unknown tool"));
     }
@@ -1479,7 +1431,10 @@ mod tests {
             &c,
             &mut agent,
         );
-        assert!(pending_res.result.contains("Still running in the background after 1s. Job ID: job-3."));
+        assert!(
+            pending_res
+                .result
+                .contains("Still running in the background after 1s. Job ID: job-3.")
+        );
     }
 }
-

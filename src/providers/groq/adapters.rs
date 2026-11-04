@@ -122,7 +122,7 @@ mod tests {
     use super::*;
     use crate::core::llm_client::AgentRequest;
     use crate::core::model::{Model, ModelName};
-    use crate::core::session::{AgentSession, Scratchpad};
+    use crate::core::session::{CoreAgentSession, Scratchpad};
     use serde_json::json;
 
     #[test]
@@ -196,11 +196,10 @@ mod tests {
 
     #[test]
     fn groq_request_includes_the_current_scratchpad() {
-        let mut session = AgentSession::builder()
-            .system("Investigator prompt")
-            .user("continue investigation")
-            .build();
-        session.update_scratchpad(Scratchpad {
+        let mut session = CoreAgentSession::new()
+            .with_system("Investigator prompt")
+            .with_user("continue investigation");
+        session.scratchpad = Some(Scratchpad {
             main_goal: "answer question".into(),
             completed_milestones: vec!["inspect config".into()],
             current_focus: "check tool registration".into(),

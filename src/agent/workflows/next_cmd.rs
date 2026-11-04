@@ -2,10 +2,8 @@ use std::env;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-
 use crate::agent::agents::AgentBuilder;
+use crate::agent::contracts::NextCommand;
 use crate::agent::error::AgentError;
 use crate::agent::patterns::react::ReactLoop;
 use crate::core::capability::Capability;
@@ -17,28 +15,6 @@ use crate::utils::FlatSchema;
 pub trait NextCmdToolFactory {
     fn cmd_predictor_tools(&self) -> Vec<Box<dyn Capability>>;
 }
-
-#[derive(JsonSchema, Deserialize, Serialize, Debug)]
-#[schemars(deny_unknown_fields)]
-pub enum Reversibility {
-    Full,
-    Mostly,
-    Partial,
-    Hard,
-    Irreversible,
-}
-
-#[derive(JsonSchema, Deserialize, Serialize, Debug)]
-#[schemars(deny_unknown_fields)]
-pub struct NextCommand {
-    /// The exact shell command to run. May span multiple lines; no Markdown fences or `$ ` prefix.
-    pub cmd: String,
-    /// One short, single-line sentence describing the command and any assumption made. Under 15 words.
-    pub man: String,
-    /// How reversible the command is, given the current environment.
-    pub scale: Reversibility,
-}
-impl FlatSchema for NextCommand {}
 
 pub struct NextCmd<'a, P: LLMProvider + Clone, M: Memory, F: NextCmdToolFactory> {
     runner: ReactLoop<P>,
@@ -69,10 +45,10 @@ impl<'a, P: LLMProvider + Clone, M: Memory, F: NextCmdToolFactory> NextCmd<'a, P
             self.factory.cmd_predictor_tools(),
             NextCommand::schema(),
         )
+        .with_user_prompt(user_prompt)
         .build();
-        let mut session = agent.build_session(user_prompt);
 
-        let prediction: NextCommand = self.runner.run(&mut agent, &mut session).await?;
+        let prediction: NextCommand = self.runner.run(&mut agent).await?;
 
         if loaded {
             let entry = Interaction {
@@ -122,7 +98,7 @@ mod tests {
     use crate::core::error::ProviderError;
     use crate::core::llm_client::AgentRequest;
     use crate::core::responce::{AgentResponse, AgentToolCall};
-    use crate::core::session::{AgentSession, ConversationEvent};
+    use crate::core::session::{ConversationEvent, CoreAgentSession};
     use crate::persistence::NextCmdMemory;
     use serde_json::{Value, json};
     use std::sync::{Arc, Mutex};
@@ -183,7 +159,7 @@ mod tests {
 
         async fn complete_structured(
             &self,
-            _session: &AgentSession,
+            _session: &CoreAgentSession,
             _schema: Value,
         ) -> Result<Value, ProviderError> {
             Ok(json!({

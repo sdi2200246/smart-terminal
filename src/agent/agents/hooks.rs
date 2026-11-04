@@ -1,7 +1,7 @@
 use crate::agent::error::AgentError;
 use crate::agent::patterns::hook::{AgentLoopHook, HookAction};
-use crate::core::responce::{AgentResponse, AgentToolCall};
-use crate::core::session::AgentSession;
+use crate::agent::session::AgentSession;
+use crate::core::responce::AgentToolCall;
 use std::collections::HashMap;
 
 pub struct DefaultAgentHook;
@@ -59,7 +59,7 @@ mod tests {
     #[test]
     fn first_call_continues() {
         let mut hook = ToolsRegulator::new();
-        let mut session = AgentSession::new(5);
+        let mut session = AgentSession::builder().steps(5).build();
         let call = fake_call("bash", json!({"command": "ls"}));
 
         let action = hook.pre_call(&mut session, &call).unwrap();
@@ -69,7 +69,7 @@ mod tests {
     #[test]
     fn duplicate_call_skips() {
         let mut hook = ToolsRegulator::new();
-        let mut session = AgentSession::new(5);
+        let mut session = AgentSession::builder().steps(5).build();
         let call = fake_call("bash", json!({"command": "ls"}));
 
         hook.pre_call(&mut session, &call).unwrap();
@@ -82,7 +82,7 @@ mod tests {
     #[test]
     fn same_tool_different_args_continues() {
         let mut hook = ToolsRegulator::new();
-        let mut session = AgentSession::new(5);
+        let mut session = AgentSession::builder().steps(5).build();
 
         let call_a = fake_call("read_file", json!({"path": "src/main.rs"}));
         let call_b = fake_call("read_file", json!({"path": "src/lib.rs"}));
@@ -96,7 +96,7 @@ mod tests {
     #[test]
     fn duplicate_injects_error_into_session() {
         let mut hook = ToolsRegulator::new();
-        let mut session = AgentSession::new(5);
+        let mut session = AgentSession::builder().steps(5).build();
         let call = fake_call("bash", json!({"command": "ls"}));
 
         hook.pre_call(&mut session, &call).unwrap();

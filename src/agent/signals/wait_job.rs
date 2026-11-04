@@ -114,7 +114,6 @@ mod tests {
     use super::*;
     use crate::agent::agents::AgentBuilder;
     use crate::core::model::{Model, ModelName};
-    use crate::core::session::AgentSession;
     use crate::multithreading::{JobEngine, JobState};
     use serde_json::json;
     use std::thread;
@@ -123,11 +122,9 @@ mod tests {
         store: &JobStore,
         args: Value,
     ) -> Result<AgentSignalOutcome, ToolError> {
-        let mut session = AgentSession::new(5);
         let mut agent =
             AgentBuilder::base("test", Model::with_default_temp(ModelName::GptOss120B)).build();
         let mut ctx = AgentSignalContext {
-            session: &mut session,
             agent: &mut agent,
             job_store: store,
         };

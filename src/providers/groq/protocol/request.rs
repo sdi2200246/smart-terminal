@@ -1,6 +1,6 @@
 use super::message::Message;
 use super::tool::Tool;
-use crate::core::session::AgentSession;
+use crate::core::session::CoreAgentSession;
 use serde::Serialize;
 use serde_json::Value;
 
@@ -18,7 +18,7 @@ pub struct GroqRequest {
 }
 
 impl GroqRequest {
-    pub fn structured(session: &AgentSession, schema: Value) -> Self {
+    pub fn structured(session: &CoreAgentSession, schema: Value) -> Self {
         // Use flat_map to unpack the Vec<Message> returned by the adapter
         let messages = session
             .events

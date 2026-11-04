@@ -13,13 +13,11 @@ pub use wait_job::{WAIT_JOB_NAME, WaitJobSignal};
 
 use crate::agent::agents::Agent;
 use crate::core::capability::ToolMetaData;
-use crate::core::session::AgentSession;
 use crate::multithreading::JobStore;
 use crate::tools::error::ToolError;
 use serde_json::Value;
 
 pub struct AgentSignalContext<'a> {
-    pub session: &'a mut AgentSession,
     pub agent: &'a mut Agent,
     pub job_store: &'a JobStore,
 }

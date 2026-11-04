@@ -4,7 +4,7 @@ use super::protocol::responce::{GroqResponse, LlmStructuredOutput, LlmToolCall};
 use crate::core::error::ProviderError;
 use crate::core::llm_client::{AgentRequest, LLMProvider};
 use crate::core::responce::{AgentResponse, AgentToolCall};
-use crate::core::session::AgentSession;
+use crate::core::session::CoreAgentSession;
 use crate::providers::client::{ClientConfig, GenericLlmClient, ProviderCodec};
 use reqwest::StatusCode;
 use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
@@ -23,7 +23,7 @@ impl ProviderCodec for GroqProtocol {
         GroqRequest::from(req)
     }
 
-    fn build_structured_request(&self, session: &AgentSession, schema: Value) -> Self::Request {
+    fn build_structured_request(&self, session: &CoreAgentSession, schema: Value) -> Self::Request {
         GroqRequest::structured(session, schema)
     }
 
@@ -107,7 +107,7 @@ impl LLMProvider for GroqClient {
 
     async fn complete_structured(
         &self,
-        session: &AgentSession,
+        session: &CoreAgentSession,
         schema: Value,
     ) -> Result<Value, ProviderError> {
         self.inner.run_complete_structured(session, schema).await

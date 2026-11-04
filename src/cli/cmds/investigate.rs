@@ -2,11 +2,11 @@ use std::env;
 use std::io;
 use std::path::PathBuf;
 
+use crate::agent::contracts::{NextCommand, Plan, Report};
 use crate::agent::error::AgentError;
 use crate::agent::patterns::react::ReactLoop;
-use crate::agent::workflows::investigator::{Investigator, Plan, Report};
 use crate::agent::patterns::tool_engine::ToolPermissionMode;
-use crate::agent::workflows::next_cmd::NextCommand;
+use crate::agent::workflows::investigator::Investigator;
 use crate::cli::presenters::Presenter;
 use crate::cli::suggestion_handoff::write_recommendation;
 use crate::cli::{

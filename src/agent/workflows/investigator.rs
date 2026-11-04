@@ -1,10 +1,7 @@
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-
 use crate::agent::agents::{AgentBuilder, AgentEvent};
+use crate::agent::contracts::{Plan, Report};
 use crate::agent::error::AgentError;
 use crate::agent::patterns::react::ReactLoop;
-use crate::agent::workflows::next_cmd::NextCommand;
 use crate::core::capability::Capability;
 use crate::core::llm_client::LLMProvider;
 use crate::core::memory::InvestigationSession;
@@ -16,35 +13,6 @@ pub trait InvestigatorToolFactory {
     fn planner_tools(&self) -> Vec<Box<dyn Capability>>;
     fn executor_tools(&self) -> Vec<Box<dyn Capability>>;
 }
-
-#[derive(JsonSchema, Deserialize, Serialize, Debug)]
-#[schemars(deny_unknown_fields)]
-pub struct PlanStep {
-    /// Concrete investigation step: what to look at, what command to run, or what file to read. One file, one command, or one directory per step.
-    pub action: String,
-    /// Why this step advances the answer to the user's question.
-    pub rationale: String,
-}
-
-#[derive(JsonSchema, Deserialize, Serialize, Debug)]
-#[schemars(deny_unknown_fields)]
-pub struct Plan {
-    /// One-line restatement of the user's question.
-    pub goal: String,
-    /// ordered, atomic investigation steps grounded in directory paths verified to exist.
-    pub steps: Vec<PlanStep>,
-}
-impl FlatSchema for Plan {}
-
-#[derive(JsonSchema, Deserialize, Serialize, Debug)]
-#[schemars(deny_unknown_fields)]
-pub struct Report {
-    ///A direct text with out special characters report answering the user's question. Not a description of what was done.
-    pub report: String,
-    /// The most likely next command the user wants to run, grounded in the investigation.
-    pub recommended_command: NextCommand,
-}
-impl FlatSchema for Report {}
 
 pub struct Investigator<P: LLMProvider + Clone, F: InvestigatorToolFactory> {
     runner: ReactLoop<P>,
@@ -85,75 +53,36 @@ impl<'a, P: LLMProvider + Clone, F: InvestigatorToolFactory> Investigator<P, F> 
             self.factory.planner_tools(),
             Plan::schema(),
         )
+        .with_session(saved_session.planner.take())
+        .with_user_prompt(format!("Question:\n{}", question))
         .with_events_streaming_opt(self.event_stream.clone())
         .build();
-        let planner_prompt = planner_prompt(&question, &saved_session.completed_reports);
-        let mut planner_session = match saved_session.planner.take() {
-            Some(mut session) => {
-                session.add_user(planner_prompt);
-                session
-            }
-            None => planner_agent.build_session(planner_prompt),
-        };
-        planner_session.replace_initial_system_prompt(planner_agent.system_prompt.clone());
 
-        let plan: Plan = self
-            .runner
-            .run(&mut planner_agent, &mut planner_session)
-            .await?;
+        let plan: Plan = self.runner.run(&mut planner_agent).await?;
 
-        let plan_json = serde_json::to_string_pretty(&plan).expect("plan serializes");
-        let user_prompt = format!(
-            "Question: {}\n\nInvestigation plan:\n{}",
-            question, plan_json
-        );
+        let user_prompt = format!("Question: {}\n\nInvestigation plan:\n{}", question, plan);
 
         let mut executor_agent = AgentBuilder::executor(
             Model::creative(ModelName::GptOss120B),
             self.factory.executor_tools(),
             Report::schema(),
         )
+        .with_session(saved_session.executor.take())
+        .with_user_prompt(user_prompt)
         .with_events_streaming_opt(self.event_stream.clone())
         .build();
-        let mut executor_session = match saved_session.executor.take() {
-            Some(mut session) => {
-                session.add_user(user_prompt);
-                session
-            }
-            None => executor_agent.build_session(user_prompt),
-        };
-        executor_session.replace_initial_system_prompt(executor_agent.system_prompt.clone());
 
-        let report: Report = self
-            .runner
-            .run(&mut executor_agent, &mut executor_session)
-            .await?;
+        let report: Report = self.runner.run(&mut executor_agent).await?;
 
-        saved_session
-            .completed_reports
-            .push(serde_json::to_string_pretty(&report).expect("report serializes"));
-        saved_session.planner = Some(planner_session);
-        saved_session.executor = Some(executor_session);
+        planner_agent
+            .session
+            .add_user(format!("Execution report:\n{}", report));
+
+        saved_session.planner = Some(planner_agent.session.into());
+        saved_session.executor = Some(executor_agent.session.into());
 
         Ok((plan, report, saved_session))
     }
-}
-
-fn planner_prompt(question: &str, completed_reports: &[String]) -> String {
-    if completed_reports.is_empty() {
-        return format!("Question:\n{}", question);
-    }
-
-    let previous_reports = completed_reports
-        .iter()
-        .enumerate()
-        .map(|(index, report)| format!("Execution {}:\n{}", index + 1, report))
-        .collect::<Vec<_>>()
-        .join("\n\n");
-    format!(
-        "Previous execution reports and findings are included below. Use them to interpret references to earlier results, and re-check facts that may have changed.\n\n{}\n\nCurrent question:\n{}",
-        previous_reports, question
-    )
 }
 
 #[cfg(test)]
@@ -162,7 +91,7 @@ mod tests {
     use crate::core::error::ProviderError;
     use crate::core::llm_client::AgentRequest;
     use crate::core::responce::{AgentResponse, AgentToolCall};
-    use crate::core::session::ConversationEvent;
+    use crate::core::session::{ConversationEvent, CoreAgentSession};
     use serde_json::{Value, json};
     use std::sync::{Arc, Mutex};
 
@@ -197,7 +126,7 @@ mod tests {
 
         async fn complete_structured(
             &self,
-            _session: &crate::core::session::AgentSession,
+            _session: &CoreAgentSession,
             schema: Value,
         ) -> Result<Value, ProviderError> {
             if schema["properties"].get("goal").is_some() {
@@ -246,29 +175,12 @@ mod tests {
         }
         assert!(requests[2].iter().any(|event| matches!(
             event,
-            ConversationEvent::User(question)
-                if question.contains("test report") && question.contains("echo done")
+            ConversationEvent::User(msg)
+                if msg.contains("Execution report:")
+                    && msg.contains("test report")
+                    && msg.contains("echo done")
         )));
         assert!(updated_session.planner.is_some());
         assert!(updated_session.executor.is_some());
-        assert_eq!(updated_session.completed_reports.len(), 2);
-    }
-
-    #[test]
-    fn report_requires_a_recommended_command() {
-        let report = serde_json::json!({
-            "report": "The working tree has no changes.",
-            "recommended_command": {
-                "cmd": "git status --short",
-                "man": "Verify that the working tree remains clean.",
-                "scale": "Full"
-            }
-        });
-        assert!(serde_json::from_value::<Report>(report).is_ok());
-
-        let report_without_command = serde_json::json!({
-            "report": "The working tree has no changes."
-        });
-        assert!(serde_json::from_value::<Report>(report_without_command).is_err());
     }
 }
