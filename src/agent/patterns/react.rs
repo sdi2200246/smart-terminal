@@ -1,12 +1,8 @@
-use crate::agent::agents::{Agent, AgentState};
-use crate::agent::error::AgentError;
-use crate::agent::patterns::tool_engine::ToolExecutionEngine;
-use crate::agent::patterns::tool_engine::ToolExecutionPolicy;
 use crate::agent::prompts::STRUCTURING_SYSTEM_PROMPT;
-use crate::core::error::ProviderError;
-use crate::core::llm_client::{AgentRequest, LLMProvider};
-use crate::core::responce::AgentResponse;
-use crate::core::session::AgentSession;
+use crate::agent::{
+    Agent, AgentError, AgentState, ToolExecutionEngine, ToolExecutionPolicy,
+};
+use crate::core::{AgentRequest, AgentResponse, AgentSession, LLMProvider, ProviderError};
 use crate::utils::FlatSchema;
 
 use serde::de::DeserializeOwned;
@@ -156,12 +152,12 @@ impl<P: LLMProvider> ReactLoop<P> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::agents::AgentBuilder;
-    use crate::agent::signals::{FinalAnswerSignal, UpdateScratchpadSignal};
-    use crate::agent::workflows::next_cmd::NextCommand;
-    use crate::core::model::{Model, ModelName};
-    use crate::core::responce::{AgentResponse, AgentToolCall};
-    use crate::core::session::{ConversationEvent, ToolCall, ToolResult};
+    use crate::agent::{
+        AgentBuilder, FinalAnswerSignal, NextCommand, UpdateScratchpadSignal,
+    };
+    use crate::core::{
+        AgentResponse, AgentToolCall, ConversationEvent, Model, ModelName, ToolCall, ToolResult,
+    };
     use serde_json::{Value, json};
     use std::sync::{
         Arc,

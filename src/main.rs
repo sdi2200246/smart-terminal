@@ -1,6 +1,6 @@
 use clap::Parser;
-use smart_terminal::cli::cli::{Cli, Commands};
 use smart_terminal::cli::cmds::{investigate, memory, next_cmd};
+use smart_terminal::cli::{Cli, Commands};
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 

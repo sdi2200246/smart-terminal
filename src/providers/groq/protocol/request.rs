@@ -1,6 +1,6 @@
 use super::message::Message;
 use super::tool::Tool;
-use crate::core::session::AgentSession;
+use crate::core::AgentSession;
 use serde::Serialize;
 use serde_json::Value;
 

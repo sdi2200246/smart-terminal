@@ -3,8 +3,7 @@ use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
-use crate::core::folder_index::FolderIndex;
-use crate::core::memory::{Conversation, Interaction, Memory, PersistenceError};
+use crate::core::{Conversation, FolderIndex, Interaction, Memory, PersistenceError};
 use crate::persistence::ProjectRootResolver;
 
 const INDEX_FILENAME: &str = "index.json";
@@ -387,8 +386,7 @@ mod tests {
 
     #[test]
     fn shared_project_resolver_migrates_investigator_history_after_parent_registration() {
-        use crate::core::memory::{InvestigationSession, InvestigationSessionStore};
-        use crate::core::session::AgentSession;
+        use crate::core::{AgentSession, InvestigationSession, InvestigationSessionStore};
         use crate::persistence::{FileInvestigationSessionStore, ProjectRootResolver};
 
         let (mut memory, temporary) = fresh();

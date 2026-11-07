@@ -3,15 +3,9 @@ mod integration {
     mod grog;
     mod investigator;
     mod next_cmd;
-    use smart_terminal::agent::workflows::investigator::InvestigatorToolFactory;
-    use smart_terminal::agent::workflows::next_cmd::NextCmdToolFactory;
-    use smart_terminal::core::capability::Capability;
-    use smart_terminal::tools::bash::Bash;
-    use smart_terminal::tools::docker::Docker;
-    use smart_terminal::tools::git_diff::GitDiffStaged;
-    use smart_terminal::tools::last_error::ReadLastError;
-    use smart_terminal::tools::read_dir::ReadDir;
-    use smart_terminal::tools::read_file::ReadFile;
+    use smart_terminal::agent::{InvestigatorToolFactory, NextCmdToolFactory};
+    use smart_terminal::core::Capability;
+    use smart_terminal::tools::{Bash, Docker, GitDiffStaged, ReadDir, ReadFile, ReadLastError};
 
     pub struct TestToolProvider;
 

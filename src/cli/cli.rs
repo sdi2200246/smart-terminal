@@ -1,4 +1,4 @@
-use crate::agent::patterns::tool_engine::ToolPermissionMode;
+use crate::agent::ToolPermissionMode;
 use clap::{Args, Parser, Subcommand};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

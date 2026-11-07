@@ -2,20 +2,17 @@ use std::env;
 use std::io;
 use std::path::PathBuf;
 
-use crate::agent::error::AgentError;
-use crate::agent::patterns::react::ReactLoop;
-use crate::agent::workflows::investigator::{Investigator, Plan, Report};
-use crate::agent::patterns::tool_engine::ToolPermissionMode;
-use crate::agent::workflows::next_cmd::NextCommand;
-use crate::cli::presenters::Presenter;
-use crate::cli::suggestion_handoff::write_recommendation;
-use crate::cli::{
-    agent_setup::CliToolProvider,
-    cli::{InvestigateAction, InvestigateArgs, InvestigationSessionAction},
+use crate::agent::{
+    AgentError, AgentEvent, Investigator, NextCommand, Plan, ReactLoop, Report,
+    ToolPermissionMode,
 };
-use crate::core::memory::{InvestigationSession, InvestigationSessionStore};
+use crate::cli::{
+    CliToolProvider, InvestigateAction, InvestigateArgs, InvestigationSessionAction, Presenter,
+    write_recommendation,
+};
+use crate::core::{InvestigationSession, InvestigationSessionStore};
 use crate::persistence::{FileInvestigationSessionStore, ProjectRootResolver};
-use crate::providers::google::client::GoogleClient;
+use crate::providers::GoogleClient;
 use tokio::sync::mpsc::UnboundedSender;
 
 enum RunError {
@@ -133,7 +130,7 @@ async fn run_workflow(
 async fn invoke_workflow(
     question: &str,
     saved_session: InvestigationSession,
-    tx: UnboundedSender<crate::agent::agents::AgentEvent>,
+    tx: UnboundedSender<AgentEvent>,
     permission_mode: ToolPermissionMode,
 ) -> Result<Option<(Plan, Report, InvestigationSession)>, RunError> {
     let provider = GoogleClient::pooled();

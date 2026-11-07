@@ -1,11 +1,9 @@
 use super::protocol::message::Message;
 use super::protocol::request::GroqRequest;
 use super::protocol::tool::{Tool, ToolCall, ToolMetaData};
-use crate::core::capability::ToolMetaData as CoreToolMetaData;
-use crate::core::llm_client::AgentRequest;
-use crate::core::model::ModelName;
-use crate::core::session::{
-    ConversationEvent, ToolCall as CoreToolCall, ToolResult as CoreToolResult,
+use crate::core::{
+    AgentRequest, ConversationEvent, ModelName, ToolCall as CoreToolCall,
+    ToolMetaData as CoreToolMetaData, ToolResult as CoreToolResult,
 };
 use serde_json::Value;
 
@@ -120,9 +118,7 @@ impl From<&AgentRequest<'_>> for GroqRequest {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::llm_client::AgentRequest;
-    use crate::core::model::{Model, ModelName};
-    use crate::core::session::{AgentSession, Scratchpad};
+    use crate::core::{AgentRequest, AgentSession, Model, ModelName, Scratchpad};
     use serde_json::json;
 
     #[test]

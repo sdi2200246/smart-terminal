@@ -1,6 +1,6 @@
 use super::error::ToolError;
 use super::prompts::{GIT_DIFF_STAGED_DESCRIPTION, GIT_DIFF_STAGED_GUIDANCE};
-use crate::core::capability::{Capability, ToolMetaData, ToolSafety};
+use crate::core::{Capability, ToolMetaData, ToolSafety};
 use serde_json::Value;
 use std::process::Command;
 

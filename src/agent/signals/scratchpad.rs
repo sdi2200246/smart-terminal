@@ -1,8 +1,7 @@
 use super::{AgentLoopControl, AgentSignal, AgentSignalContext, AgentSignalOutcome};
 use crate::agent::prompts::{SCRATCHPAD_DESCRIPTION, SCRATCHPAD_GUIDANCE};
-use crate::core::capability::{ToolMetaData, ToolSafety};
-use crate::core::session::Scratchpad;
-use crate::tools::error::ToolError;
+use crate::core::{Scratchpad, ToolMetaData, ToolSafety};
+use crate::tools::ToolError;
 use crate::utils::FlatSchema;
 use serde_json::Value;
 

@@ -3,7 +3,7 @@ use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
-use crate::core::memory::{InvestigationSession, InvestigationSessionStore, PersistenceError};
+use crate::core::{InvestigationSession, InvestigationSessionStore, PersistenceError};
 use crate::persistence::ProjectRootResolver;
 
 const INVESTIGATION_SESSIONS_DIR: &str = "investigator-conversations";
@@ -118,7 +118,7 @@ impl InvestigationSessionStore for FileInvestigationSessionStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::session::AgentSession;
+    use crate::core::{AgentSession, ConversationEvent, ToolCall};
     use tempfile::TempDir;
 
     #[test]
@@ -127,7 +127,7 @@ mod tests {
         let store = FileInvestigationSessionStore::new(temporary.path());
         let mut planner = AgentSession::builder().user("Question").build();
         planner.add_tool_calls(vec![
-            crate::core::session::ToolCall::new(
+            ToolCall::new(
                 "inspect",
                 serde_json::json!({"path": "."}),
                 "call-1",
@@ -145,7 +145,7 @@ mod tests {
         let loaded = store.load("/project/a").unwrap().unwrap();
         let loaded_planner = loaded.planner.as_ref().unwrap();
         match &loaded_planner.events[1] {
-            crate::core::session::ConversationEvent::ToolCalls(calls) => {
+            ConversationEvent::ToolCalls(calls) => {
                 assert_eq!(calls[0].thinking_state.as_deref(), Some("gemini-signature"))
             }
 
@@ -222,12 +222,12 @@ mod tests {
         let planner_events = &migrated.planner.unwrap().events;
         assert!(matches!(
             &planner_events[0],
-            crate::core::session::ConversationEvent::User(question)
+            ConversationEvent::User(question)
                 if question == "parent question"
         ));
         assert!(matches!(
             &planner_events[1],
-            crate::core::session::ConversationEvent::User(question)
+            ConversationEvent::User(question)
                 if question == "child question"
         ));
         assert_eq!(migrated.completed_reports, vec!["child finding"]);

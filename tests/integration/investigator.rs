@@ -1,9 +1,7 @@
 use super::TestToolProvider;
-use smart_terminal::agent::patterns::react::ReactLoop;
-use smart_terminal::agent::workflows::investigator::{Investigator, Plan, Report};
-use smart_terminal::core::llm_client::LLMProvider;
-use smart_terminal::providers::google::client::GoogleClient;
-use smart_terminal::providers::groq::client::GroqClient;
+use smart_terminal::agent::{Investigator, Plan, ReactLoop, Report};
+use smart_terminal::core::LLMProvider;
+use smart_terminal::providers::{GoogleClient, GroqClient};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
 
