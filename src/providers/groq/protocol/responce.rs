@@ -1,5 +1,5 @@
 use super::message::Message;
-use crate::providers::groq::error::GroqError;
+use super::super::error::GroqError;
 use serde::Deserialize;
 use serde_json::Value;
 

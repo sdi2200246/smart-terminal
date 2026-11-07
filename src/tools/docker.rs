@@ -1,6 +1,6 @@
 use super::error::ToolError;
 use super::prompts::{DOCKER_DESCRIPTION, DOCKER_GUIDANCE};
-use crate::core::capability::{Capability, ToolMetaData, ToolSafety};
+use crate::core::{Capability, ToolMetaData, ToolSafety};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::Path;

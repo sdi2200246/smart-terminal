@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-pub use crate::core::folder_index::FolderIndex as MemoryIndex;
-use crate::core::session::AgentSession;
+pub use super::folder_index::FolderIndex as MemoryIndex;
+use super::session::AgentSession;
 
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct Conversation {

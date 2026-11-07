@@ -1,11 +1,10 @@
 use super::error::GroqError;
 use super::protocol::request::GroqRequest;
 use super::protocol::responce::{GroqResponse, LlmStructuredOutput, LlmToolCall};
-use crate::core::error::ProviderError;
-use crate::core::llm_client::{AgentRequest, LLMProvider};
-use crate::core::responce::{AgentResponse, AgentToolCall};
-use crate::core::session::AgentSession;
-use crate::providers::client::{ClientConfig, GenericLlmClient, ProviderCodec};
+use crate::core::{
+    AgentRequest, AgentResponse, AgentSession, AgentToolCall, LLMProvider, ProviderError,
+};
+use crate::providers::{ClientConfig, GenericLlmClient, ProviderCodec};
 use reqwest::StatusCode;
 use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
 use serde_json::Value;
@@ -117,9 +116,7 @@ impl LLMProvider for GroqClient {
 #[cfg(test)]
 mod unit {
     use super::*;
-    use crate::core::responce::AgentToolCall;
-    use crate::providers::groq::protocol::request::GroqRequest;
-    use crate::providers::groq::protocol::responce::{GroqResponse, LlmToolCall};
+    use crate::core::AgentToolCall;
     use reqwest::StatusCode;
     use reqwest::header::AUTHORIZATION;
     use serde_json::json;

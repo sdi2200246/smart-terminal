@@ -1,5 +1,5 @@
 use super::message::Message;
-use crate::providers::google::error::GoogleError;
+use super::super::error::GoogleError;
 use serde::Deserialize;
 use serde_json::Value;
 

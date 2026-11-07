@@ -1,7 +1,7 @@
 use super::message::Message;
 use super::tool::Tool;
-use crate::core::session::{AgentSession, ConversationEvent};
-use crate::providers::google::adapters::to_gemini_schema;
+use super::super::adapters::to_gemini_schema;
+use crate::core::{AgentSession, ConversationEvent};
 
 use serde::Serialize;
 use serde_json::Value;
@@ -62,7 +62,7 @@ impl GeminiRequest {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::session::AgentSession;
+    use crate::core::AgentSession;
     use serde_json::json;
 
     fn session_with(events: Vec<ConversationEvent>) -> AgentSession {

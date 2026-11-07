@@ -1,11 +1,8 @@
 use super::TestToolProvider;
-use smart_terminal::agent::patterns::react::ReactLoop;
-use smart_terminal::agent::workflows::next_cmd::{NextCmd, NextCommand};
-use smart_terminal::core::llm_client::LLMProvider;
-use smart_terminal::core::memory::{Interaction, Memory};
+use smart_terminal::agent::{NextCmd, NextCommand, ReactLoop};
+use smart_terminal::core::{Interaction, LLMProvider, Memory};
 use smart_terminal::persistence::NextCmdMemory;
-use smart_terminal::providers::google::client::GoogleClient;
-use smart_terminal::providers::groq::client::GroqClient;
+use smart_terminal::providers::{GoogleClient, GroqClient};
 use std::env;
 use tempfile::TempDir;
 use tracing_subscriber::EnvFilter;

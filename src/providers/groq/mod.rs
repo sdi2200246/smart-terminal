@@ -1,4 +1,8 @@
-pub mod adapters;
-pub mod client;
-pub mod error;
-pub mod protocol;
+mod adapters;
+mod client;
+mod error;
+mod protocol;
+
+pub use client::{GroqClient, GroqProtocol};
+pub use error::GroqError;
+

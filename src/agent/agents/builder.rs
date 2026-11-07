@@ -4,20 +4,18 @@ use serde::Serialize;
 use serde_json::Value;
 use tokio::sync::mpsc::UnboundedSender;
 
+use super::Agent;
 use super::contexts;
 use super::events::AgentEvent;
 use super::hooks::{DefaultAgentHook, ToolsRegulator};
-use super::Agent;
-use crate::agent::patterns::hook::AgentLoopHook;
 use crate::agent::prompts::{
     AgentPrompt, CMD_PREDICTOR_PROMPT, EXECUTOR_PROMPT, PLANNER_PROMPT, SystemPromptBuilder,
 };
-use crate::agent::signals::{
-    AgentAction, AgentActionSpace, AgentSignal, FinalAnswerSignal, UpdateScratchpadSignal,
-    WAIT_JOB_NAME, WaitJobSignal,
+use crate::agent::{
+    AgentAction, AgentActionSpace, AgentLoopHook, AgentSignal, FinalAnswerSignal,
+    UpdateScratchpadSignal, WAIT_JOB_NAME, WaitJobSignal,
 };
-use crate::core::capability::Capability;
-use crate::core::model::Model;
+use crate::core::{Capability, Model};
 
 enum PromptSource {
     Raw(String),
