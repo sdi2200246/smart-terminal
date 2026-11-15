@@ -51,7 +51,7 @@ mod tests {
         );
         assert_eq!(
             to_openrouter_model_string(ModelName::GptOss120B),
-            "meta-llama/llama-3.3-70b-instruct:free"
+            "nvidia/nemotron-3.5-super-vl:free"
         );
     }
 }
