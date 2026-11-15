@@ -3,7 +3,7 @@ use reqwest::StatusCode;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum GroqError {
+pub enum OpenAiError {
     #[error("Request timed out")]
     Timeout {
         #[source]
@@ -35,22 +35,21 @@ pub enum GroqError {
     Protocol { status: StatusCode, body: String },
 }
 
-impl From<GroqError> for ProviderError {
-    fn from(e: GroqError) -> Self {
+impl From<OpenAiError> for ProviderError {
+    fn from(e: OpenAiError) -> Self {
         match e {
-            GroqError::TokenLimit { .. } => ProviderError::TokenLimit {
+            OpenAiError::TokenLimit { .. } => ProviderError::TokenLimit {
                 source: anyhow::anyhow!(e),
             },
-            GroqError::InvalidToolCall { .. } => ProviderError::InvalidToolCall {
+            OpenAiError::InvalidToolCall { .. } => ProviderError::InvalidToolCall {
                 source: anyhow::anyhow!(e),
             },
-            GroqError::MalformedResponse { .. } => ProviderError::MalformedResponse {
+            OpenAiError::MalformedResponse { .. } => ProviderError::MalformedResponse {
                 source: anyhow::anyhow!(e),
             },
-            GroqError::UnexpectedOutput { .. } => ProviderError::MalformedResponse {
+            OpenAiError::UnexpectedOutput { .. } => ProviderError::MalformedResponse {
                 source: anyhow::anyhow!(e),
             },
-
             _ => ProviderError::Protocol {
                 source: anyhow::anyhow!(e),
             },
