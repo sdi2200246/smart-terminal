@@ -1437,4 +1437,26 @@ mod tests {
                 .contains("Still running in the background after 1s. Job ID: job-3.")
         );
     }
+
+    #[tokio::test]
+    async fn pending_job_streams_tool_backgrounded_event() {
+        let engine = fast_engine(1000);
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut agent = test_agent(vec![Box::new(Echo)]);
+        agent.event_stream = Some(tx);
+        let c = call("echo", "call_id_1", json!({}));
+
+        engine.tool_dispatcher.resolve_job_outcome(
+            "job-7",
+            Some(crate::multithreading::JobState::Running),
+            &c,
+            &mut agent,
+        );
+
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(crate::agent::agents::AgentEvent::ToolBackgrounded { tool, job_id })
+                if tool == "echo" && job_id == "job-7"
+        ));
+    }
 }

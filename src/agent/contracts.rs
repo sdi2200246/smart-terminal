@@ -34,7 +34,7 @@ impl fmt::Display for NextCommand {
     }
 }
 
-#[derive(JsonSchema, Deserialize, Serialize, Debug)]
+#[derive(JsonSchema, Deserialize, Serialize, Debug, Clone)]
 #[schemars(deny_unknown_fields)]
 pub struct PlanStep {
     /// Concrete investigation step: what to look at, what command to run, or what file to read. One file, one command, or one directory per step.
@@ -43,7 +43,7 @@ pub struct PlanStep {
     pub rationale: String,
 }
 
-#[derive(JsonSchema, Deserialize, Serialize, Debug)]
+#[derive(JsonSchema, Deserialize, Serialize, Debug, Clone)]
 #[schemars(deny_unknown_fields)]
 pub struct Plan {
     /// One-line restatement of the user's question.

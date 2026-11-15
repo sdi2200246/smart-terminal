@@ -47,6 +47,18 @@ impl Agent {
         }
     }
 
+    pub(crate) fn notify_tool_backgrounded(&self, call: &AgentToolCall, job_id: &str) {
+        if let Some(stream) = &self.event_stream {
+            let event = AgentEvent::ToolBackgrounded {
+                tool: call.name().to_string(),
+                job_id: job_id.to_string(),
+            };
+            if let Err(error) = stream.send(event) {
+                tracing::warn!(tool = %call.name(), error = %error, "failed to stream backgrounded tool");
+            }
+        }
+    }
+
     pub(crate) fn request_tool_approval(
         &self,
         call: &AgentToolCall,

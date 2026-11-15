@@ -83,9 +83,9 @@ impl GoogleClient {
     }
 
     fn build(_max_idle: usize) -> Self {
-         let api_key =  "AQ.Ab8RN6JCtUwUc8iIISw2UKPaXJYW4nd-Kl_nrW64xLMaitcWdA"; //std::env::var("GEMINI_API_KEY")
-        //     .or_else(|_| std::env::var("GOOGLE_API_KEY"))
-        //     .expect("GEMINI_API_KEY or GOOGLE_API_KEY must be set");
+         let api_key = std::env::var("GEMINI_API_KEY")
+            .or_else(|_| std::env::var("GOOGLE_API_KEY"))
+            .expect("GEMINI_API_KEY or GOOGLE_API_KEY must be set");
 
         let mut headers = HeaderMap::new();
         headers.insert(

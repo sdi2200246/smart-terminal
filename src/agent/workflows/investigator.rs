@@ -59,6 +59,7 @@ impl<'a, P: LLMProvider + Clone, F: InvestigatorToolFactory> Investigator<P, F> 
         .build();
 
         let plan: Plan = self.runner.run(&mut planner_agent).await?;
+        self.notify_plan_ready(&plan);
 
         let user_prompt = format!("Question: {}\n\nInvestigation plan:\n{}", question, plan);
 
@@ -82,6 +83,14 @@ impl<'a, P: LLMProvider + Clone, F: InvestigatorToolFactory> Investigator<P, F> 
         saved_session.executor = Some(executor_agent.session.into());
 
         Ok((plan, report, saved_session))
+    }
+
+    fn notify_plan_ready(&self, plan: &Plan) {
+        if let Some(stream) = &self.event_stream {
+            if let Err(error) = stream.send(AgentEvent::PlanReady(plan.clone())) {
+                tracing::warn!(error = %error, "failed to stream plan");
+            }
+        }
     }
 }
 
@@ -182,5 +191,24 @@ mod tests {
         )));
         assert!(updated_session.planner.is_some());
         assert!(updated_session.executor.is_some());
+    }
+
+    #[tokio::test]
+    async fn streams_plan_ready_event_as_soon_as_planner_completes() {
+        let captured = Arc::new(Mutex::new(Vec::new()));
+        let runner = ReactLoop::new(SessionCaptureProvider(captured));
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut investigator = Investigator::new(runner, EmptyToolFactory).with_events_streaming(tx);
+
+        investigator.run("test question").await.unwrap();
+
+        let mut saw_plan_ready = false;
+        while let Ok(event) = rx.try_recv() {
+            if let AgentEvent::PlanReady(plan) = event {
+                assert_eq!(plan.goal, "test goal");
+                saw_plan_ready = true;
+            }
+        }
+        assert!(saw_plan_ready, "expected AgentEvent::PlanReady to be streamed");
     }
 }

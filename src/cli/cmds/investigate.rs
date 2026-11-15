@@ -2,7 +2,7 @@ use std::env;
 use std::io;
 use std::path::PathBuf;
 
-use crate::agent::contracts::{NextCommand, Plan, Report};
+use crate::agent::contracts::{Plan, Report};
 use crate::agent::error::AgentError;
 use crate::agent::patterns::react::ReactLoop;
 use crate::agent::patterns::tool_engine::ToolPermissionMode;
@@ -27,7 +27,7 @@ pub async fn run(args: InvestigateArgs) {
     let cwd = match env::current_dir() {
         Ok(path) => path,
         Err(error) => {
-            eprintln!("Failed to read current directory: {error}");
+            Presenter::render_error(format!("Failed to read current directory: {error}"));
             std::process::exit(1);
         }
     };
@@ -35,7 +35,9 @@ pub async fn run(args: InvestigateArgs) {
     let project_root = match project_roots.resolve_root(&cwd) {
         Ok(project_root) => project_root,
         Err(error) => {
-            eprintln!("Failed to resolve investigation session root: {error}");
+            Presenter::render_error(format!(
+                "Failed to resolve investigation session root: {error}"
+            ));
             std::process::exit(1);
         }
     };
@@ -46,21 +48,27 @@ pub async fn run(args: InvestigateArgs) {
         match session_args.action {
             InvestigationSessionAction::Clear => {
                 if let Err(error) = store.load_for_project_root(&project_root, &project_roots) {
-                    eprintln!("Failed to migrate investigation session: {error}");
+                    Presenter::render_error(format!(
+                        "Failed to migrate investigation session: {error}"
+                    ));
                     std::process::exit(1);
                 }
                 if let Err(error) = store.clear(&project_key) {
-                    eprintln!("Failed to clear investigation session: {error}");
+                    Presenter::render_error(format!(
+                        "Failed to clear investigation session: {error}"
+                    ));
                     std::process::exit(1);
                 }
-                println!("✓ cleared investigation session for {}", cwd.display());
+                Presenter::render_session_cleared(&cwd);
             }
         }
         return;
     }
 
     let Some(question) = args.question else {
-        eprintln!("Provide an investigation question, or use `investigate session clear`.");
+        Presenter::render_error(
+            "Provide an investigation question, or use `investigate session clear`.",
+        );
         std::process::exit(2);
     };
 
@@ -70,7 +78,7 @@ pub async fn run(args: InvestigateArgs) {
         match load_snapshot(&store, &project_root, &project_roots) {
             Ok(snapshot) => snapshot,
             Err(error) => {
-                eprintln!("{error}");
+                Presenter::render_error(error);
                 std::process::exit(1);
             }
         }
@@ -78,25 +86,27 @@ pub async fn run(args: InvestigateArgs) {
     let outcome = run_workflow(&question, snapshot, args.tool_permission.into()).await;
 
     match outcome {
-        Ok(Some((plan, report, updated_session))) => {
+        Ok(Some((_plan, report, updated_session))) => {
             if !args.one_off {
                 if let Err(error) = store.save(&project_key, &updated_session) {
-                    eprintln!("Failed to save investigation session: {error}");
+                    Presenter::render_error(format!(
+                        "Failed to save investigation session: {error}"
+                    ));
                     std::process::exit(1);
                 }
             }
-            print_result(&plan, &report);
+            present_result(&report);
         }
         Ok(None) => {
-            println!("Investigation cancelled");
+            Presenter::render_cancelled("Investigation cancelled");
             std::process::exit(130);
         }
         Err(RunError::Agent(error)) => {
-            eprintln!("Investigation failed: {error:?}");
+            Presenter::render_error(format!("Investigation failed: {error:?}"));
             std::process::exit(1);
         }
         Err(RunError::CtrlC(error)) => {
-            eprintln!("Failed to listen for Ctrl+C: {error}");
+            Presenter::render_error(format!("Failed to listen for Ctrl+C: {error}"));
             std::process::exit(1);
         }
     }
@@ -124,7 +134,7 @@ async fn run_workflow(
     drop(tx);
 
     if let Err(error) = handle.await {
-        eprintln!("Presenter task failed: {error}");
+        Presenter::render_error(format!("Presenter task failed: {error}"));
     }
 
     outcome
@@ -149,32 +159,18 @@ async fn invoke_workflow(
     }
 }
 
-fn print_result(plan: &Plan, report: &Report) {
-    println!("─── Plan ───");
-    println!("Goal: {}\n", plan.goal);
-    for (index, step) in plan.steps.iter().enumerate() {
-        println!("  {}. {}", index + 1, step.action);
-        println!("     {}", step.rationale);
-    }
-
-    println!("\n─── Report ───");
-    println!("{}", report.report);
+fn present_result(report: &Report) {
     let command = &report.recommended_command;
     let handed_to_shell = env::var_os("SMART_TERMINAL_SUGGESTION_DIR")
         .map(|directory| write_recommendation(&PathBuf::from(directory), command))
         .transpose();
-    match handed_to_shell {
-        Ok(Some(())) => {}
-        Ok(None) => print_recommendation(command),
+    let show_recommendation = match handed_to_shell {
+        Ok(Some(())) => false,
+        Ok(None) => true,
         Err(error) => {
-            eprintln!("Failed to hand recommendation to zsh: {error}");
-            print_recommendation(command);
+            Presenter::render_error(format!("Failed to hand recommendation to zsh: {error}"));
+            true
         }
-    }
-}
-
-fn print_recommendation(command: &NextCommand) {
-    println!("\n─── Suggested Command ───");
-    println!("{}", command.cmd);
-    println!("{} ({:?})", command.man, command.scale);
+    };
+    Presenter::render_investigation_result(report, show_recommendation);
 }

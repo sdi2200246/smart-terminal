@@ -158,6 +158,7 @@ impl ToolDispatcher {
                 msg
             }
             None | Some(JobState::Running) => {
+                agent.notify_tool_backgrounded(call, job_id);
                 pending_job_message(self.threshold.as_secs(), job_id, WAIT_JOB_NAME)
             }
         };

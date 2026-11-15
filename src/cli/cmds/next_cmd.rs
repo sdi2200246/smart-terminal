@@ -4,13 +4,11 @@ use crate::agent::patterns::tool_engine::ToolPermissionMode;
 use crate::agent::workflows::next_cmd::NextCmd;
 use crate::cli::agent_setup::CliToolProvider;
 use crate::cli::cli::NextCmdArgs;
+use crate::cli::presenters::Presenter;
 use crate::core::memory::Memory;
 use crate::persistence::NextCmdMemory;
 use crate::providers::groq::client::GroqClient;
 use std::env;
-use std::io::{self, Write};
-
-const OUTPUT_PROTOCOL: &str = "SMART_TERMINAL_NEXT_CMD_V1";
 
 pub async fn run(args: NextCmdArgs) {
     let mut memory = NextCmdMemory::project_local();
@@ -32,31 +30,14 @@ pub async fn run(args: NextCmdArgs) {
                     man: e.to_string(),
                     scale: Reversibility::Irreversible,
                 };
-                let stdout = io::stdout();
-                let mut output = stdout.lock();
-                let _ = write_prediction(&mut output, &prediction);
-                let _ = output.flush();
+                let _ = Presenter::render_prediction(&prediction);
                 return;
             }
         }
     };
-    let stdout = io::stdout();
-    let mut output = stdout.lock();
-    if let Err(error) = write_prediction(&mut output, &prediction) {
-        eprintln!("Failed to write command suggestion: {error}");
+    if let Err(error) = Presenter::render_prediction(&prediction) {
+        Presenter::render_error(format!("Failed to write command suggestion: {error}"));
     }
-}
-
-fn write_prediction(output: &mut impl Write, prediction: &NextCommand) -> io::Result<()> {
-    // The command is the complete remaining payload after the versioned metadata header.
-    writeln!(output, "{OUTPUT_PROTOCOL}")?;
-    writeln!(
-        output,
-        "{}",
-        prediction.man.lines().collect::<Vec<_>>().join(" ")
-    )?;
-    writeln!(output, "{:?}", prediction.scale)?;
-    writeln!(output, "{}", prediction.cmd)
 }
 
 #[cfg(test)]
@@ -72,7 +53,7 @@ mod tests {
         };
         let mut output = Vec::new();
 
-        write_prediction(&mut output, &prediction).unwrap();
+        Presenter::write_prediction(&mut output, &prediction).unwrap();
 
         assert_eq!(
             String::from_utf8(output).unwrap(),
@@ -89,7 +70,7 @@ mod tests {
         };
         let mut output = Vec::new();
 
-        write_prediction(&mut output, &prediction).unwrap();
+        Presenter::write_prediction(&mut output, &prediction).unwrap();
 
         assert_eq!(
             String::from_utf8(output).unwrap(),
