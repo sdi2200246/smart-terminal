@@ -11,7 +11,7 @@ pub fn to_openrouter_model_string(model: ModelName) -> String {
         // ModelName::Gemini1_5Pro => "google/gemini-pro-1.5".into(),
         // ModelName::Gemini1_5Flash => "google/gemini-flash-1.5".into(),
         // ModelName::Gemini2_5Flash => "google/gemini-2.0-flash-001".into(),
-        _ => "nvidia/nemotron-3.5-super-vl:fre".into(),
+        _ => "nvidia/nemotron-3.5-super-vl:free".into(),
     }
 }
 
