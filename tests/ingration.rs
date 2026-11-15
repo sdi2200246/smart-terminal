@@ -3,6 +3,7 @@ mod integration {
     mod grog;
     mod investigator;
     mod next_cmd;
+    mod openrouter;
     use smart_terminal::agent::{InvestigatorToolFactory, NextCmdToolFactory};
     use smart_terminal::core::Capability;
     use smart_terminal::tools::{Bash, Docker, GitDiffStaged, ReadDir, ReadFile, ReadLastError};
