@@ -1,5 +1,4 @@
 use super::policy::{PermissionDecision, ToolExecutionPolicy};
-use crate::agent::agents::Agent;
 use crate::agent::prompts::pending_job_message;
 use crate::agent::signals::{ToolInvocation, WAIT_JOB_NAME};
 use crate::core::capability::ToolSafety;

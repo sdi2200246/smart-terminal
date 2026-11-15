@@ -1,8 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::core::folder_index::FolderIndex;
-use crate::core::memory::PersistenceError;
+use crate::core::{FolderIndex, PersistenceError};
 
 const INDEX_FILENAME: &str = "index.json";
 const MEMORY_DIRNAME: &str = "memory";

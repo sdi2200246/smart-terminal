@@ -3,8 +3,7 @@ use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
-use crate::core::folder_index::FolderIndex;
-use crate::core::memory::{Conversation, Interaction, Memory, PersistenceError};
+use crate::core::{Conversation, FolderIndex, Interaction, Memory, PersistenceError};
 use crate::persistence::ProjectRootResolver;
 
 const INDEX_FILENAME: &str = "index.json";

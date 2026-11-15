@@ -1,4 +1,4 @@
-use crate::core::error::InternalError;
+use crate::core::InternalError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]

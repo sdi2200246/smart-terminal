@@ -4,12 +4,12 @@ use crate::core::session::CoreAgentSession;
 use serde::Serialize;
 use serde_json::Value;
 
-#[derive(Serialize, Debug, Default)]
-pub struct GroqRequest {
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
+pub struct OpenAiRequest {
     pub model: String,
     pub messages: Vec<Message>,
     pub temperature: f32,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub tools: Vec<Tool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_choice: Option<String>,
@@ -26,8 +26,8 @@ impl GroqRequest {
             .flat_map(|e| Vec::<Message>::from(e))
             .collect();
 
-        GroqRequest {
-            model: "openai/gpt-oss-120b".into(),
+        OpenAiRequest {
+            model: model.into(),
             messages,
             temperature: 0.1,
             tools: vec![],
@@ -37,13 +37,13 @@ impl GroqRequest {
     }
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ResponseFormat {
     pub r#type: String,
     pub json_schema: JsonSchemaSpec,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct JsonSchemaSpec {
     pub name: String,
     pub strict: bool,

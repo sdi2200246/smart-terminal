@@ -1,80 +1,5 @@
-use super::protocol::message::Message;
-use super::protocol::request::GroqRequest;
-use super::protocol::tool::{Tool, ToolCall, ToolMetaData};
-use crate::core::capability::ToolMetaData as CoreToolMetaData;
-use crate::core::llm_client::AgentRequest;
-use crate::core::model::ModelName;
-use crate::core::session::{
-    ConversationEvent, ToolCall as CoreToolCall, ToolResult as CoreToolResult,
-};
-use serde_json::Value;
-
-impl From<&CoreToolMetaData> for ToolMetaData {
-    fn from(core_meta: &CoreToolMetaData) -> Self {
-        ToolMetaData {
-            name: core_meta.name.clone(),
-            description: Some(core_meta.description.clone()),
-            parameters: core_meta.parameters.clone(),
-            arguments: None,
-        }
-    }
-}
-
-impl From<&CoreToolMetaData> for Tool {
-    fn from(core_meta: &CoreToolMetaData) -> Self {
-        Tool::factory(ToolMetaData::from(core_meta))
-    }
-}
-
-impl From<&CoreToolCall> for ToolCall {
-    fn from(core_call: &CoreToolCall) -> Self {
-        ToolCall {
-            id: core_call.id.clone(),
-            call_type: "function".to_string(),
-            function: ToolMetaData {
-                name: core_call.name.clone(),
-                description: None,
-                parameters: Value::Null,
-                arguments: Some(core_call.arguments.to_string()),
-            },
-        }
-    }
-}
-
-impl From<&CoreToolResult> for Message {
-    fn from(core_res: &CoreToolResult) -> Self {
-        Message::tool_responce(
-            Some(core_res.result.clone()),
-            core_res.id.clone(),
-            core_res.name.clone(),
-        )
-    }
-}
-
-impl From<&ConversationEvent> for Vec<Message> {
-    fn from(event: &ConversationEvent) -> Vec<Message> {
-        match event {
-            ConversationEvent::System(message) => vec![Message::system(Some(message.clone()))],
-
-            ConversationEvent::User(message) => vec![Message::user(Some(message.clone()))],
-
-            ConversationEvent::Assistant(message) => vec![Message {
-                role: "assistant".into(),
-                content: Some(message.clone()),
-                tool_calls: vec![],
-                tool_call_id: None,
-                name: None,
-            }],
-
-            ConversationEvent::ToolCalls(calls) => {
-                return vec![Message::tool_calls(
-                    calls.iter().map(ToolCall::from).collect(),
-                )];
-            }
-            ConversationEvent::ToolResults(results) => results.iter().map(Message::from).collect(),
-        }
-    }
-}
+use crate::core::{AgentRequest, ModelName};
+use crate::providers::openai_compatible::{build_openai_request, OpenAiRequest};
 
 pub fn to_groq_model_string(model: ModelName) -> String {
     match model {
@@ -84,36 +9,9 @@ pub fn to_groq_model_string(model: ModelName) -> String {
     }
 }
 
-impl From<&AgentRequest<'_>> for GroqRequest {
+impl From<&AgentRequest<'_>> for OpenAiRequest {
     fn from(request: &AgentRequest<'_>) -> Self {
-        let mut messages: Vec<Message> = request
-            .session
-            .events
-            .iter()
-            .flat_map(Vec::<Message>::from)
-            .collect();
-        if let Some(scratchpad) = &request.session.scratchpad {
-            let scratchpad_message = Message::system(Some(format!(
-                "Current scratchpad:\n{}",
-                serde_json::to_string_pretty(scratchpad).expect("scratchpad serializes to JSON")
-            )));
-            let position = messages
-                .iter()
-                .position(|message| message.role != "system")
-                .unwrap_or(messages.len());
-            messages.insert(position, scratchpad_message);
-        }
-
-        let tools: Vec<Tool> = request.tools_metadata.iter().map(Tool::from).collect();
-
-        GroqRequest {
-            model: to_groq_model_string(request.model.get_name()),
-            messages,
-            tools,
-            temperature: request.model.get_temp(),
-            tool_choice: None,
-            response_format: None,
-        }
+        build_openai_request(request, to_groq_model_string(request.model.get_name()))
     }
 }
 
@@ -212,7 +110,7 @@ mod tests {
             tools_metadata: &[],
         };
 
-        let groq_request = GroqRequest::from(&request);
+        let groq_request = OpenAiRequest::from(&request);
         let scratchpad_message = &groq_request.messages[1];
         assert_eq!(scratchpad_message.role, "system");
         assert!(

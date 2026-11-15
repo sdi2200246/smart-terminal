@@ -1,10 +1,11 @@
-pub mod builder;
+mod builder;
 mod contexts;
-pub mod events;
-pub mod hooks;
+mod events;
+mod hooks;
 
 pub use builder::AgentBuilder;
 pub use events::{AgentEvent, AgentState};
+pub use hooks::{DefaultAgentHook, ToolsRegulator};
 
 use crate::agent::patterns::hook::AgentLoopHook;
 use crate::agent::patterns::tool_engine::PermissionDecision;

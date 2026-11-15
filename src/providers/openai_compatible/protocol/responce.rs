@@ -1,21 +1,21 @@
+use super::super::error::OpenAiError;
 use super::message::Message;
-use crate::providers::groq::error::GroqError;
 use serde::Deserialize;
 use serde_json::Value;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct LlmToolCall {
     pub name: String,
     pub id: String,
     pub args: Value,
 }
 
-#[derive(Deserialize, Debug)]
-pub struct GroqResponse {
+#[derive(Deserialize, Debug, Clone)]
+pub struct OpenAiResponse {
     pub choices: Vec<Choice>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Choice {
     pub index: usize,
     #[serde(default)]
@@ -25,25 +25,24 @@ pub struct Choice {
     pub message: Message,
 }
 
-impl TryFrom<GroqResponse> for LlmToolCall {
-    type Error = GroqError;
+impl TryFrom<OpenAiResponse> for LlmToolCall {
+    type Error = OpenAiError;
 
-    fn try_from(value: GroqResponse) -> Result<Self, Self::Error> {
-        let choice =
-            value
-                .choices
-                .into_iter()
-                .next()
-                .ok_or_else(|| GroqError::UnexpectedOutput {
-                    body: "No choices in response".to_string(),
-                })?;
+    fn try_from(value: OpenAiResponse) -> Result<Self, Self::Error> {
+        let choice = value
+            .choices
+            .into_iter()
+            .next()
+            .ok_or_else(|| OpenAiError::UnexpectedOutput {
+                body: "No choices in response".to_string(),
+            })?;
 
         if choice.finish_reason == Some("stop".to_string()) {
             let conclusion = choice
                 .message
                 .content
                 .filter(|s| !s.trim().is_empty())
-                .ok_or_else(|| GroqError::UnexpectedOutput {
+                .ok_or_else(|| OpenAiError::UnexpectedOutput {
                     body: "Model stopped without producing a conclusion. Expected non-empty content alongside finish_reason=stop.".to_string(),
                 })?;
 
@@ -59,19 +58,19 @@ impl TryFrom<GroqResponse> for LlmToolCall {
             .tool_calls
             .into_iter()
             .next()
-            .ok_or_else(|| GroqError::UnexpectedOutput {
+            .ok_or_else(|| OpenAiError::UnexpectedOutput {
                 body: "Expected a tool call but none were found.".to_string(),
             })?;
 
         let args_str = tool
             .function
             .arguments
-            .ok_or_else(|| GroqError::UnexpectedOutput {
+            .ok_or_else(|| OpenAiError::UnexpectedOutput {
                 body: "No arguments were found in the tool call.".to_string(),
             })?;
 
         let parsed_args: Value =
-            serde_json::from_str(&args_str).map_err(|e| GroqError::InvalidToolCall {
+            serde_json::from_str(&args_str).map_err(|e| OpenAiError::InvalidToolCall {
                 body: e.to_string(),
             })?;
 
@@ -87,28 +86,29 @@ pub struct LlmStructuredOutput {
     pub value: Value,
 }
 
-impl TryFrom<GroqResponse> for LlmStructuredOutput {
-    type Error = GroqError;
+impl TryFrom<OpenAiResponse> for LlmStructuredOutput {
+    type Error = OpenAiError;
 
-    fn try_from(res: GroqResponse) -> Result<Self, Self::Error> {
+    fn try_from(res: OpenAiResponse) -> Result<Self, Self::Error> {
         let choice = res
             .choices
             .into_iter()
             .next()
-            .ok_or_else(|| GroqError::UnexpectedOutput {
+            .ok_or_else(|| OpenAiError::UnexpectedOutput {
                 body: "No choices in response".to_string(),
             })?;
 
         let content = choice
             .message
             .content
-            .ok_or_else(|| GroqError::UnexpectedOutput {
-                body: "Expected content field, got none".to_string(),
+            .filter(|s| !s.trim().is_empty())
+            .ok_or_else(|| OpenAiError::UnexpectedOutput {
+                body: "Model response content is empty in structured mode".to_string(),
             })?;
 
         let value: Value =
-            serde_json::from_str(&content).map_err(|e| GroqError::UnexpectedOutput {
-                body: e.to_string(),
+            serde_json::from_str(&content).map_err(|e| OpenAiError::UnexpectedOutput {
+                body: format!("Failed to parse structured output as JSON: {e}"),
             })?;
 
         Ok(LlmStructuredOutput { value })
@@ -120,7 +120,7 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    fn parse(json_value: serde_json::Value) -> GroqResponse {
+    fn parse(json_value: serde_json::Value) -> OpenAiResponse {
         serde_json::from_value(json_value).unwrap()
     }
 
@@ -186,7 +186,7 @@ mod tests {
         });
 
         let result = LlmToolCall::try_from(parse(raw));
-        assert!(matches!(result, Err(GroqError::UnexpectedOutput { .. })));
+        assert!(matches!(result, Err(OpenAiError::UnexpectedOutput { .. })));
     }
 
     #[test]
@@ -204,14 +204,14 @@ mod tests {
         });
 
         let result = LlmToolCall::try_from(parse(raw));
-        assert!(matches!(result, Err(GroqError::UnexpectedOutput { .. })));
+        assert!(matches!(result, Err(OpenAiError::UnexpectedOutput { .. })));
     }
 
     #[test]
     fn fails_when_no_choices() {
         let raw = json!({ "choices": [] });
         let result = LlmToolCall::try_from(parse(raw));
-        assert!(matches!(result, Err(GroqError::UnexpectedOutput { .. })));
+        assert!(matches!(result, Err(OpenAiError::UnexpectedOutput { .. })));
     }
 
     #[test]
@@ -229,7 +229,7 @@ mod tests {
         });
 
         let result = LlmToolCall::try_from(parse(raw));
-        assert!(matches!(result, Err(GroqError::UnexpectedOutput { .. })));
+        assert!(matches!(result, Err(OpenAiError::UnexpectedOutput { .. })));
     }
 
     #[test]
@@ -248,6 +248,6 @@ mod tests {
         });
 
         let result = LlmToolCall::try_from(parse(raw));
-        assert!(matches!(result, Err(GroqError::UnexpectedOutput { .. })));
+        assert!(matches!(result, Err(OpenAiError::UnexpectedOutput { .. })));
     }
 }

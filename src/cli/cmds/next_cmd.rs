@@ -7,7 +7,7 @@ use crate::cli::cli::NextCmdArgs;
 use crate::cli::presenters::Presenter;
 use crate::core::memory::Memory;
 use crate::persistence::NextCmdMemory;
-use crate::providers::groq::client::GroqClient;
+use crate::providers::GroqClient;
 use std::env;
 
 pub async fn run(args: NextCmdArgs) {

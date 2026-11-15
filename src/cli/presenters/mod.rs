@@ -10,7 +10,7 @@ use std::time::Duration;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::task::JoinHandle;
 
-pub mod render;
+mod render;
 
 const SPINNER_TICK: Duration = Duration::from_millis(80);
 const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏", " "];
@@ -172,7 +172,7 @@ fn read_line() -> Option<String> {
     Some(input.trim().to_string())
 }
 
-fn prompt_for_approval(call: &crate::core::responce::AgentToolCall) -> PermissionDecision {
+fn prompt_for_approval(call: &AgentToolCall) -> PermissionDecision {
     println!();
     print!("{}", render::format_prompt(&format!("Allow {}? [y/N]", call.name())));
 

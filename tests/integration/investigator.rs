@@ -70,3 +70,12 @@ async fn project_overview_groq() {
     let provider = GroqClient::pooled();
     let (_plan, _report) = run_case("overview_groq", question, provider).await;
 }
+
+#[tokio::test]
+#[ignore = "requires OPENROUTER_API_KEY"]
+async fn project_overview_openrouter() {
+    dotenv::dotenv().ok();
+    let question = "read project structure and explain the main features of the project";
+    let provider = OpenRouterClient::pooled();
+    let (_plan, _report) = run_case("overview_openrouter", question, provider).await;
+}

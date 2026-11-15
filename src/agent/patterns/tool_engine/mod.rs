@@ -6,10 +6,9 @@ pub use policy::{PermissionDecision, ToolExecutionPolicy, ToolPermissionMode};
 pub use signal_dispatcher::SignalDispatcher;
 pub use tool_dispatcher::{DEFAULT_JOB_CAPACITY, TOOL_WAIT_THRESHOLD, ToolDispatcher};
 
-use crate::agent::agents::Agent;
 use crate::agent::prompts::must_run_alone_message;
-use crate::agent::signals::{
-    AgentAction, AgentSignalInvocation, ModelCall, ToolInvocation,
+use crate::agent::{
+    Agent, AgentAction, AgentSignalInvocation, ModelCall, ToolInvocation,
 };
 use crate::core::responce::{AgentResponse, AgentToolCall};
 use crate::core::session::{ToolCall, ToolResult};
@@ -222,15 +221,12 @@ impl ToolExecutionEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::agents::{Agent, AgentBuilder};
-    use crate::agent::signals::{
-        AgentLoopControl, AgentSignal, AgentSignalContext, AgentSignalOutcome,
-        UpdateScratchpadSignal,
+    use crate::agent::{
+        Agent, AgentBuilder, AgentEvent, AgentLoopControl, AgentSignal, AgentSignalContext,
+        AgentSignalOutcome, UpdateScratchpadSignal,
     };
-    use crate::core::capability::{Capability, ToolMetaData, ToolSafety};
-    use crate::core::model::{Model, ModelName};
-    use crate::core::session::ConversationEvent;
-    use crate::tools::error::ToolError;
+    use crate::core::{Capability, ConversationEvent, Model, ModelName, ToolMetaData, ToolSafety};
+    use crate::tools::ToolError;
     use serde_json::json;
     use std::sync::{
         Arc, Mutex,
@@ -445,7 +441,7 @@ mod tests {
 
         assert!(matches!(
             rx.try_recv(),
-            Ok(crate::agent::agents::AgentEvent::ToolCall(call)) if call.name() == "boom"
+            Ok(AgentEvent::ToolCall(call)) if call.name() == "boom"
         ));
     }
 
@@ -486,7 +482,7 @@ mod tests {
 
         assert!(matches!(
             rx.try_recv().expect("expected a streamed call"),
-            crate::agent::agents::AgentEvent::ToolCall(call)
+            AgentEvent::ToolCall(call)
                 if call.name() == "echo"
         ));
     }
@@ -1346,7 +1342,7 @@ mod tests {
 
         let approval_handle = tokio::spawn(async move {
             while let Some(evt) = rx.recv().await {
-                if let crate::agent::agents::AgentEvent::ToolApprovalRequest { responder, .. } = evt
+                if let AgentEvent::ToolApprovalRequest { responder, .. } = evt
                 {
                     tokio::time::sleep(Duration::from_millis(100)).await;
                     let _ = responder.send(PermissionDecision::Approved);

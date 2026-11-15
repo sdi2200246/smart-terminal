@@ -5,8 +5,7 @@ use smart_terminal::agent::workflows::next_cmd::NextCmd;
 use smart_terminal::core::llm_client::LLMProvider;
 use smart_terminal::core::memory::{Interaction, Memory};
 use smart_terminal::persistence::NextCmdMemory;
-use smart_terminal::providers::google::client::GoogleClient;
-use smart_terminal::providers::groq::client::GroqClient;
+use smart_terminal::providers::{GoogleClient, GroqClient, OpenRouterClient};
 use std::env;
 use tempfile::TempDir;
 use tracing_subscriber::EnvFilter;
@@ -114,6 +113,19 @@ async fn completes_partial_git_commit_google() {
         "partial_commit_google",
         "git commit ",
         GoogleClient::pooled(),
+    )
+    .await;
+}
+
+#[tokio::test]
+#[ignore = "requires OPENROUTER_API_KEY"]
+async fn completes_partial_git_commit_openrouter() {
+    dotenv::dotenv().ok();
+
+    let _ = run_case(
+        "partial_commit_openrouter",
+        "git commit ",
+        OpenRouterClient::pooled(),
     )
     .await;
 }

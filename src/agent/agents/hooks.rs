@@ -49,7 +49,7 @@ impl AgentLoopHook for ToolsRegulator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::session::ConversationEvent;
+    use crate::core::ConversationEvent;
     use serde_json::json;
 
     fn fake_call(name: &str, args: serde_json::Value) -> AgentToolCall {

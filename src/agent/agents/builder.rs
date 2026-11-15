@@ -17,8 +17,7 @@ use crate::agent::signals::{
     AgentAction, AgentActionSpace, AgentSignal, FinalAnswerSignal, UpdateScratchpadSignal,
     WAIT_JOB_NAME, WaitJobSignal,
 };
-use crate::core::capability::Capability;
-use crate::core::model::Model;
+use crate::core::{Capability, Model};
 
 enum PromptSource {
     Raw(String),

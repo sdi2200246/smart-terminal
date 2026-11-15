@@ -11,6 +11,10 @@ use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
 use serde_json::Value;
 use std::time::Duration;
 
+pub type GroqError = OpenAiError;
+pub type GroqRequest = OpenAiRequest;
+pub type GroqResponse = OpenAiResponse;
+
 #[derive(Clone)]
 pub struct GroqProtocol;
 
@@ -20,7 +24,7 @@ impl ProviderCodec for GroqProtocol {
     type Error = GroqError;
 
     fn build_complete_request(&self, req: &AgentRequest<'_>) -> Self::Request {
-        GroqRequest::from(req)
+        build_openai_request(req, to_groq_model_string(req.model.get_name()))
     }
 
     fn build_structured_request(&self, session: &CoreAgentSession, schema: Value) -> Self::Request {
@@ -117,9 +121,7 @@ impl LLMProvider for GroqClient {
 #[cfg(test)]
 mod unit {
     use super::*;
-    use crate::core::responce::AgentToolCall;
-    use crate::providers::groq::protocol::request::GroqRequest;
-    use crate::providers::groq::protocol::responce::{GroqResponse, LlmToolCall};
+    use crate::core::AgentToolCall;
     use reqwest::StatusCode;
     use reqwest::header::AUTHORIZATION;
     use serde_json::json;
@@ -264,7 +266,7 @@ mod unit {
                 assert_eq!(status, StatusCode::BAD_REQUEST);
                 assert_eq!(body, "invalid request parameters");
             }
-            _ => panic!("Expected GroqErro  r::Protocol, got {:?}", err),
+            _ => panic!("Expected GroqError::Protocol, got {:?}", err),
         }
     }
 

@@ -1,7 +1,7 @@
 use super::{AgentLoopControl, AgentSignal, AgentSignalContext, AgentSignalOutcome};
 use crate::agent::prompts::FINAL_ANSWER_DESCRIPTION;
-use crate::core::capability::{ToolMetaData, ToolSafety};
-use crate::tools::error::ToolError;
+use crate::core::{ToolMetaData, ToolSafety};
+use crate::tools::ToolError;
 use serde_json::Value;
 
 pub struct FinalAnswerSignal {

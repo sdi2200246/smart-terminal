@@ -7,6 +7,12 @@ pub enum ModelName {
     Gemini1_5Pro,
     Gemini1_5Flash,
     Gemini2_5Flash,
+    // OpenRouter models
+    Nemotron3_5SuperVlFree,
+    Llama3_3_70BFree,
+    Gemini2_0FlashExpFree,
+    Qwen2_5Coder32BFree,
+    Mistral7BInstructFree,
 }
 
 #[derive(Debug, PartialEq, Clone)]

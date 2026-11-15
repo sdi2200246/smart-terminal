@@ -1,8 +1,8 @@
 use super::{AgentLoopControl, AgentSignal, AgentSignalContext, AgentSignalOutcome};
 use crate::agent::prompts::{WAIT_JOB_DESCRIPTION, WAIT_JOB_GUIDANCE};
-use crate::core::capability::{ToolMetaData, ToolSafety};
+use crate::core::{ToolMetaData, ToolSafety};
 use crate::multithreading::{JobStore, WaitOutcome};
-use crate::tools::error::ToolError;
+use crate::tools::ToolError;
 use crate::utils::FlatSchema;
 use schemars::JsonSchema;
 use serde::Deserialize;

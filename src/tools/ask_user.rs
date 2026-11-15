@@ -1,6 +1,6 @@
 use super::error::ToolError;
 use super::prompts::ASK_USER_DESCRIPTION;
-use crate::core::capability::{Capability, ToolMetaData, ToolSafety};
+use crate::core::{Capability, ToolMetaData, ToolSafety};
 use crate::utils::FlatSchema;
 use schemars::JsonSchema;
 use serde::Deserialize;

@@ -1,6 +1,5 @@
 use super::AgentSignal;
-use crate::core::capability::{Capability, ToolMetaData};
-use crate::core::responce::AgentToolCall;
+use crate::core::{AgentToolCall, Capability, ToolMetaData};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -146,9 +145,9 @@ impl AgentActionSpace {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::signals::{AgentLoopControl, AgentSignalContext, AgentSignalOutcome};
-    use crate::core::capability::ToolSafety;
-    use crate::tools::error::ToolError;
+    use crate::agent::{AgentLoopControl, AgentSignalContext, AgentSignalOutcome};
+    use crate::core::ToolSafety;
+    use crate::tools::ToolError;
     use serde_json::{Value, json};
 
     struct FakeTool(&'static str);

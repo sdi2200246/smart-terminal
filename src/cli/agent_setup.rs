@@ -1,13 +1,6 @@
-use crate::agent::workflows::investigator::InvestigatorToolFactory;
-use crate::agent::workflows::next_cmd::NextCmdToolFactory;
-use crate::core::capability::Capability;
-
-use crate::tools::bash::Bash;
-use crate::tools::docker::Docker;
-use crate::tools::git_diff::GitDiffStaged;
-use crate::tools::last_error::ReadLastError;
-use crate::tools::read_dir::ReadDir;
-use crate::tools::read_file::ReadFile;
+use crate::agent::{InvestigatorToolFactory, NextCmdToolFactory};
+use crate::core::Capability;
+use crate::tools::{Bash, Docker, GitDiffStaged, ReadDir, ReadFile, ReadLastError};
 
 pub struct CliToolProvider;
 

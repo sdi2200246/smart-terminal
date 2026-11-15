@@ -1,7 +1,7 @@
-pub mod action_space;
-pub mod final_answer;
-pub mod scratchpad;
-pub mod wait_job;
+mod action_space;
+mod final_answer;
+mod scratchpad;
+mod wait_job;
 
 pub use action_space::{
     ActionSpaceError, AgentAction, AgentActionSpace, AgentSignalInvocation, ModelCall,
@@ -14,7 +14,7 @@ pub use wait_job::{WAIT_JOB_NAME, WaitJobSignal};
 use crate::agent::agents::Agent;
 use crate::core::capability::ToolMetaData;
 use crate::multithreading::JobStore;
-use crate::tools::error::ToolError;
+use crate::tools::ToolError;
 use serde_json::Value;
 
 pub struct AgentSignalContext<'a> {

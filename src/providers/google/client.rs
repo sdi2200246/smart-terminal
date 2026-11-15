@@ -1,5 +1,5 @@
 use super::api::request::GeminiRequest;
-use super::api::responce::{GeminiResponse, LlmResponse, LlmStructuredOutput, LlmToolCall};
+use super::api::responce::{GeminiResponse, LlmResponse, LlmStructuredOutput};
 use super::error::GoogleError;
 use crate::core::error::ProviderError;
 use crate::core::llm_client::{AgentRequest, LLMProvider};
@@ -125,10 +125,9 @@ impl LLMProvider for GoogleClient {
 }
 #[cfg(test)]
 mod unit {
+    use super::super::api::responce::LlmResponse;
     use super::*;
-    use crate::core::responce::{AgentResponse, AgentToolCall};
-    use crate::providers::google::api::request::GeminiRequest;
-    use crate::providers::google::api::responce::{GeminiResponse, LlmResponse};
+    use crate::core::{AgentResponse, AgentToolCall};
     use serde_json::json;
 
     fn google_response(
