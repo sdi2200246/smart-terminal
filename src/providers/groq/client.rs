@@ -1,14 +1,20 @@
-use super::error::GroqError;
-use super::protocol::request::GroqRequest;
-use super::protocol::responce::{GroqResponse, LlmStructuredOutput, LlmToolCall};
+use super::adapters::to_groq_model_string;
 use crate::core::{
     AgentRequest, AgentResponse, AgentSession, AgentToolCall, LLMProvider, ProviderError,
+};
+use crate::providers::openai_compatible::{
+    build_openai_request, build_openai_structured_request, LlmStructuredOutput, LlmToolCall,
+    OpenAiError, OpenAiRequest, OpenAiResponse,
 };
 use crate::providers::{ClientConfig, GenericLlmClient, ProviderCodec};
 use reqwest::StatusCode;
 use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
 use serde_json::Value;
 use std::time::Duration;
+
+pub type GroqError = OpenAiError;
+pub type GroqRequest = OpenAiRequest;
+pub type GroqResponse = OpenAiResponse;
 
 #[derive(Clone)]
 pub struct GroqProtocol;
@@ -19,11 +25,11 @@ impl ProviderCodec for GroqProtocol {
     type Error = GroqError;
 
     fn build_complete_request(&self, req: &AgentRequest<'_>) -> Self::Request {
-        GroqRequest::from(req)
+        build_openai_request(req, to_groq_model_string(req.model.get_name()))
     }
 
     fn build_structured_request(&self, session: &AgentSession, schema: Value) -> Self::Request {
-        GroqRequest::structured(session, schema)
+        build_openai_structured_request(session, schema, "openai/gpt-oss-120b")
     }
 
     fn parse_agent_responce(&self, res: Self::Response) -> Result<AgentResponse, Self::Error> {
@@ -261,7 +267,7 @@ mod unit {
                 assert_eq!(status, StatusCode::BAD_REQUEST);
                 assert_eq!(body, "invalid request parameters");
             }
-            _ => panic!("Expected GroqErro  r::Protocol, got {:?}", err),
+            _ => panic!("Expected GroqError::Protocol, got {:?}", err),
         }
     }
 
