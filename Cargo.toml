@@ -2,6 +2,15 @@
 name = "smart-terminal"
 version = "0.1.0"
 edition = "2024"
+default-run = "smart-terminal"
+
+[[bin]]
+name = "smart-terminal"
+path = "src/main.rs"
+
+[[bin]]
+name = "sterm"
+path = "src/bin/sterm.rs"
 
 [dependencies]
 reqwest = { version = "0.12", features = ["json"] }

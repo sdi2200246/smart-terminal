@@ -43,6 +43,7 @@ pub enum Commands {
     /// Manipulate the memory of you assistant
     Memory(MemoryArgs),
     /// Investigate a question about the project or environment
+    #[command(visible_alias = "ask")]
     Investigate(InvestigateArgs),
 }
 
@@ -132,6 +133,19 @@ mod tests {
                 })),
                 ..
             })
+        ));
+    }
+
+    #[test]
+    fn parses_ask_as_an_investigate_alias() {
+        let cli = Cli::try_parse_from(["agent", "ask", "question"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Commands::Investigate(InvestigateArgs {
+                question: Some(question),
+                action: None,
+                ..
+            }) if question == "question"
         ));
     }
 }
