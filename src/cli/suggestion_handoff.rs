@@ -1,7 +1,7 @@
 use std::io::{self, Write};
 use std::path::Path;
 
-use crate::agent::workflows::next_cmd::NextCommand;
+use crate::agent::NextCommand;
 
 const HANDOFF_FILE: &str = "investigator-command";
 const OUTPUT_PROTOCOL: &str = "SMART_TERMINAL_NEXT_CMD_V1";
@@ -32,7 +32,7 @@ pub fn write_recommendation(directory: &Path, command: &NextCommand) -> io::Resu
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::workflows::next_cmd::Reversibility;
+    use crate::agent::Reversibility;
 
     fn command(cmd: &str, man: &str) -> NextCommand {
         NextCommand {

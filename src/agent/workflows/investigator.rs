@@ -1,14 +1,10 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::agent::agents::{AgentBuilder, AgentEvent};
-use crate::agent::error::AgentError;
-use crate::agent::patterns::react::ReactLoop;
-use crate::agent::workflows::next_cmd::NextCommand;
-use crate::core::capability::Capability;
-use crate::core::llm_client::LLMProvider;
-use crate::core::memory::InvestigationSession;
-use crate::core::model::{Model, ModelName};
+use crate::agent::{
+    AgentBuilder, AgentError, AgentEvent, NextCommand, ReactLoop,
+};
+use crate::core::{Capability, InvestigationSession, LLMProvider, Model, ModelName};
 use crate::utils::FlatSchema;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -159,10 +155,9 @@ fn planner_prompt(question: &str, completed_reports: &[String]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::error::ProviderError;
-    use crate::core::llm_client::AgentRequest;
-    use crate::core::responce::{AgentResponse, AgentToolCall};
-    use crate::core::session::ConversationEvent;
+    use crate::core::{
+        AgentRequest, AgentResponse, AgentSession, AgentToolCall, ConversationEvent, ProviderError,
+    };
     use serde_json::{Value, json};
     use std::sync::{Arc, Mutex};
 
@@ -197,7 +192,7 @@ mod tests {
 
         async fn complete_structured(
             &self,
-            _session: &crate::core::session::AgentSession,
+            _session: &AgentSession,
             schema: Value,
         ) -> Result<Value, ProviderError> {
             if schema["properties"].get("goal").is_some() {

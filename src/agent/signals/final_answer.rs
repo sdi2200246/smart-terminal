@@ -1,7 +1,7 @@
 use super::{AgentLoopControl, AgentSignal, AgentSignalContext, AgentSignalOutcome};
 use crate::agent::prompts::FINAL_ANSWER_DESCRIPTION;
-use crate::core::capability::{ToolMetaData, ToolSafety};
-use crate::tools::error::ToolError;
+use crate::core::{ToolMetaData, ToolSafety};
+use crate::tools::ToolError;
 use serde_json::Value;
 
 pub struct FinalAnswerSignal {
@@ -54,9 +54,8 @@ impl AgentSignal for FinalAnswerSignal {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::agents::AgentBuilder;
-    use crate::core::model::{Model, ModelName};
-    use crate::core::session::AgentSession;
+    use crate::agent::AgentBuilder;
+    use crate::core::{AgentSession, Model, ModelName};
     use crate::utils::FlatSchema;
     use schemars::JsonSchema;
     use serde::Deserialize;

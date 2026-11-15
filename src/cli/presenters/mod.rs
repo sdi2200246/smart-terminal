@@ -1,5 +1,5 @@
-use crate::agent::agents::{AgentEvent, AgentState};
-use crate::agent::patterns::tool_engine::PermissionDecision;
+use crate::agent::{AgentEvent, AgentState, PermissionDecision};
+use crate::core::AgentToolCall;
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use std::io::Write;
@@ -9,7 +9,7 @@ use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::task::JoinHandle;
 use tokio::time::{Duration, interval};
 
-pub mod render;
+mod render;
 
 const WIDTH: usize = 6;
 const HEIGHT: usize = 4;
@@ -87,7 +87,7 @@ impl Presenter {
     }
 }
 
-fn prompt_for_approval(call: &crate::core::responce::AgentToolCall) -> PermissionDecision {
+fn prompt_for_approval(call: &AgentToolCall) -> PermissionDecision {
     println!();
     print!("  Approve {}? [y/N]: ", call.name());
     let _ = std::io::stdout().flush();

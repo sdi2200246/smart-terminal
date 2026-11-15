@@ -1,7 +1,5 @@
-use crate::agent::error::AgentError;
-use crate::agent::patterns::hook::{AgentLoopHook, HookAction};
-use crate::core::responce::{AgentResponse, AgentToolCall};
-use crate::core::session::AgentSession;
+use crate::agent::{AgentError, AgentLoopHook, HookAction};
+use crate::core::{AgentSession, AgentToolCall};
 use std::collections::HashMap;
 
 pub struct DefaultAgentHook;
@@ -49,7 +47,7 @@ impl AgentLoopHook for ToolsRegulator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::session::ConversationEvent;
+    use crate::core::ConversationEvent;
     use serde_json::json;
 
     fn fake_call(name: &str, args: serde_json::Value) -> AgentToolCall {

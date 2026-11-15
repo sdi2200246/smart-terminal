@@ -1,4 +1,4 @@
-use crate::core::error::ProviderError;
+use crate::core::ProviderError;
 use reqwest::StatusCode;
 use thiserror::Error;
 

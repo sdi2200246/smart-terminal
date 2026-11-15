@@ -5,13 +5,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::agent::agents::AgentBuilder;
-use crate::agent::error::AgentError;
-use crate::agent::patterns::react::ReactLoop;
-use crate::core::capability::Capability;
-use crate::core::llm_client::LLMProvider;
-use crate::core::memory::{Conversation, Interaction, Memory};
-use crate::core::model::{Model, ModelName};
+use crate::agent::{AgentBuilder, AgentError, ReactLoop};
+use crate::core::{Capability, Conversation, Interaction, LLMProvider, Memory, Model, ModelName};
 use crate::utils::FlatSchema;
 
 pub trait NextCmdToolFactory {
@@ -119,10 +114,9 @@ fn now_secs() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::error::ProviderError;
-    use crate::core::llm_client::AgentRequest;
-    use crate::core::responce::{AgentResponse, AgentToolCall};
-    use crate::core::session::{AgentSession, ConversationEvent};
+    use crate::core::{
+        AgentRequest, AgentResponse, AgentSession, AgentToolCall, ConversationEvent, ProviderError,
+    };
     use crate::persistence::NextCmdMemory;
     use serde_json::{Value, json};
     use std::sync::{Arc, Mutex};

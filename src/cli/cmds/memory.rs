@@ -1,8 +1,8 @@
 use std::env;
 use std::path::PathBuf;
 
-use crate::cli::cli::{MemoryAction, MemoryArgs};
-use crate::core::memory::{Memory, PersistenceError};
+use crate::cli::{MemoryAction, MemoryArgs};
+use crate::core::{Memory, PersistenceError};
 use crate::persistence::NextCmdMemory;
 
 pub async fn run(args: MemoryArgs) {

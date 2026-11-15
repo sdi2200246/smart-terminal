@@ -59,7 +59,7 @@ impl Message {
     ) -> Message {
         Message {
             role: "tool".into(),
-            content: content,
+            content,
             tool_calls: vec![],
             tool_call_id: Some(tool_call_id),
             name: Some(tool_name),
@@ -96,6 +96,7 @@ impl Message {
         }
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;

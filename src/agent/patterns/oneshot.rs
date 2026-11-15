@@ -1,6 +1,5 @@
-use crate::agent::error::AgentError;
-use crate::core::llm_client::LLMProvider;
-use crate::core::session::AgentSession;
+use crate::agent::AgentError;
+use crate::core::{AgentSession, LLMProvider};
 use crate::utils::FlatSchema;
 use serde::de::DeserializeOwned;
 

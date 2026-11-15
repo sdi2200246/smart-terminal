@@ -1,8 +1,8 @@
 use super::{AgentLoopControl, AgentSignal, AgentSignalContext, AgentSignalOutcome};
 use crate::agent::prompts::{WAIT_JOB_DESCRIPTION, WAIT_JOB_GUIDANCE};
-use crate::core::capability::{ToolMetaData, ToolSafety};
+use crate::core::{ToolMetaData, ToolSafety};
 use crate::multithreading::{JobStore, WaitOutcome};
-use crate::tools::error::ToolError;
+use crate::tools::ToolError;
 use crate::utils::FlatSchema;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -112,9 +112,8 @@ impl AgentSignal for WaitJobSignal {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::agents::AgentBuilder;
-    use crate::core::model::{Model, ModelName};
-    use crate::core::session::AgentSession;
+    use crate::agent::AgentBuilder;
+    use crate::core::{AgentSession, Model, ModelName};
     use crate::multithreading::{JobEngine, JobState};
     use serde_json::json;
     use std::thread;

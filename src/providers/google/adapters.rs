@@ -1,11 +1,9 @@
 use super::api::message::{Message, Part};
 use super::api::request::{GeminiRequest, GenerationConfig};
 use super::api::tool::{FunctionCall, FunctionDeclaration, FunctionResponse, Tool};
-use crate::core::capability::ToolMetaData as CoreToolMetaData;
-use crate::core::llm_client::AgentRequest;
-use crate::core::model::ModelName;
-use crate::core::session::{
-    ConversationEvent, ToolCall as CoreToolCall, ToolResult as CoreToolResult,
+use crate::core::{
+    AgentRequest, ConversationEvent, ModelName, ToolCall as CoreToolCall,
+    ToolMetaData as CoreToolMetaData, ToolResult as CoreToolResult,
 };
 use serde_json::Value;
 

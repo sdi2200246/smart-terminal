@@ -2,11 +2,10 @@
 mod integration {
     use std::print;
 
-    use smart_terminal::core::capability::{ToolMetaData, ToolSafety};
-    use smart_terminal::core::llm_client::{AgentRequest, LLMProvider};
-    use smart_terminal::core::model::{Model, ModelName};
-    use smart_terminal::core::session::AgentSession;
-    use smart_terminal::providers::google::client::GoogleClient;
+    use smart_terminal::core::{
+        AgentRequest, AgentSession, LLMProvider, Model, ModelName, ToolMetaData, ToolSafety,
+    };
+    use smart_terminal::providers::GoogleClient;
 
     fn simple_session() -> AgentSession {
         let mut session = AgentSession::new(5);
@@ -80,9 +79,8 @@ mod integration {
     mod integration_structured_responces {
         use schemars::JsonSchema;
         use serde::Deserialize;
-        use smart_terminal::core::llm_client::LLMProvider;
-        use smart_terminal::core::session::AgentSession;
-        use smart_terminal::providers::google::client::GoogleClient;
+        use smart_terminal::core::{AgentSession, LLMProvider};
+        use smart_terminal::providers::GoogleClient;
         use smart_terminal::utils::FlatSchema;
 
         fn session(user: &str) -> AgentSession {

@@ -1,6 +1,6 @@
 use super::error::ToolError;
 use super::prompts::{READ_LAST_ERROR_DESCRIPTION, READ_LAST_ERROR_GUIDANCE};
-use crate::core::capability::{Capability, ToolMetaData, ToolSafety};
+use crate::core::{Capability, ToolMetaData, ToolSafety};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;

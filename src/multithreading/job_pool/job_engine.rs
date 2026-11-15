@@ -78,7 +78,7 @@ impl JobEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::multithreading::job_pool::job_store::WaitOutcome;
+    use crate::multithreading::WaitOutcome;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::thread;
     use std::time::{Duration, Instant};
