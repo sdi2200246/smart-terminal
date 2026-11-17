@@ -11,6 +11,7 @@ Built in Rust. Uses provider-specific LLMs via Groq and Google Gemini.
 
 The project docs are split into a few focused guides:
 
+- [CONTRIBUTING.md](CONTRIBUTING.md) — guide for contributors, open ideas, and maintainership opportunities.
 - [docs/architecture.md](docs/architecture.md) — architecture, data flow, and extension points.
 - [docs/development.md](docs/development.md) — local setup, build/test workflow, and contributor expectations.
 
@@ -246,8 +247,20 @@ reload
 
 - **Folder-scoped investigation state** — maintain one investigation conversation history per project folder, so the `investigate` agent can preserve context between sessions without mixing unrelated projects.
 - **Conversation management commands** — add commands to inspect or erase the stored investigation history when users want to start fresh.
+- **Alternative shell integrations** — native support for Fish, Bash, and Nushell.
+- **Offline / Local LLM support** — first-class integration with Ollama and `llama.cpp`.
 
-Contributions, bug reports, and feature suggestions are welcome.
+## Contributing
+
+Contributions, bug reports, and feature suggestions are warmly welcomed! 🎉
+
+As the original author is stepping back from active development, **the project is wide open for community direction, experiments, and new co-maintainers**. If you're interested in shaping an AI shell companion in Rust, we'd love to have you.
+
+Check out [CONTRIBUTING.md](CONTRIBUTING.md) to get started with:
+- Local setup & testing guidelines
+- High-impact areas needing help (shells, providers, tools, performance)
+- Code conventions and PR submission workflow
+- Co-maintainership and stewardship opportunities
  
 ## Author & Contact
 

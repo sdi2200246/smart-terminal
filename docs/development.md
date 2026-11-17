@@ -203,4 +203,5 @@ Ensure the integration file path is correct and that you ran `source ~/.zshrc` a
 ## Additional resources
 
 - [README.md](../README.md)
+- [CONTRIBUTING.md](../CONTRIBUTING.md)
 - [docs/architecture.md](architecture.md)
