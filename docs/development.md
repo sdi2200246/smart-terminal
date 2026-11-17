@@ -51,6 +51,9 @@ You should see the available commands:
 - `next-cmd`
 - `memory`
 - `investigate`
+- `ask` (alias for `investigate`)
+
+An additional `sterm` executable name is built from the same CLI entry point; `smart-terminal` remains available.
 
 ## Typical development tasks
 

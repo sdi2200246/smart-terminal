@@ -92,6 +92,14 @@ $ smart-terminal investigate --one-off "What does this repository do?"
 $ smart-terminal investigate session clear
 ```
 
+You can also use the shorter `sterm` executable name and `ask` command alias:
+
+```bash
+$ sterm ask --one-off "What does this repository do?"
+```
+
+The original `smart-terminal investigate` command remains supported.
+
 The conversation is stored separately from `next-cmd` memory and keyed by the project path. A resumed run receives a fresh tool-step budget; old calls do not count against it.
  
 
