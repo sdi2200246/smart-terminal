@@ -1,7 +1,7 @@
 use super::message::Message;
 use super::tool::Tool;
-use crate::core::session::CoreAgentSession;
-use serde::Serialize;
+use crate::core::CoreAgentSession;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
@@ -17,8 +17,16 @@ pub struct OpenAiRequest {
     pub response_format: Option<ResponseFormat>,
 }
 
-impl GroqRequest {
+impl OpenAiRequest {
     pub fn structured(session: &CoreAgentSession, schema: Value) -> Self {
+        Self::structured_with_model(session, schema, "openai/gpt-oss-120b")
+    }
+
+    pub fn structured_with_model(
+        session: &CoreAgentSession,
+        schema: Value,
+        model: impl Into<String>,
+    ) -> Self {
         // Use flat_map to unpack the Vec<Message> returned by the adapter
         let messages = session
             .events

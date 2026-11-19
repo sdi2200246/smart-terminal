@@ -11,8 +11,8 @@ pub use final_answer::FinalAnswerSignal;
 pub use scratchpad::UpdateScratchpadSignal;
 pub use wait_job::{WAIT_JOB_NAME, WaitJobSignal};
 
-use crate::agent::agents::Agent;
-use crate::core::capability::ToolMetaData;
+use crate::agent::Agent;
+use crate::core::ToolMetaData;
 use crate::multithreading::JobStore;
 use crate::tools::ToolError;
 use serde_json::Value;

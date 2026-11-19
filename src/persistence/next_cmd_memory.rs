@@ -386,8 +386,7 @@ mod tests {
 
     #[test]
     fn shared_project_resolver_migrates_investigator_history_after_parent_registration() {
-        use crate::core::memory::{InvestigationSession, InvestigationSessionStore};
-        use crate::core::session::CoreAgentSession;
+        use crate::core::{CoreAgentSession, InvestigationSession, InvestigationSessionStore};
         use crate::persistence::{FileInvestigationSessionStore, ProjectRootResolver};
 
         let (mut memory, temporary) = fresh();

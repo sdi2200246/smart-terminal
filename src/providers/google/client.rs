@@ -1,11 +1,10 @@
 use super::api::request::GeminiRequest;
 use super::api::responce::{GeminiResponse, LlmResponse, LlmStructuredOutput};
 use super::error::GoogleError;
-use crate::core::error::ProviderError;
-use crate::core::llm_client::{AgentRequest, LLMProvider};
-use crate::core::responce::{AgentResponse, AgentToolCall};
-use crate::core::session::CoreAgentSession;
-use crate::providers::client::{ClientConfig, GenericLlmClient, ProviderCodec};
+use crate::core::{
+    AgentRequest, AgentResponse, AgentToolCall, CoreAgentSession, LLMProvider, ProviderError,
+};
+use crate::providers::{ClientConfig, GenericLlmClient, ProviderCodec};
 use reqwest::StatusCode;
 use serde_json::Value;
 
@@ -83,7 +82,7 @@ impl GoogleClient {
     }
 
     fn build(_max_idle: usize) -> Self {
-         let api_key = std::env::var("GEMINI_API_KEY")
+        let api_key = std::env::var("GEMINI_API_KEY")
             .or_else(|_| std::env::var("GOOGLE_API_KEY"))
             .expect("GEMINI_API_KEY or GOOGLE_API_KEY must be set");
 

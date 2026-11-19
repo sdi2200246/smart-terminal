@@ -149,20 +149,28 @@ mod tests {
             .await;
 
         assert_eq!(
-            store.wait_finished("job-1", Duration::from_millis(50)).await,
+            store
+                .wait_finished("job-1", Duration::from_millis(50))
+                .await,
             WaitOutcome::Completed("res".into())
         );
         assert_eq!(
-            store.wait_finished("job-1", Duration::from_millis(50)).await,
+            store
+                .wait_finished("job-1", Duration::from_millis(50))
+                .await,
             WaitOutcome::NotFound
         );
 
         assert_eq!(
-            store.wait_finished("job-2", Duration::from_millis(50)).await,
+            store
+                .wait_finished("job-2", Duration::from_millis(50))
+                .await,
             WaitOutcome::Failed("err".into())
         );
         assert_eq!(
-            store.wait_finished("job-2", Duration::from_millis(50)).await,
+            store
+                .wait_finished("job-2", Duration::from_millis(50))
+                .await,
             WaitOutcome::NotFound
         );
     }
@@ -178,4 +186,3 @@ mod tests {
         );
     }
 }
-

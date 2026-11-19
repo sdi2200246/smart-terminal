@@ -1,11 +1,11 @@
-use super::error::GroqError;
-use super::protocol::request::GroqRequest;
-use super::protocol::responce::{GroqResponse, LlmStructuredOutput, LlmToolCall};
-use crate::core::error::ProviderError;
-use crate::core::llm_client::{AgentRequest, LLMProvider};
-use crate::core::responce::{AgentResponse, AgentToolCall};
-use crate::core::session::CoreAgentSession;
-use crate::providers::client::{ClientConfig, GenericLlmClient, ProviderCodec};
+use super::adapters::to_groq_model_string;
+use crate::core::{
+    AgentRequest, AgentResponse, AgentToolCall, CoreAgentSession, LLMProvider, ProviderError,
+};
+use crate::providers::{
+    ClientConfig, GenericLlmClient, LlmStructuredOutput, LlmToolCall, OpenAiError, OpenAiRequest,
+    OpenAiResponse, ProviderCodec, build_openai_request,
+};
 use reqwest::StatusCode;
 use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
 use serde_json::Value;

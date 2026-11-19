@@ -2,16 +2,8 @@ use std::env;
 use std::io;
 use std::path::PathBuf;
 
-use crate::agent::contracts::{Plan, Report};
-use crate::agent::error::AgentError;
-use crate::agent::patterns::react::ReactLoop;
-use crate::agent::patterns::tool_engine::ToolPermissionMode;
-use crate::agent::workflows::investigator::Investigator;
-use crate::cli::presenters::Presenter;
-use crate::cli::suggestion_handoff::write_recommendation;
-use crate::cli::{
-    agent_setup::CliToolProvider,
-    cli::{InvestigateAction, InvestigateArgs, InvestigationSessionAction},
+use crate::agent::{
+    AgentError, AgentEvent, Investigator, Plan, ReactLoop, Report, ToolPermissionMode,
 };
 use crate::cli::{
     CliToolProvider, InvestigateAction, InvestigateArgs, InvestigationSessionAction, Presenter,

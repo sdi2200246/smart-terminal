@@ -118,7 +118,7 @@ impl InvestigationSessionStore for FileInvestigationSessionStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::session::CoreAgentSession;
+    use crate::core::{ConversationEvent, CoreAgentSession};
     use tempfile::TempDir;
 
     #[test]
@@ -126,16 +126,16 @@ mod tests {
         let temporary = TempDir::new().unwrap();
         let store = FileInvestigationSessionStore::new(temporary.path());
         let mut planner = CoreAgentSession::new().with_user("Question");
-        planner.events.push(
-            crate::core::session::ConversationEvent::ToolCalls(vec![
+        planner
+            .events
+            .push(crate::core::session::ConversationEvent::ToolCalls(vec![
                 crate::core::session::ToolCall::new(
                     "inspect",
                     serde_json::json!({"path": "."}),
                     "call-1",
                 )
                 .with_thinking_state(Some("gemini-signature".into())),
-            ]),
-        );
+            ]));
         let session = InvestigationSession {
             planner: Some(planner),
             executor: Some(CoreAgentSession::new().with_user("Question and plan")),

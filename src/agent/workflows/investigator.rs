@@ -1,11 +1,5 @@
-use crate::agent::agents::{AgentBuilder, AgentEvent};
-use crate::agent::contracts::{Plan, Report};
-use crate::agent::error::AgentError;
-use crate::agent::patterns::react::ReactLoop;
-use crate::core::capability::Capability;
-use crate::core::llm_client::LLMProvider;
-use crate::core::memory::InvestigationSession;
-use crate::core::model::{Model, ModelName};
+use crate::agent::{AgentBuilder, AgentError, AgentEvent, Plan, ReactLoop, Report};
+use crate::core::{Capability, InvestigationSession, LLMProvider, Model, ModelName};
 use crate::utils::FlatSchema;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -97,10 +91,10 @@ impl<'a, P: LLMProvider + Clone, F: InvestigatorToolFactory> Investigator<P, F> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::error::ProviderError;
-    use crate::core::llm_client::AgentRequest;
-    use crate::core::responce::{AgentResponse, AgentToolCall};
-    use crate::core::session::{ConversationEvent, CoreAgentSession};
+    use crate::core::{
+        AgentRequest, AgentResponse, AgentToolCall, ConversationEvent, CoreAgentSession,
+        ProviderError,
+    };
     use serde_json::{Value, json};
     use std::sync::{Arc, Mutex};
 
@@ -198,7 +192,8 @@ mod tests {
         let captured = Arc::new(Mutex::new(Vec::new()));
         let runner = ReactLoop::new(SessionCaptureProvider(captured));
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-        let mut investigator = Investigator::new(runner, EmptyToolFactory).with_events_streaming(tx);
+        let mut investigator =
+            Investigator::new(runner, EmptyToolFactory).with_events_streaming(tx);
 
         investigator.run("test question").await.unwrap();
 
@@ -209,6 +204,9 @@ mod tests {
                 saw_plan_ready = true;
             }
         }
-        assert!(saw_plan_ready, "expected AgentEvent::PlanReady to be streamed");
+        assert!(
+            saw_plan_ready,
+            "expected AgentEvent::PlanReady to be streamed"
+        );
     }
 }

@@ -59,7 +59,12 @@ impl JobEngine {
         let job_id = Uuid::new_v4().to_string();
         self.store.set(job_id.clone(), JobState::Running).await;
 
-        if self.tx.send((job_id.clone(), Box::new(task))).await.is_err() {
+        if self
+            .tx
+            .send((job_id.clone(), Box::new(task)))
+            .await
+            .is_err()
+        {
             self.store
                 .set(
                     job_id.clone(),
@@ -192,7 +197,9 @@ mod tests {
             .await;
 
         assert_eq!(
-            store.wait_finished(&fast_id, Duration::from_millis(150)).await,
+            store
+                .wait_finished(&fast_id, Duration::from_millis(150))
+                .await,
             WaitOutcome::Completed("fast".into())
         );
         assert_eq!(store.get(&slow_id).await, Some(JobState::Running));
@@ -343,7 +350,10 @@ mod tests {
             "Load test finished {total_jobs} jobs in {elapsed:?} | peak concurrency: {peak}/{capacity} | ok: {completed_count}, err: {failed_err_count}, panic: {panicked_count}"
         );
 
-        assert_eq!(completed_count + failed_err_count + panicked_count, total_jobs);
+        assert_eq!(
+            completed_count + failed_err_count + panicked_count,
+            total_jobs
+        );
         assert_eq!(active.load(Ordering::SeqCst), 0);
         assert!(
             peak <= capacity,
@@ -355,4 +365,3 @@ mod tests {
         );
     }
 }
-

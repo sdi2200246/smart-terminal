@@ -1,12 +1,11 @@
 use super::adapters::to_openrouter_model_string;
 use crate::core::{
-    AgentRequest, AgentResponse, AgentSession, AgentToolCall, LLMProvider, ProviderError,
+    AgentRequest, AgentResponse, AgentToolCall, CoreAgentSession, LLMProvider, ProviderError,
 };
-use crate::providers::openai_compatible::{
-    build_openai_request, build_openai_structured_request, LlmStructuredOutput, LlmToolCall,
-    OpenAiError, OpenAiRequest, OpenAiResponse,
+use crate::providers::{
+    ClientConfig, GenericLlmClient, LlmStructuredOutput, LlmToolCall, OpenAiError, OpenAiRequest,
+    OpenAiResponse, ProviderCodec, build_openai_request, build_openai_structured_request,
 };
-use crate::providers::{ClientConfig, GenericLlmClient, ProviderCodec};
 use reqwest::StatusCode;
 use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderName, HeaderValue};
 use serde_json::Value;
@@ -26,7 +25,7 @@ impl ProviderCodec for OpenRouterProtocol {
         build_openai_request(req, to_openrouter_model_string(req.model.get_name()))
     }
 
-    fn build_structured_request(&self, session: &AgentSession, schema: Value) -> Self::Request {
+    fn build_structured_request(&self, session: &CoreAgentSession, schema: Value) -> Self::Request {
         build_openai_structured_request(session, schema, "meta-llama/llama-3.3-70b-instruct:free")
     }
 
@@ -126,7 +125,7 @@ impl LLMProvider for OpenRouterClient {
 
     async fn complete_structured(
         &self,
-        session: &AgentSession,
+        session: &CoreAgentSession,
         schema: Value,
     ) -> Result<Value, ProviderError> {
         self.inner.run_complete_structured(session, schema).await
@@ -194,7 +193,10 @@ mod tests {
             .headers
             .get("http-referer")
             .expect("Missing http-referer header");
-        assert_eq!(referer.to_str().unwrap(), "https://github.com/smart-terminal");
+        assert_eq!(
+            referer.to_str().unwrap(),
+            "https://github.com/smart-terminal"
+        );
 
         let title = client
             .inner
@@ -208,10 +210,8 @@ mod tests {
     #[test]
     fn maps_payload_too_large_error() {
         let protocol = OpenRouterProtocol;
-        let err = protocol.map_status_error(
-            StatusCode::PAYLOAD_TOO_LARGE,
-            "Payload too large".into(),
-        );
+        let err =
+            protocol.map_status_error(StatusCode::PAYLOAD_TOO_LARGE, "Payload too large".into());
 
         match err {
             OpenAiError::TokenLimit { body } => {
@@ -270,7 +270,11 @@ mod tests {
     #[test]
     fn parse_tool_call_wraps_single_call_in_agent_response() {
         let protocol = OpenRouterProtocol;
-        let resp = openrouter_response("read_file", "call_openrouter_1", json!({"path": "src/main.rs"}));
+        let resp = openrouter_response(
+            "read_file",
+            "call_openrouter_1",
+            json!({"path": "src/main.rs"}),
+        );
         let response = protocol.parse_agent_responce(resp).unwrap();
         assert_eq!(response.len(), 1);
         let call = &response.calls()[0];
@@ -291,7 +295,8 @@ mod tests {
                     "content": "All tasks completed."
                 }
             }]
-        })).unwrap();
+        }))
+        .unwrap();
 
         let response = protocol.parse_agent_responce(resp).unwrap();
         assert_eq!(response.len(), 1);

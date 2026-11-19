@@ -1,6 +1,4 @@
-use crate::core::session::{
-    ConversationEvent, CoreAgentSession, Scratchpad, ToolCall, ToolResult,
-};
+use crate::core::{ConversationEvent, CoreAgentSession, Scratchpad, ToolCall, ToolResult};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -153,8 +151,10 @@ impl SessionBuilder {
     }
 
     pub fn formatted_context(mut self, json: impl Into<String>) -> Self {
-        self.events
-            .push(ConversationEvent::System(format!("Context:\n{}", json.into())));
+        self.events.push(ConversationEvent::System(format!(
+            "Context:\n{}",
+            json.into()
+        )));
         self
     }
 

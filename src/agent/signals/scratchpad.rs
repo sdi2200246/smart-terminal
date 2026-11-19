@@ -44,4 +44,3 @@ impl AgentSignal for UpdateScratchpadSignal {
         })
     }
 }
-

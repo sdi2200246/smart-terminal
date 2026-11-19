@@ -54,8 +54,8 @@ impl AgentSignal for FinalAnswerSignal {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::agents::AgentBuilder;
-    use crate::core::model::{Model, ModelName};
+    use crate::agent::AgentBuilder;
+    use crate::core::{Model, ModelName};
     use crate::utils::FlatSchema;
     use schemars::JsonSchema;
     use serde::Deserialize;
@@ -152,4 +152,3 @@ mod tests {
         assert_eq!(meta.parameters, schema);
     }
 }
-

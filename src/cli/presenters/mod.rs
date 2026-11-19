@@ -1,7 +1,5 @@
-use crate::agent::agents::{AgentEvent, AgentState};
-use crate::agent::contracts::{NextCommand, Report};
-use crate::agent::patterns::tool_engine::PermissionDecision;
-use crate::core::memory::Interaction;
+use crate::agent::{AgentEvent, AgentState, NextCommand, PermissionDecision, Report};
+use crate::core::{AgentToolCall, Interaction};
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use std::io::{self, Write};
@@ -80,7 +78,10 @@ impl Presenter {
         println!("{}", render::format_report(report));
         if show_recommendation {
             println!();
-            println!("{}", render::format_recommendation(&report.recommended_command));
+            println!(
+                "{}",
+                render::format_recommendation(&report.recommended_command)
+            );
         }
         println!();
     }
@@ -174,7 +175,10 @@ fn read_line() -> Option<String> {
 
 fn prompt_for_approval(call: &AgentToolCall) -> PermissionDecision {
     println!();
-    print!("{}", render::format_prompt(&format!("Allow {}? [y/N]", call.name())));
+    print!(
+        "{}",
+        render::format_prompt(&format!("Allow {}? [y/N]", call.name()))
+    );
 
     let Some(response) = read_line() else {
         return PermissionDecision::Denied(format!(
@@ -204,7 +208,7 @@ fn prompt_for_approval(call: &AgentToolCall) -> PermissionDecision {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::contracts::{Plan, PlanStep, Reversibility};
+    use crate::agent::{Plan, PlanStep, Reversibility};
 
     #[test]
     fn backgrounded_tool_line_shows_tool_and_job_id() {
@@ -244,7 +248,10 @@ mod tests {
         assert!(rendered_plan.contains("Verify repository status"));
         assert!(rendered_plan.contains("Run git status"));
         assert!(rendered_plan.contains("▎"));
-        assert!(rendered_plan.contains("48;2;"), "panel should have a filled background");
+        assert!(
+            rendered_plan.contains("48;2;"),
+            "panel should have a filled background"
+        );
 
         let rendered_report = render::format_report(&report);
         assert!(rendered_report.contains("REPORT"));

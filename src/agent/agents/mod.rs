@@ -7,13 +7,8 @@ pub use builder::AgentBuilder;
 pub use events::{AgentEvent, AgentState};
 pub use hooks::{DefaultAgentHook, ToolsRegulator};
 
-use crate::agent::patterns::hook::AgentLoopHook;
-use crate::agent::patterns::tool_engine::PermissionDecision;
-use crate::agent::session::AgentSession;
-use crate::agent::signals::AgentActionSpace;
-use crate::core::model::Model;
-use crate::core::responce::AgentToolCall;
-use crate::core::session::ConversationEvent;
+use crate::agent::{AgentActionSpace, AgentLoopHook, AgentSession, PermissionDecision};
+use crate::core::{AgentToolCall, ConversationEvent, Model};
 use tokio::sync::{mpsc::UnboundedSender, oneshot};
 
 pub struct Agent {
@@ -84,8 +79,7 @@ impl Agent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::model::{Model, ModelName};
-    use crate::core::session::CoreAgentSession;
+    use crate::core::{CoreAgentSession, Model, ModelName};
 
     #[test]
     fn state_updates_are_sent_to_the_presenter() {

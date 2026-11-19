@@ -1,7 +1,5 @@
-use crate::agent::error::AgentError;
-use crate::agent::patterns::hook::{AgentLoopHook, HookAction};
-use crate::agent::session::AgentSession;
-use crate::core::responce::AgentToolCall;
+use crate::agent::{AgentError, AgentLoopHook, AgentSession, HookAction};
+use crate::core::AgentToolCall;
 use std::collections::HashMap;
 
 pub struct DefaultAgentHook;

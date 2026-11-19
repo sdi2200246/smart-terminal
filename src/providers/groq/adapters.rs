@@ -1,5 +1,5 @@
 use crate::core::{AgentRequest, ModelName};
-use crate::providers::openai_compatible::{build_openai_request, OpenAiRequest};
+use crate::providers::{OpenAiRequest, build_openai_request};
 
 pub fn to_groq_model_string(model: ModelName) -> String {
     match model {
@@ -17,10 +17,11 @@ impl From<&AgentRequest<'_>> for OpenAiRequest {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::core::llm_client::AgentRequest;
-    use crate::core::model::{Model, ModelName};
-    use crate::core::session::{CoreAgentSession, Scratchpad};
+    use crate::core::{
+        AgentRequest, ConversationEvent, CoreAgentSession, Model, ModelName, Scratchpad,
+        ToolCall as CoreToolCall, ToolResult as CoreToolResult,
+    };
+    use crate::providers::{Message, OpenAiRequest};
     use serde_json::json;
 
     #[test]

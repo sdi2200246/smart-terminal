@@ -8,14 +8,12 @@ use super::Agent;
 use super::contexts;
 use super::events::AgentEvent;
 use super::hooks::{DefaultAgentHook, ToolsRegulator};
-use crate::agent::patterns::hook::AgentLoopHook;
 use crate::agent::prompts::{
     AgentPrompt, CMD_PREDICTOR_PROMPT, EXECUTOR_PROMPT, PLANNER_PROMPT, SystemPromptBuilder,
 };
-use crate::agent::session::{AgentSession, DEFAULT_STEPS};
-use crate::agent::signals::{
-    AgentAction, AgentActionSpace, AgentSignal, FinalAnswerSignal, UpdateScratchpadSignal,
-    WAIT_JOB_NAME, WaitJobSignal,
+use crate::agent::{
+    AgentAction, AgentActionSpace, AgentLoopHook, AgentSession, AgentSignal, DEFAULT_STEPS,
+    FinalAnswerSignal, UpdateScratchpadSignal, WAIT_JOB_NAME, WaitJobSignal,
 };
 use crate::core::{Capability, Model};
 

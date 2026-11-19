@@ -1,11 +1,6 @@
-use crate::agent::contracts::{NextCommand, Reversibility};
-use crate::agent::patterns::react::ReactLoop;
-use crate::agent::patterns::tool_engine::ToolPermissionMode;
-use crate::agent::workflows::next_cmd::NextCmd;
-use crate::cli::agent_setup::CliToolProvider;
-use crate::cli::cli::NextCmdArgs;
-use crate::cli::presenters::Presenter;
-use crate::core::memory::Memory;
+use crate::agent::{NextCmd, NextCommand, ReactLoop, Reversibility, ToolPermissionMode};
+use crate::cli::{CliToolProvider, NextCmdArgs, Presenter};
+use crate::core::Memory;
 use crate::persistence::NextCmdMemory;
 use crate::providers::GroqClient;
 use std::env;

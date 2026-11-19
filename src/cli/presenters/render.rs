@@ -10,9 +10,8 @@ use ratatui::{
 };
 use serde_json::Value;
 
-use crate::agent::contracts::{NextCommand, Plan, Report, Reversibility};
-use crate::core::memory::Interaction;
-use crate::core::responce::AgentToolCall;
+use crate::agent::{NextCommand, Plan, Report, Reversibility};
+use crate::core::{AgentToolCall, Interaction};
 
 pub const OUTPUT_PROTOCOL: &str = "SMART_TERMINAL_NEXT_CMD_V1";
 
@@ -246,7 +245,10 @@ pub(crate) fn format_prompt(question: &str) -> String {
     ]))
 }
 
-pub(crate) fn write_prediction(output: &mut impl Write, prediction: &NextCommand) -> io::Result<()> {
+pub(crate) fn write_prediction(
+    output: &mut impl Write,
+    prediction: &NextCommand,
+) -> io::Result<()> {
     // The command is the complete remaining payload after the versioned metadata header.
     writeln!(output, "{OUTPUT_PROTOCOL}")?;
     writeln!(

@@ -7,11 +7,8 @@ pub use signal_dispatcher::SignalDispatcher;
 pub use tool_dispatcher::{DEFAULT_JOB_CAPACITY, TOOL_WAIT_THRESHOLD, ToolDispatcher};
 
 use crate::agent::prompts::must_run_alone_message;
-use crate::agent::{
-    Agent, AgentAction, AgentSignalInvocation, ModelCall, ToolInvocation,
-};
-use crate::core::responce::{AgentResponse, AgentToolCall};
-use crate::core::session::{ToolCall, ToolResult};
+use crate::agent::{Agent, AgentAction, AgentSignalInvocation, ModelCall, ToolInvocation};
+use crate::core::{AgentResponse, AgentToolCall, ToolCall, ToolResult};
 use crate::multithreading::JobStore;
 use serde_json::Value;
 use std::time::Duration;
@@ -55,11 +52,7 @@ impl ToolExecutionEngine {
         self.tool_dispatcher.job_store()
     }
 
-    pub async fn dispatch_tool_batch(
-        &self,
-        agent: &mut Agent,
-        response: AgentResponse,
-    ) {
+    pub async fn dispatch_tool_batch(&self, agent: &mut Agent, response: AgentResponse) {
         let calls = response.into_calls();
 
         self.notify_and_stream_calls(agent, &calls);
@@ -120,10 +113,7 @@ impl ToolExecutionEngine {
             .await;
         Self::place_results(&mut results, denied);
 
-        let executed = self
-            .tool_dispatcher
-            .execute(permitted, calls, agent)
-            .await;
+        let executed = self.tool_dispatcher.execute(permitted, calls, agent).await;
         Self::place_results(&mut results, executed);
 
         (Self::assemble_results(calls, results), final_answer)
@@ -188,10 +178,7 @@ impl ToolExecutionEngine {
         ToolResult::new(name, msg, orig.id())
     }
 
-    fn place_results(
-        slots: &mut [Option<ToolResult>],
-        entries: Vec<(usize, ToolResult)>,
-    ) {
+    fn place_results(slots: &mut [Option<ToolResult>], entries: Vec<(usize, ToolResult)>) {
         for (pos, r) in entries {
             slots[pos] = Some(r);
         }
@@ -207,11 +194,7 @@ impl ToolExecutionEngine {
             .map(|(pos, r)| {
                 r.unwrap_or_else(|| {
                     let orig = &calls[pos];
-                    ToolResult::new(
-                        orig.name(),
-                        "internal error: no result for call",
-                        orig.id(),
-                    )
+                    ToolResult::new(orig.name(), "internal error: no result for call", orig.id())
                 })
             })
             .collect()
@@ -671,7 +654,10 @@ mod tests {
     async fn final_answer_is_not_gated_by_scratchpad_updates() {
         let engine = ToolExecutionEngine::new();
         let mut agent = test_agent_builder(vec![])
-            .with_signals(vec![Box::new(UpdateScratchpadSignal), Box::new(FinalAnswer)])
+            .with_signals(vec![
+                Box::new(UpdateScratchpadSignal),
+                Box::new(FinalAnswer),
+            ])
             .with_user_prompt("request")
             .build();
 
@@ -1021,7 +1007,9 @@ mod tests {
                 assert_eq!(rs[0].id, "call_slow");
                 assert_eq!(rs[0].name, "slow_op");
                 assert!(
-                    rs[0].result.contains("Still running in the background after"),
+                    rs[0]
+                        .result
+                        .contains("Still running in the background after"),
                     "got: {}",
                     rs[0].result
                 );
@@ -1193,7 +1181,11 @@ mod tests {
                 assert_eq!(rs[0].result, "echo:{\"n\":1}");
 
                 assert_eq!(rs[1].id, "c1");
-                assert!(rs[1].result.contains("Still running in the background after"));
+                assert!(
+                    rs[1]
+                        .result
+                        .contains("Still running in the background after")
+                );
 
                 assert_eq!(rs[2].id, "c2");
                 assert_eq!(rs[2].result, "scratchpad updated successfully");
@@ -1342,8 +1334,7 @@ mod tests {
 
         let approval_handle = tokio::spawn(async move {
             while let Some(evt) = rx.recv().await {
-                if let AgentEvent::ToolApprovalRequest { responder, .. } = evt
-                {
+                if let AgentEvent::ToolApprovalRequest { responder, .. } = evt {
                     tokio::time::sleep(Duration::from_millis(100)).await;
                     let _ = responder.send(PermissionDecision::Approved);
                     break;

@@ -1,6 +1,5 @@
-use crate::agent::contracts::Plan;
-use crate::agent::patterns::tool_engine::PermissionDecision;
-use crate::core::responce::AgentToolCall;
+use crate::agent::{PermissionDecision, Plan};
+use crate::core::AgentToolCall;
 use tokio::sync::oneshot;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -37,4 +36,3 @@ impl AgentState {
         }
     }
 }
-

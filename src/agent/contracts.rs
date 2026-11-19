@@ -99,4 +99,3 @@ mod tests {
         assert!(serde_json::from_value::<Report>(report_without_command).is_err());
     }
 }
-

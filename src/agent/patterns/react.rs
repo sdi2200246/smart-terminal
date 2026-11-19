@@ -1,8 +1,6 @@
 use crate::agent::prompts::STRUCTURING_SYSTEM_PROMPT;
-use crate::core::error::ProviderError;
-use crate::core::llm_client::{AgentRequest, LLMProvider};
-use crate::core::responce::AgentResponse;
-use crate::core::session::CoreAgentSession;
+use crate::agent::{Agent, AgentError, AgentState, ToolExecutionEngine, ToolExecutionPolicy};
+use crate::core::{AgentRequest, AgentResponse, CoreAgentSession, LLMProvider, ProviderError};
 use crate::utils::FlatSchema;
 
 use serde::de::DeserializeOwned;
@@ -137,12 +135,10 @@ impl<P: LLMProvider> ReactLoop<P> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::agents::AgentBuilder;
-    use crate::agent::contracts::NextCommand;
-    use crate::agent::signals::{FinalAnswerSignal, UpdateScratchpadSignal};
-    use crate::core::model::{Model, ModelName};
-    use crate::core::responce::{AgentResponse, AgentToolCall};
-    use crate::core::session::{ConversationEvent, ToolCall, ToolResult};
+    use crate::agent::{AgentBuilder, FinalAnswerSignal, NextCommand, UpdateScratchpadSignal};
+    use crate::core::{
+        AgentResponse, AgentToolCall, ConversationEvent, Model, ModelName, ToolCall, ToolResult,
+    };
     use serde_json::{Value, json};
     use std::sync::{
         Arc,
@@ -204,11 +200,10 @@ mod tests {
             scratchpad: None,
         };
 
-        let mut agent =
-            AgentBuilder::base("test", Model::with_default_temp(ModelName::GptOss120B))
-                .with_session(Some(prior))
-                .with_user_prompt("resumed question")
-                .build();
+        let mut agent = AgentBuilder::base("test", Model::with_default_temp(ModelName::GptOss120B))
+            .with_session(Some(prior))
+            .with_user_prompt("resumed question")
+            .build();
         let saved_history = agent.session.events.clone();
 
         runner.run::<NextCommand>(&mut agent).await.unwrap();
@@ -291,7 +286,9 @@ mod tests {
             _session: &CoreAgentSession,
             _schema: Value,
         ) -> Result<Value, ProviderError> {
-            panic!("complete_structured should not be called when final_answer signal finishes loop");
+            panic!(
+                "complete_structured should not be called when final_answer signal finishes loop"
+            );
         }
     }
 

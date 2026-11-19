@@ -27,10 +27,8 @@ impl NextCmdToolFactory for CliToolProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::agents::{Agent, AgentBuilder};
-    use crate::agent::contracts::{NextCommand, Plan, Report};
-    use crate::core::model::{Model, ModelName};
-    use crate::core::session::ConversationEvent;
+    use crate::agent::{Agent, AgentBuilder, NextCommand, Plan, Report};
+    use crate::core::{ConversationEvent, Model, ModelName};
     use crate::utils::FlatSchema;
 
     fn print_complete_prompt(name: &str, agent: Agent) {
@@ -83,7 +81,11 @@ mod tests {
             assert!(agent.action_space.get("wait_job").is_some());
         }
         assert!(executor.system_prompt().contains("`update_scratchpad`"));
-        assert!(executor.system_prompt().contains("[AVAILABLE-TOOL GUIDANCE]"));
+        assert!(
+            executor
+                .system_prompt()
+                .contains("[AVAILABLE-TOOL GUIDANCE]")
+        );
         assert!(!planner.system_prompt().contains("`update_scratchpad`"));
         assert!(!predictor.system_prompt().contains("`update_scratchpad`"));
         assert!(executor.system_prompt().contains("complete updated state"));
