@@ -127,7 +127,21 @@ Useful for anything you'd normally answer by poking around — what does this co
 ## Architecture Overview
 
 <p align="center">
-<img width="680" height="540" alt="smart_terminal_dependency_graph_v4" src="https://github.com/user-attachments/assets/9c5cfc28-c376-4fa0-882f-1890f519d46c" />
+```mermaid
+flowchart TB
+    CLI["src/cli<br/>composition root"] --> Core["src/core<br/>contracts"]
+    CLI --> Workflows["src/agent/workflows"]
+    Workflows --> Agents["src/agent/agents<br/>AgentBuilder"]
+    Agents --> Signals["src/agent/signals<br/>ActionSpace"]
+    Agents --> Providers["src/providers<br/>Groq / Google"]
+    Signals --> Tools["src/tools<br/>Capabilities"]
+    Agents --> Persistence["src/persistence<br/>JSON stores"]
+    Agents --> Jobs["src/multithreading/job_pool<br/>background jobs"]
+    Core -. contracts .-> Agents
+    Core -. contracts .-> Persistence
+```
+
+The diagram mirrors the current module boundaries: `src/cli` is the composition root, while `src/core` contains the provider-, storage-, and tool-agnostic contracts.
 </p>
 
 `smart-terminal` is organized into a modular, layered architecture that separates terminal interaction, reasoning workflows, LLM integration, and system tooling. `src/cli` is the sole composition root — the only layer that wires concrete providers, tools, and memory together.
@@ -162,7 +176,24 @@ The only thing that varies per command is what happens inside the workflow box:
 | `investigate` | 2 — `planner` then `executor` | `ReactLoop` (shared) |
 
 <p align="center">
-<img height="500" alt="smart_terminal_runtime_flow_clean" src="https://github.com/user-attachments/assets/17b9772b-a549-493f-aade-7859b931ac56" />
+```mermaid
+flowchart LR
+    Input["CLI input"] --> Router["Router::dispatch"]
+    Router --> Workflow["NextCmd / Investigate"]
+    Workflow --> Build["AgentBuilder"]
+    Build --> Loop["ReactLoop"]
+    Loop --> Model["Groq / Google"]
+    Model --> Engine["ToolExecutionEngine"]
+    Engine -->|fast call| Inline["inline result"]
+    Engine -->|slow call| Job["JobEngine<br/>pending Job ID"]
+    Job --> Wait["wait_job"]
+    Wait --> Result["completed result"]
+    Inline --> Answer["final_answer / structured stop"]
+    Result --> Answer
+    Answer --> Output["CLI presenter"]
+```
+
+Slow tools are backgrounded after the one-second wait threshold; the agent collects them explicitly through the exclusive `wait_job` signal.
 </p>
 
 ### Design Goals
