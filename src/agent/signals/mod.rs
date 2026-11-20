@@ -12,13 +12,12 @@ pub use scratchpad::UpdateScratchpadSignal;
 pub use wait_job::{WAIT_JOB_NAME, WaitJobSignal};
 
 use crate::agent::Agent;
-use crate::core::{AgentSession, ToolMetaData};
+use crate::core::ToolMetaData;
 use crate::multithreading::JobStore;
 use crate::tools::ToolError;
 use serde_json::Value;
 
 pub struct AgentSignalContext<'a> {
-    pub session: &'a mut AgentSession,
     pub agent: &'a mut Agent,
     pub job_store: &'a JobStore,
 }

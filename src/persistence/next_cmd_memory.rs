@@ -386,7 +386,7 @@ mod tests {
 
     #[test]
     fn shared_project_resolver_migrates_investigator_history_after_parent_registration() {
-        use crate::core::{AgentSession, InvestigationSession, InvestigationSessionStore};
+        use crate::core::{CoreAgentSession, InvestigationSession, InvestigationSessionStore};
         use crate::persistence::{FileInvestigationSessionStore, ProjectRootResolver};
 
         let (mut memory, temporary) = fresh();
@@ -399,8 +399,7 @@ mod tests {
             .save(
                 &child.to_string_lossy(),
                 &InvestigationSession {
-                    planner: Some(AgentSession::builder().user("child investigation").build()),
-                    completed_reports: vec!["child report".into()],
+                    planner: Some(CoreAgentSession::new().with_user("child investigation")),
                     ..InvestigationSession::default()
                 },
             )
@@ -419,7 +418,8 @@ mod tests {
             .load_for_project_root(&parent, &resolver)
             .unwrap()
             .unwrap();
-        assert_eq!(migrated.completed_reports, vec!["child report"]);
+        assert!(migrated.planner.is_some());
+        assert_eq!(migrated.absorbed_roots, vec![child.clone()]);
         assert!(store.load(&child.to_string_lossy()).unwrap().is_none());
     }
 }

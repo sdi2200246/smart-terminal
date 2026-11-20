@@ -1,4 +1,4 @@
-use crate::agent::PermissionDecision;
+use crate::agent::{PermissionDecision, Plan};
 use crate::core::AgentToolCall;
 use tokio::sync::oneshot;
 
@@ -18,6 +18,11 @@ pub enum AgentEvent {
         call: AgentToolCall,
         responder: oneshot::Sender<PermissionDecision>,
     },
+    ToolBackgrounded {
+        tool: String,
+        job_id: String,
+    },
+    PlanReady(Plan),
 }
 
 impl AgentState {
@@ -31,4 +36,3 @@ impl AgentState {
         }
     }
 }
-

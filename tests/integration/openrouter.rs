@@ -3,7 +3,7 @@ mod integration {
     use schemars::JsonSchema;
     use serde::Deserialize;
     use smart_terminal::core::{
-        AgentRequest, AgentSession, LLMProvider, Model, ModelName, ToolMetaData, ToolSafety,
+        AgentRequest, CoreAgentSession, LLMProvider, Model, ModelName, ToolMetaData, ToolSafety,
     };
     use smart_terminal::providers::OpenRouterClient;
     use smart_terminal::utils::FlatSchema;
@@ -12,11 +12,10 @@ mod integration {
         dotenv::dotenv().ok();
     }
 
-    fn simple_session(user_msg: &str) -> AgentSession {
-        let mut session = AgentSession::new(5);
-        session.add_system("You are a helpful assistant.");
-        session.add_user(user_msg);
-        session
+    fn simple_session(user_msg: &str) -> CoreAgentSession {
+        CoreAgentSession::new()
+            .with_system("You are a helpful assistant.")
+            .with_user(user_msg)
     }
 
     /// Test 1: Basic completion / chat response.
@@ -56,11 +55,11 @@ mod integration {
 
         let client = OpenRouterClient::default();
 
-        let mut session = AgentSession::new(5);
-        session.add_system(
-            "You are a helpful assistant. Use the get_weather tool when asked about weather.",
-        );
-        session.add_user("What is the weather in Athens?");
+        let session = CoreAgentSession::new()
+            .with_system(
+                "You are a helpful assistant. Use the get_weather tool when asked about weather.",
+            )
+            .with_user("What is the weather in Athens?");
 
         let model = Model::new(ModelName::Nemotron3_5SuperVlFree, 0.1);
 
@@ -124,9 +123,9 @@ mod integration {
 
         let client = OpenRouterClient::default();
 
-        let mut session = AgentSession::new(5);
-        session.add_system("You are a helpful shell assistant. Respond with JSON matching schema.");
-        session.add_user("git sta");
+        let session = CoreAgentSession::new()
+            .with_system("You are a helpful shell assistant. Respond with JSON matching schema.")
+            .with_user("git sta");
 
         let result = client
             .complete_structured(&session, NextCommand::schema())
@@ -140,7 +139,8 @@ mod integration {
 
         let value = result.unwrap();
         println!("Structured output JSON: {}", value);
-        let parsed: NextCommand = serde_json::from_value(value).expect("failed to deserialize into NextCommand");
+        let parsed: NextCommand =
+            serde_json::from_value(value).expect("failed to deserialize into NextCommand");
         assert!(!parsed.cmd.is_empty());
         assert!(!parsed.man.is_empty());
     }

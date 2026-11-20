@@ -36,4 +36,3 @@ pub const READ_DIR_DESCRIPTION: &str = "Read the contents of a directory. \
 pub const READ_FILE_DESCRIPTION: &str = "Read lines from a file. Returns the content within the requested \
     line range and the total line count. Use start/end to window into large files. \
     Lines are 1-indexed and inclusive.";
-

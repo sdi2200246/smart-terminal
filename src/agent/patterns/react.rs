@@ -1,8 +1,6 @@
 use crate::agent::prompts::STRUCTURING_SYSTEM_PROMPT;
-use crate::agent::{
-    Agent, AgentError, AgentState, ToolExecutionEngine, ToolExecutionPolicy,
-};
-use crate::core::{AgentRequest, AgentResponse, AgentSession, LLMProvider, ProviderError};
+use crate::agent::{Agent, AgentError, AgentState, ToolExecutionEngine, ToolExecutionPolicy};
+use crate::core::{AgentRequest, AgentResponse, CoreAgentSession, LLMProvider, ProviderError};
 use crate::utils::FlatSchema;
 
 use serde::de::DeserializeOwned;
@@ -26,17 +24,13 @@ impl<P: LLMProvider> ReactLoop<P> {
         }
     }
 
-    #[tracing::instrument(skip(self, agent, session), fields(loop_kind = "React"))]
-    pub async fn run<T>(
-        &mut self,
-        agent: &mut Agent,
-        session: &mut AgentSession,
-    ) -> Result<T, AgentError>
+    #[tracing::instrument(skip(self, agent), fields(loop_kind = "React"))]
+    pub async fn run<T>(&mut self, agent: &mut Agent) -> Result<T, AgentError>
     where
         T: FlatSchema + DeserializeOwned,
     {
         agent.hooks.on_loop_start();
-        let result = self.run_loop::<T>(agent, session).await;
+        let result = self.run_loop::<T>(agent).await;
         agent.update_state(if result.is_ok() {
             AgentState::Completed
         } else {
@@ -45,29 +39,25 @@ impl<P: LLMProvider> ReactLoop<P> {
         result
     }
 
-    async fn run_loop<T>(
-        &mut self,
-        agent: &mut Agent,
-        session: &mut AgentSession,
-    ) -> Result<T, AgentError>
+    async fn run_loop<T>(&mut self, agent: &mut Agent) -> Result<T, AgentError>
     where
         T: FlatSchema + DeserializeOwned,
     {
         let stop_args: Value;
         loop {
-            if let Some(value) = session.take_final_answer() {
+            if let Some(value) = agent.session.take_final_answer() {
                 agent.hooks.on_final_answer();
                 return serde_json::from_value::<T>(value)
                     .map_err(|_| AgentError::ScheemaViolation);
             }
 
-            if session.steps_exhausted() {
+            if agent.session.steps_exhausted() {
                 agent.hooks.on_loop_exhausted();
                 return Err(AgentError::StepsExhausted);
             }
 
             agent.update_state(AgentState::Thinking);
-            let response = match self.call_llm(session, agent).await? {
+            let response = match self.call_llm(agent).await? {
                 Some(r) => r,
                 None => continue,
             };
@@ -83,22 +73,17 @@ impl<P: LLMProvider> ReactLoop<P> {
             }
 
             agent.update_state(AgentState::ExecutingTool);
-            self.tool_engine
-                .dispatch_tool_batch(session, agent, response)
-                .await;
+            self.tool_engine.dispatch_tool_batch(agent, response).await;
         }
-        self.structure_output::<T>(session, &stop_args, agent).await
+        self.structure_output::<T>(&stop_args, agent).await
     }
 
-    async fn call_llm(
-        &mut self,
-        session: &mut AgentSession,
-        agent: &mut Agent,
-    ) -> Result<Option<AgentResponse>, AgentError> {
+    async fn call_llm(&mut self, agent: &mut Agent) -> Result<Option<AgentResponse>, AgentError> {
         let schemas = agent.action_space.model_schemas();
+        let core_session = CoreAgentSession::from(&agent.session);
         let request = AgentRequest {
             model: &agent.model,
-            session,
+            session: &core_session,
             tools_metadata: &schemas,
         };
 
@@ -106,12 +91,12 @@ impl<P: LLMProvider> ReactLoop<P> {
             Ok(response) => Ok(Some(response)),
             Err(ProviderError::InvalidToolCall { source }) => {
                 agent.hooks.on_invalid_tool_call(&source.to_string());
-                session.add_error(format!("{}", source));
+                agent.session.add_error(format!("{}", source));
                 Ok(None)
             }
             Err(ProviderError::MalformedResponse { source }) => {
                 agent.hooks.on_provider_error(&source.to_string());
-                session.add_error(format!("{}", source));
+                agent.session.add_error(format!("{}", source));
                 Ok(None)
             }
             Err(e) => {
@@ -123,7 +108,6 @@ impl<P: LLMProvider> ReactLoop<P> {
 
     async fn structure_output<T>(
         &mut self,
-        session: &mut AgentSession,
         stop_args: &Value,
         agent: &mut Agent,
     ) -> Result<T, AgentError>
@@ -131,10 +115,9 @@ impl<P: LLMProvider> ReactLoop<P> {
         T: FlatSchema + DeserializeOwned,
     {
         agent.update_state(AgentState::StructuringOutput);
-        let output_session = AgentSession::builder()
-            .system(STRUCTURING_SYSTEM_PROMPT)
-            .user(stop_args.to_string())
-            .build();
+        let output_session = CoreAgentSession::new()
+            .with_system(STRUCTURING_SYSTEM_PROMPT)
+            .with_user(stop_args.to_string());
 
         agent.hooks.on_structuring_start();
         let raw = self
@@ -143,7 +126,7 @@ impl<P: LLMProvider> ReactLoop<P> {
             .await?;
         let response_text = raw.to_string();
         let typed = serde_json::from_value::<T>(raw).expect("Type must always be right");
-        session.add_assistant(response_text);
+        agent.session.add_assistant(response_text);
         agent.hooks.on_structuring_complete();
         Ok(typed)
     }
@@ -152,9 +135,7 @@ impl<P: LLMProvider> ReactLoop<P> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::{
-        AgentBuilder, FinalAnswerSignal, NextCommand, UpdateScratchpadSignal,
-    };
+    use crate::agent::{AgentBuilder, FinalAnswerSignal, NextCommand, UpdateScratchpadSignal};
     use crate::core::{
         AgentResponse, AgentToolCall, ConversationEvent, Model, ModelName, ToolCall, ToolResult,
     };
@@ -182,7 +163,7 @@ mod tests {
 
         async fn complete_structured(
             &self,
-            session: &AgentSession,
+            session: &CoreAgentSession,
             _schema: Value,
         ) -> Result<Value, ProviderError> {
             self.0.store(
@@ -201,31 +182,38 @@ mod tests {
         let structured_session_had_tools = Arc::new(AtomicBool::new(false));
         let provider = StructuredCallTracker(structured_session_had_tools.clone());
         let mut runner = ReactLoop::new(provider);
-        let mut agent =
-            AgentBuilder::base("test", Model::with_default_temp(ModelName::GptOss120B)).build();
-        let mut session = AgentSession::builder()
-            .system("test")
-            .user("original question")
-            .build();
-        session.add_tool_calls(vec![
-            ToolCall::new("read_file", json!({"path":"file"}), "call-1")
-                .with_thinking_state(Some("provider-signature".into())),
-        ]);
-        session.add_tool_results(vec![ToolResult::new("read_file", "contents", "call-1")]);
-        session.add_user("resumed question");
-        let saved_history = session.events.clone();
 
-        runner
-            .run::<NextCommand>(&mut agent, &mut session)
-            .await
-            .unwrap();
+        let prior = CoreAgentSession {
+            events: vec![
+                ConversationEvent::System("test".into()),
+                ConversationEvent::User("original question".into()),
+                ConversationEvent::ToolCalls(vec![
+                    ToolCall::new("read_file", json!({"path":"file"}), "call-1")
+                        .with_thinking_state(Some("provider-signature".into())),
+                ]),
+                ConversationEvent::ToolResults(vec![ToolResult::new(
+                    "read_file",
+                    "contents",
+                    "call-1",
+                )]),
+            ],
+            scratchpad: None,
+        };
+
+        let mut agent = AgentBuilder::base("test", Model::with_default_temp(ModelName::GptOss120B))
+            .with_session(Some(prior))
+            .with_user_prompt("resumed question")
+            .build();
+        let saved_history = agent.session.events.clone();
+
+        runner.run::<NextCommand>(&mut agent).await.unwrap();
 
         assert_eq!(
-            &session.events[..saved_history.len()],
+            &agent.session.events[..saved_history.len()],
             saved_history.as_slice()
         );
         assert!(matches!(
-            session.events.last(),
+            agent.session.events.last(),
             Some(ConversationEvent::Assistant(_))
         ));
         assert!(!structured_session_had_tools.load(Ordering::SeqCst));
@@ -254,7 +242,7 @@ mod tests {
 
         async fn complete_structured(
             &self,
-            _session: &AgentSession,
+            _session: &CoreAgentSession,
             _schema: Value,
         ) -> Result<Value, ProviderError> {
             Ok(json!({"cmd":"echo done","man":"Print done.","scale":"Full"}))
@@ -268,18 +256,12 @@ mod tests {
         let mut runner = ReactLoop::new(provider);
         let mut agent = AgentBuilder::base("test", Model::with_default_temp(ModelName::GptOss120B))
             .with_signals(vec![Box::new(UpdateScratchpadSignal)])
-            .build();
-        let mut session = AgentSession::builder()
-            .system("test")
-            .user("request")
+            .with_user_prompt("request")
             .build();
 
-        runner
-            .run::<NextCommand>(&mut agent, &mut session)
-            .await
-            .unwrap();
+        runner.run::<NextCommand>(&mut agent).await.unwrap();
 
-        assert!(session.scratchpad.is_none());
+        assert!(agent.session.scratchpad.is_none());
         assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
 
@@ -301,10 +283,12 @@ mod tests {
 
         async fn complete_structured(
             &self,
-            _session: &AgentSession,
+            _session: &CoreAgentSession,
             _schema: Value,
         ) -> Result<Value, ProviderError> {
-            panic!("complete_structured should not be called when final_answer signal finishes loop");
+            panic!(
+                "complete_structured should not be called when final_answer signal finishes loop"
+            );
         }
     }
 
@@ -315,13 +299,10 @@ mod tests {
             .with_signals(vec![Box::new(FinalAnswerSignal {
                 properties: NextCommand::schema(),
             })])
-            .build();
-        let mut session = AgentSession::builder()
-            .system("test")
-            .user("status")
+            .with_user_prompt("status")
             .build();
 
-        let result: NextCommand = runner.run(&mut agent, &mut session).await.unwrap();
+        let result: NextCommand = runner.run(&mut agent).await.unwrap();
         assert_eq!(result.cmd, "git status");
         assert_eq!(result.man, "Check status.");
     }

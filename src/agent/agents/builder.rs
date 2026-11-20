@@ -12,8 +12,8 @@ use crate::agent::prompts::{
     AgentPrompt, CMD_PREDICTOR_PROMPT, EXECUTOR_PROMPT, PLANNER_PROMPT, SystemPromptBuilder,
 };
 use crate::agent::{
-    AgentAction, AgentActionSpace, AgentLoopHook, AgentSignal, FinalAnswerSignal,
-    UpdateScratchpadSignal, WAIT_JOB_NAME, WaitJobSignal,
+    AgentAction, AgentActionSpace, AgentLoopHook, AgentSession, AgentSignal, DEFAULT_STEPS,
+    FinalAnswerSignal, UpdateScratchpadSignal, WAIT_JOB_NAME, WaitJobSignal,
 };
 use crate::core::{Capability, Model};
 
@@ -28,6 +28,9 @@ pub struct AgentBuilder {
     model: Model,
     hooks: Box<dyn AgentLoopHook>,
     context: Option<String>,
+    user_prompt: Option<String>,
+    session: Option<AgentSession>,
+    steps: usize,
     event_stream: Option<UnboundedSender<AgentEvent>>,
 }
 
@@ -39,6 +42,9 @@ impl AgentBuilder {
             model,
             hooks: Box::new(DefaultAgentHook),
             context: None,
+            user_prompt: None,
+            session: None,
+            steps: DEFAULT_STEPS,
             event_stream: None,
         }
     }
@@ -50,6 +56,9 @@ impl AgentBuilder {
             model,
             hooks: Box::new(DefaultAgentHook),
             context: None,
+            user_prompt: None,
+            session: None,
+            steps: DEFAULT_STEPS,
             event_stream: None,
         }
     }
@@ -156,6 +165,21 @@ impl AgentBuilder {
         self
     }
 
+    pub fn with_user_prompt(mut self, prompt: impl Into<String>) -> Self {
+        self.user_prompt = Some(prompt.into());
+        self
+    }
+
+    pub fn with_session(mut self, session: Option<impl Into<AgentSession>>) -> Self {
+        self.session = session.map(Into::into);
+        self
+    }
+
+    pub fn with_steps(mut self, steps: usize) -> Self {
+        self.steps = steps;
+        self
+    }
+
     pub fn with_hook(mut self, hook: Box<dyn AgentLoopHook>) -> Self {
         self.hooks = hook;
         self
@@ -183,14 +207,35 @@ impl AgentBuilder {
             }
         };
 
+        let session = match self.session {
+            Some(saved) => {
+                let mut session = saved.with_steps(self.steps);
+                session.replace_initial_system_prompt(system_prompt);
+                if let Some(user_prompt) = self.user_prompt {
+                    session.add_user(user_prompt);
+                }
+                session
+            }
+            None => {
+                let mut builder = AgentSession::builder()
+                    .steps(self.steps)
+                    .system(system_prompt);
+                if let Some(ctx) = self.context {
+                    builder = builder.formatted_context(ctx);
+                }
+                if let Some(user_prompt) = self.user_prompt {
+                    builder = builder.user(user_prompt);
+                }
+                builder.build()
+            }
+        };
+
         Agent {
             action_space: self.action_space,
-            system_prompt,
             model: self.model,
             hooks: self.hooks,
-            context: self.context,
+            session,
             event_stream: self.event_stream,
         }
     }
 }
-

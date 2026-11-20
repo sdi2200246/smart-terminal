@@ -16,4 +16,3 @@ pub use git_diff::GitDiffStaged;
 pub use last_error::ReadLastError;
 pub use read_dir::ReadDir;
 pub use read_file::ReadFile;
-

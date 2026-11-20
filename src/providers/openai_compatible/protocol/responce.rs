@@ -29,13 +29,14 @@ impl TryFrom<OpenAiResponse> for LlmToolCall {
     type Error = OpenAiError;
 
     fn try_from(value: OpenAiResponse) -> Result<Self, Self::Error> {
-        let choice = value
-            .choices
-            .into_iter()
-            .next()
-            .ok_or_else(|| OpenAiError::UnexpectedOutput {
-                body: "No choices in response".to_string(),
-            })?;
+        let choice =
+            value
+                .choices
+                .into_iter()
+                .next()
+                .ok_or_else(|| OpenAiError::UnexpectedOutput {
+                    body: "No choices in response".to_string(),
+                })?;
 
         if choice.finish_reason == Some("stop".to_string()) {
             let conclusion = choice
@@ -90,13 +91,13 @@ impl TryFrom<OpenAiResponse> for LlmStructuredOutput {
     type Error = OpenAiError;
 
     fn try_from(res: OpenAiResponse) -> Result<Self, Self::Error> {
-        let choice = res
-            .choices
-            .into_iter()
-            .next()
-            .ok_or_else(|| OpenAiError::UnexpectedOutput {
-                body: "No choices in response".to_string(),
-            })?;
+        let choice =
+            res.choices
+                .into_iter()
+                .next()
+                .ok_or_else(|| OpenAiError::UnexpectedOutput {
+                    body: "No choices in response".to_string(),
+                })?;
 
         let content = choice
             .message

@@ -2,8 +2,6 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-const DEFAULT_STEPS: usize = 50;
-
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct ToolCall {
     pub name: String,
@@ -32,7 +30,6 @@ impl ToolCall {
 pub struct ToolResult {
     pub name: String,
     pub result: String,
-
     pub id: String,
 }
 
@@ -51,9 +48,7 @@ pub enum ConversationEvent {
     System(String),
     User(String),
     Assistant(String),
-    /// One model turn's calls, in emission order. Length 1 for sequential.
     ToolCalls(Vec<ToolCall>),
-    /// Results for the immediately preceding ToolCalls, same order and length.
     ToolResults(Vec<ToolResult>),
 }
 
@@ -65,165 +60,27 @@ pub struct Scratchpad {
     pub vital_findings: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgentSession {
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct CoreAgentSession {
+    #[serde(default)]
     pub events: Vec<ConversationEvent>,
-    pub steps: usize,
-    pub final_answer: Option<Value>,
+    #[serde(default)]
     pub scratchpad: Option<Scratchpad>,
 }
 
-impl AgentSession {
-    pub fn new(steps: usize) -> Self {
-        Self {
-            events: Vec::new(),
-            steps,
-            final_answer: None,
-            scratchpad: None,
-        }
+impl CoreAgentSession {
+    pub fn new() -> Self {
+        Self::default()
     }
 
-    pub fn builder() -> SessionBuilder {
-        SessionBuilder::new()
-    }
-
-    pub fn add_system(&mut self, message: impl Into<String>) {
-        self.events.push(ConversationEvent::System(message.into()));
-    }
-
-    pub fn replace_initial_system_prompt(&mut self, message: impl Into<String>) {
-        let message = message.into();
-        match self.events.first_mut() {
-            Some(ConversationEvent::System(existing)) => *existing = message,
-            _ => self.events.insert(0, ConversationEvent::System(message)),
-        }
-    }
-
-    pub fn add_user(&mut self, message: impl Into<String>) {
-        self.events.push(ConversationEvent::User(message.into()));
-    }
-
-    pub fn add_assistant(&mut self, message: impl Into<String>) {
-        self.events
-            .push(ConversationEvent::Assistant(message.into()));
-    }
-
-    pub fn add_reflection(&mut self, reflection: impl Into<String>) {
-        self.events.push(ConversationEvent::System(format!(
-            "[REFLECTION] {}",
-            reflection.into()
-        )));
-    }
-
-    pub fn add_tool_calls(&mut self, calls: Vec<ToolCall>) {
-        debug_assert!(!calls.is_empty(), "empty tool call batch");
-        self.events.push(ConversationEvent::ToolCalls(calls));
-    }
-
-    pub fn add_tool_results(&mut self, results: Vec<ToolResult>) {
-        debug_assert_eq!(
-            self.pending_call_count(),
-            Some(results.len()),
-            "tool results must pair 1:1 with the preceding call batch"
-        );
-        self.events.push(ConversationEvent::ToolResults(results));
-    }
-
-    pub fn add_error(&mut self, er: String) {
-        self.events
-            .push(ConversationEvent::System(format!("[ERROR]:{}", er)));
-    }
-
-    fn pending_call_count(&self) -> Option<usize> {
-        match self.events.last() {
-            Some(ConversationEvent::ToolCalls(calls)) => Some(calls.len()),
-            _ => None,
-        }
-    }
-
-    pub fn current_steps(&self) -> usize {
-        let start = self
-            .events
-            .iter()
-            .rposition(|event| matches!(event, ConversationEvent::User(_)))
-            .map_or(0, |index| index + 1);
-        self.events[start..]
-            .iter()
-            .filter(|e| matches!(e, ConversationEvent::ToolCalls(_)))
-            .count()
-    }
-
-    pub fn steps_exhausted(&self) -> bool {
-        self.current_steps() >= self.steps
-    }
-
-    pub fn events(&self) -> &[ConversationEvent] {
-        &self.events
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.events.is_empty()
-    }
-
-    pub fn clear_events(&mut self) {
-        self.events.clear();
-    }
-
-    pub fn set_final_answer(&mut self, value: Value) {
-        self.final_answer = Some(value);
-    }
-
-    pub fn take_final_answer(&mut self) -> Option<Value> {
-        self.final_answer.take()
-    }
-
-    pub fn update_scratchpad(&mut self, new: Scratchpad) {
-        self.scratchpad = Some(new);
-    }
-}
-
-pub struct SessionBuilder {
-    events: Vec<ConversationEvent>,
-    steps: usize,
-}
-
-impl SessionBuilder {
-    fn new() -> Self {
-        Self {
-            events: vec![],
-            steps: DEFAULT_STEPS,
-        }
-    }
-
-    pub fn system(mut self, message: impl Into<String>) -> Self {
+    pub fn with_system(mut self, message: impl Into<String>) -> Self {
         self.events.push(ConversationEvent::System(message.into()));
         self
     }
 
-    pub fn user(mut self, message: impl Into<String>) -> Self {
+    pub fn with_user(mut self, message: impl Into<String>) -> Self {
         self.events.push(ConversationEvent::User(message.into()));
         self
-    }
-
-    pub fn context<T: Serialize>(mut self, ctx: &T) -> Self {
-        let json = serde_json::to_string_pretty(ctx).unwrap();
-        self.events
-            .push(ConversationEvent::System(format!("Context:\n{}", json)));
-        self
-    }
-
-    pub fn steps(mut self, steps: usize) -> Self {
-        self.steps = steps;
-        self
-    }
-
-    pub fn build(self) -> AgentSession {
-        AgentSession {
-            events: self.events,
-            steps: self.steps,
-            final_answer: None,
-            scratchpad: None,
-        }
     }
 }
 
@@ -232,16 +89,23 @@ mod tests {
     use super::*;
 
     #[test]
-    fn agent_session_round_trips_tool_calls_and_provider_metadata() {
-        let mut session = AgentSession::builder().user("question").build();
-        session.add_tool_calls(vec![
-            ToolCall::new("inspect", serde_json::json!({"path": "."}), "call-1")
-                .with_thinking_state(Some("gemini-signature".into())),
-        ]);
-        session.add_tool_results(vec![ToolResult::new("inspect", "result", "call-1")]);
+    fn core_agent_session_round_trips_tool_calls_and_provider_metadata() {
+        let session = CoreAgentSession {
+            events: vec![
+                ConversationEvent::User("question".into()),
+                ConversationEvent::ToolCalls(vec![
+                    ToolCall::new("inspect", serde_json::json!({"path": "."}), "call-1")
+                        .with_thinking_state(Some("gemini-signature".into())),
+                ]),
+                ConversationEvent::ToolResults(vec![ToolResult::new(
+                    "inspect", "result", "call-1",
+                )]),
+            ],
+            scratchpad: None,
+        };
 
         let serialized = serde_json::to_string(&session).unwrap();
-        let restored: AgentSession = serde_json::from_str(&serialized).unwrap();
+        let restored: CoreAgentSession = serde_json::from_str(&serialized).unwrap();
 
         assert_eq!(restored.events, session.events);
         match &restored.events[1] {
@@ -250,35 +114,5 @@ mod tests {
             }
             _ => panic!("expected tool calls"),
         }
-    }
-
-    #[test]
-    fn replacing_initial_system_prompt_preserves_the_rest_of_the_transcript() {
-        let mut session = AgentSession::builder()
-            .system("old prompt")
-            .context(&serde_json::json!({"cwd":"project"}))
-            .user("first question")
-            .build();
-        session.add_assistant("prior answer");
-        let transcript = session.events[1..].to_vec();
-
-        session.replace_initial_system_prompt("updated prompt");
-
-        assert_eq!(
-            session.events.first(),
-            Some(&ConversationEvent::System("updated prompt".into()))
-        );
-        assert_eq!(&session.events[1..], transcript.as_slice());
-    }
-
-    #[test]
-    fn resumed_session_counts_steps_after_latest_user_event() {
-        let mut session = AgentSession::builder().user("first run").build();
-        session.add_tool_calls(vec![ToolCall::new("old", serde_json::Value::Null, "old")]);
-        session.add_user("resumed run");
-
-        assert_eq!(session.current_steps(), 0);
-        session.add_tool_calls(vec![ToolCall::new("new", serde_json::Value::Null, "new")]);
-        assert_eq!(session.current_steps(), 1);
     }
 }

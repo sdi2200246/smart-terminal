@@ -2,7 +2,7 @@ use super::protocol::message::Message;
 use super::protocol::request::{OpenAiRequest, ResponseFormat};
 use super::protocol::tool::{Tool, ToolCall, ToolMetaData};
 use crate::core::{
-    AgentRequest, AgentSession, ConversationEvent, ToolCall as CoreToolCall,
+    AgentRequest, ConversationEvent, CoreAgentSession, ToolCall as CoreToolCall,
     ToolMetaData as CoreToolMetaData, ToolResult as CoreToolResult,
 };
 use serde_json::Value;
@@ -74,7 +74,7 @@ impl From<&ConversationEvent> for Vec<Message> {
     }
 }
 
-pub fn build_messages_with_scratchpad(session: &AgentSession) -> Vec<Message> {
+pub fn build_messages_with_scratchpad(session: &CoreAgentSession) -> Vec<Message> {
     let mut messages: Vec<Message> = session
         .events
         .iter()
@@ -115,7 +115,7 @@ pub fn build_openai_request(request: &AgentRequest<'_>, model: impl Into<String>
 }
 
 pub fn build_openai_structured_request(
-    session: &AgentSession,
+    session: &CoreAgentSession,
     schema: Value,
     model: impl Into<String>,
 ) -> OpenAiRequest {
@@ -138,7 +138,7 @@ pub fn build_openai_structured_request(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::{AgentRequest, AgentSession, Model, ModelName, Scratchpad};
+    use crate::core::{AgentRequest, CoreAgentSession, Model, ModelName, Scratchpad};
     use serde_json::json;
 
     #[test]
@@ -212,11 +212,10 @@ mod tests {
 
     #[test]
     fn openai_request_includes_the_current_scratchpad() {
-        let mut session = AgentSession::builder()
-            .system("Investigator prompt")
-            .user("continue investigation")
-            .build();
-        session.update_scratchpad(Scratchpad {
+        let mut session = CoreAgentSession::new()
+            .with_system("Investigator prompt")
+            .with_user("continue investigation");
+        session.scratchpad = Some(Scratchpad {
             main_goal: "answer question".into(),
             completed_milestones: vec!["inspect config".into()],
             current_focus: "check tool registration".into(),

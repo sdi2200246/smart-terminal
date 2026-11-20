@@ -1,12 +1,11 @@
 use super::adapters::to_groq_model_string;
 use crate::core::{
-    AgentRequest, AgentResponse, AgentSession, AgentToolCall, LLMProvider, ProviderError,
+    AgentRequest, AgentResponse, AgentToolCall, CoreAgentSession, LLMProvider, ProviderError,
 };
-use crate::providers::openai_compatible::{
-    build_openai_request, build_openai_structured_request, LlmStructuredOutput, LlmToolCall,
-    OpenAiError, OpenAiRequest, OpenAiResponse,
+use crate::providers::{
+    ClientConfig, GenericLlmClient, LlmStructuredOutput, LlmToolCall, OpenAiError, OpenAiRequest,
+    OpenAiResponse, ProviderCodec, build_openai_request,
 };
-use crate::providers::{ClientConfig, GenericLlmClient, ProviderCodec};
 use reqwest::StatusCode;
 use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
 use serde_json::Value;
@@ -28,8 +27,8 @@ impl ProviderCodec for GroqProtocol {
         build_openai_request(req, to_groq_model_string(req.model.get_name()))
     }
 
-    fn build_structured_request(&self, session: &AgentSession, schema: Value) -> Self::Request {
-        build_openai_structured_request(session, schema, "openai/gpt-oss-120b")
+    fn build_structured_request(&self, session: &CoreAgentSession, schema: Value) -> Self::Request {
+        GroqRequest::structured(session, schema)
     }
 
     fn parse_agent_responce(&self, res: Self::Response) -> Result<AgentResponse, Self::Error> {
@@ -112,7 +111,7 @@ impl LLMProvider for GroqClient {
 
     async fn complete_structured(
         &self,
-        session: &AgentSession,
+        session: &CoreAgentSession,
         schema: Value,
     ) -> Result<Value, ProviderError> {
         self.inner.run_complete_structured(session, schema).await

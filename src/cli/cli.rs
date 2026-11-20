@@ -109,7 +109,15 @@ mod tests {
 
     #[test]
     fn parses_one_off_investigation() {
-        let cli = Cli::try_parse_from(["agent", "investigate", "--one-off", "--perms", "auto", "question"]).unwrap();
+        let cli = Cli::try_parse_from([
+            "agent",
+            "investigate",
+            "--one-off",
+            "--perms",
+            "auto",
+            "question",
+        ])
+        .unwrap();
         assert!(matches!(
             cli.command,
             Commands::Investigate(InvestigateArgs {
@@ -123,7 +131,15 @@ mod tests {
 
     #[test]
     fn parses_investigation_session_actions() {
-        let cli = Cli::try_parse_from(["agent", "investigate", "--perms", "manual", "session", "clear"]).unwrap();
+        let cli = Cli::try_parse_from([
+            "agent",
+            "investigate",
+            "--perms",
+            "manual",
+            "session",
+            "clear",
+        ])
+        .unwrap();
         assert!(matches!(
             cli.command,
             Commands::Investigate(InvestigateArgs {

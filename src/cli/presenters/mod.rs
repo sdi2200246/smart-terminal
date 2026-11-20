@@ -1,21 +1,17 @@
-use crate::agent::{AgentEvent, AgentState, PermissionDecision};
-use crate::core::AgentToolCall;
+use crate::agent::{AgentEvent, AgentState, NextCommand, PermissionDecision, Report};
+use crate::core::{AgentToolCall, Interaction};
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
-use std::io::Write;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::io::{self, Write};
+use std::path::Path;
+use std::time::Duration;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::task::JoinHandle;
-use tokio::time::{Duration, interval};
 
 mod render;
 
-const WIDTH: usize = 6;
-const HEIGHT: usize = 4;
-const TICK_MS: u64 = 160;
-const RESEED_AFTER: u32 = 50;
-const DENSITY: f32 = 0.25;
+const SPINNER_TICK: Duration = Duration::from_millis(80);
+const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏", " "];
 
 pub struct Presenter {
     rx: UnboundedReceiver<AgentEvent>,
@@ -29,252 +25,241 @@ impl Presenter {
 
     pub fn spawn(mut self) -> JoinHandle<()> {
         tokio::spawn(async move {
-            let pb = ProgressBar::new_spinner();
-            pb.set_draw_target(ProgressDrawTarget::stdout()); // <-- add this
-            pb.set_style(ProgressStyle::default_spinner().template("{msg}").unwrap());
-            let mut board = Board::seeded(WIDTH, HEIGHT, next_seed());
-            let mut state = AgentState::Thinking;
-            let mut message = "Waiting for agent activity".to_string();
-            pb.set_message(board.render(state, &message));
+            let spinner = ProgressBar::new_spinner();
+            spinner.set_draw_target(ProgressDrawTarget::stdout());
+            spinner.set_style(
+                ProgressStyle::with_template("  {spinner:.cyan} {msg}")
+                    .expect("valid spinner template")
+                    .tick_strings(SPINNER_FRAMES),
+            );
+            spinner.set_message(state_message(AgentState::Thinking));
+            spinner.enable_steady_tick(SPINNER_TICK);
 
-            let mut ticker = interval(Duration::from_millis(TICK_MS));
-            let mut gens_since_reseed: u32 = 0;
-
-            loop {
-                tokio::select! {
-                    biased;
-
-                    event_opt = self.rx.recv() => {
-                        match event_opt {
-                            Some(AgentEvent::StateUpdate(next_state)) => {
-                                state = next_state;
-                                message = state_message(state).to_string();
-                                pb.set_message(board.render(state, &message));
-                            }
-                            Some(AgentEvent::ToolCall(call)) => {
-                                let line = render::format_call(&call);
-                                pb.suspend(|| println!("{line}"));
-                            }
-                            Some(AgentEvent::ToolApprovalRequest { call, responder }) => {
-                                let line = render::format_approval_request(&call);
-                                pb.suspend(|| {
-                                    println!();
-                                    println!("{line}");
-                                });
-                                let decision = prompt_for_approval(&call);
-                                let _ = responder.send(decision);
-                            }
-                            None => break,
-                        }
+            while let Some(event) = self.rx.recv().await {
+                match event {
+                    AgentEvent::StateUpdate(state) => {
+                        spinner.set_message(state_message(state));
                     }
-
-                    _ = ticker.tick() => {
-                        board.step();
-                        gens_since_reseed += 1;
-
-                        if board.is_empty() || gens_since_reseed >= RESEED_AFTER {
-                            board = Board::seeded(WIDTH, HEIGHT, next_seed());
-                            gens_since_reseed = 0;
-                        }
-
-                        pb.set_message(board.render(state, &message));
+                    AgentEvent::ToolCall(call) => {
+                        let line = render::format_call(&call);
+                        spinner.suspend(|| println!("{line}"));
+                    }
+                    AgentEvent::ToolBackgrounded { tool, job_id } => {
+                        let line = render::format_backgrounded(&tool, &job_id);
+                        spinner.suspend(|| println!("{line}"));
+                    }
+                    AgentEvent::PlanReady(plan) => {
+                        let panel = render::format_plan(&plan);
+                        spinner.suspend(|| {
+                            println!();
+                            println!("{panel}");
+                            println!();
+                        });
+                    }
+                    AgentEvent::ToolApprovalRequest { call, responder } => {
+                        let panel = render::format_approval_request(&call);
+                        let decision = spinner.suspend(|| {
+                            println!();
+                            println!("{panel}");
+                            prompt_for_approval(&call)
+                        });
+                        let _ = responder.send(decision);
                     }
                 }
             }
 
-            pb.finish();
+            spinner.finish_and_clear();
         })
     }
+
+    /// The plan is rendered live via [`AgentEvent::PlanReady`]; this renders what remains.
+    pub fn render_investigation_result(report: &Report, show_recommendation: bool) {
+        println!();
+        println!("{}", render::format_report(report));
+        if show_recommendation {
+            println!();
+            println!(
+                "{}",
+                render::format_recommendation(&report.recommended_command)
+            );
+        }
+        println!();
+    }
+
+    pub fn render_session_cleared(cwd: &Path) {
+        println!(
+            "{}",
+            render::format_success(
+                "cleared investigation session for",
+                &cwd.display().to_string()
+            )
+        );
+    }
+
+    pub fn render_cancelled(message: &str) {
+        println!("{}", render::format_info(message));
+    }
+
+    pub fn render_memory_registered(cwd: &Path) {
+        println!(
+            "{}",
+            render::format_success("registered", &cwd.display().to_string())
+        );
+    }
+
+    pub fn render_memory_deleted(cwd: &Path) {
+        println!(
+            "{}",
+            render::format_success("deleted", &format!("memory for {}", cwd.display()))
+        );
+    }
+
+    pub fn render_memory_cleared(cwd: &Path) {
+        println!(
+            "{}",
+            render::format_success("cleared", &format!("interactions for {}", cwd.display()))
+        );
+    }
+
+    pub fn render_memory_unregistered() {
+        println!(
+            "{}",
+            render::format_info("not registered — run `memory init` first")
+        );
+    }
+
+    pub fn render_memory_interactions(cwd: &Path, interactions: &[Interaction]) {
+        if interactions.is_empty() {
+            println!(
+                "{}",
+                render::format_info(&format!("no interactions yet for {}", cwd.display()))
+            );
+            return;
+        }
+        println!("{}", render::format_memory_interactions(cwd, interactions));
+    }
+
+    pub fn render_prediction(prediction: &NextCommand) -> io::Result<()> {
+        let stdout = io::stdout();
+        let mut output = stdout.lock();
+        Self::write_prediction(&mut output, prediction)?;
+        output.flush()
+    }
+
+    pub fn write_prediction(output: &mut impl Write, prediction: &NextCommand) -> io::Result<()> {
+        render::write_prediction(output, prediction)
+    }
+
+    pub fn render_error(message: impl AsRef<str>) {
+        eprintln!("{}", render::format_error(message.as_ref()));
+    }
+}
+
+fn state_message(state: AgentState) -> String {
+    let detail = match state {
+        AgentState::Thinking => "waiting for model response",
+        AgentState::ExecutingTool => "running tools",
+        AgentState::StructuringOutput => "formatting final answer",
+        AgentState::Completed => "done",
+        AgentState::Failed => "agent failed",
+    };
+    format!("{}  {}", state.label().bold(), detail.dimmed())
+}
+
+fn read_line() -> Option<String> {
+    let _ = io::stdout().flush();
+    let mut input = String::new();
+    io::stdin().read_line(&mut input).ok()?;
+    Some(input.trim().to_string())
 }
 
 fn prompt_for_approval(call: &AgentToolCall) -> PermissionDecision {
     println!();
-    print!("  Approve {}? [y/N]: ", call.name());
-    let _ = std::io::stdout().flush();
+    print!(
+        "{}",
+        render::format_prompt(&format!("Allow {}? [y/N]", call.name()))
+    );
 
-    let mut input = String::new();
-    if std::io::stdin().read_line(&mut input).is_err() {
+    let Some(response) = read_line() else {
         return PermissionDecision::Denied(format!(
             "Tool '{}' requires approval but the approval input could not be read.",
             call.name()
         ));
+    };
+
+    if matches!(response.to_ascii_lowercase().as_str(), "y" | "yes") {
+        println!("  {}", render::format_success("approved", ""));
+        return PermissionDecision::Approved;
     }
 
-    let response = input.trim().to_ascii_lowercase();
-    if matches!(response.as_str(), "y" | "yes") {
-        println!("  approved");
-        PermissionDecision::Approved
-    } else {
-        print!("  reason: ");
-        let _ = std::io::stdout().flush();
+    print!("{}", render::format_prompt("Reason (optional):"));
+    let reason = read_line()
+        .filter(|reason| !reason.is_empty())
+        .unwrap_or_else(|| "no reason provided".to_string());
 
-        let mut reason = String::new();
-        if std::io::stdin().read_line(&mut reason).is_err() {
-            return PermissionDecision::Denied(format!(
-                "User denied approval for tool '{}': no reason provided.",
-                call.name()
-            ));
-        }
-
-        let reason = reason.trim();
-        let reason = if reason.is_empty() {
-            "no reason provided".to_string()
-        } else {
-            reason.to_string()
-        };
-
-        println!("  denied");
-        PermissionDecision::Denied(format!(
-            "User denied approval for tool '{}': {}",
-            call.name(), reason
-        ))
-    }
-}
-
-struct Board {
-    width: usize,
-    height: usize,
-    cells: Vec<bool>,
-}
-
-impl Board {
-    fn seeded(width: usize, height: usize, seed: u64) -> Self {
-        let mut rng = XorShift64::new(seed);
-        let cells = (0..width * height)
-            .map(|_| rng.next_f32() < DENSITY)
-            .collect();
-        Self {
-            width,
-            height,
-            cells,
-        }
-    }
-
-    fn idx(&self, x: usize, y: usize) -> usize {
-        y * self.width + x
-    }
-
-    fn alive(&self, x: isize, y: isize) -> bool {
-        let x = x.rem_euclid(self.width as isize) as usize;
-        let y = y.rem_euclid(self.height as isize) as usize;
-        self.cells[self.idx(x, y)]
-    }
-
-    fn step(&mut self) {
-        let mut next = vec![false; self.cells.len()];
-        for y in 0..self.height {
-            for x in 0..self.width {
-                let mut n = 0;
-                for dy in [-1isize, 0, 1] {
-                    for dx in [-1isize, 0, 1] {
-                        if dx == 0 && dy == 0 {
-                            continue;
-                        }
-                        if self.alive(x as isize + dx, y as isize + dy) {
-                            n += 1;
-                        }
-                    }
-                }
-                let alive_now = self.cells[self.idx(x, y)];
-                next[self.idx(x, y)] = matches!((alive_now, n), (true, 2) | (true, 3) | (false, 3));
-            }
-        }
-        self.cells = next;
-    }
-
-    fn is_empty(&self) -> bool {
-        !self.cells.iter().any(|&c| c)
-    }
-
-    fn render(&self, state: AgentState, message: &str) -> String {
-        let mut out = format!("{}\n", format!("Agent: {}", state.label()).dimmed());
-        out.push_str(&format!("┌{}┐\n", "─".repeat(self.width * 2)));
-
-        for y in 0..self.height {
-            out.push('│');
-            for x in 0..self.width {
-                let pixel = if self.cells[self.idx(x, y)] {
-                    state_cell(state)
-                } else {
-                    "  ".on_black().to_string()
-                };
-                out.push_str(&pixel);
-            }
-            out.push('│');
-            if y == self.height / 2 {
-                out.push_str(&format!("  {}", render::truncate(message, 48)));
-            }
-            out.push('\n');
-        }
-        out.push_str(&format!("└{}┘", "─".repeat(self.width * 2)));
-        out
-    }
-}
-
-fn state_cell(state: AgentState) -> String {
-    match state {
-        AgentState::Thinking => "  ".on_green().to_string(),
-        AgentState::ExecutingTool => "  ".on_yellow().to_string(),
-        AgentState::StructuringOutput => "  ".on_blue().to_string(),
-        AgentState::Completed => "  ".on_blue().to_string(),
-        AgentState::Failed => "  ".on_red().to_string(),
-    }
-}
-
-fn state_message(state: AgentState) -> &'static str {
-    match state {
-        AgentState::Thinking => "Waiting for model response",
-        AgentState::ExecutingTool => "Running requested tool",
-        AgentState::StructuringOutput => "Formatting final answer",
-        AgentState::Completed => "Agent finished",
-        AgentState::Failed => "Agent failed",
-    }
-}
-
-/// Tiny self-contained PRNG — avoids pulling in the `rand` crate for a spinner.
-struct XorShift64(u64);
-
-impl XorShift64 {
-    fn new(seed: u64) -> Self {
-        Self(if seed == 0 { 0x9E3779B97F4A7C15 } else { seed })
-    }
-    fn next_u64(&mut self) -> u64 {
-        let mut x = self.0;
-        x ^= x << 13;
-        x ^= x >> 7;
-        x ^= x << 17;
-        self.0 = x;
-        x
-    }
-    fn next_f32(&mut self) -> f32 {
-        (self.next_u64() % 1_000_000) as f32 / 1_000_000.0
-    }
-}
-
-static SEED_COUNTER: AtomicU64 = AtomicU64::new(0);
-
-fn next_seed() -> u64 {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos() as u64)
-        .unwrap_or(0);
-    let count = SEED_COUNTER.fetch_add(1, Ordering::Relaxed);
-    nanos ^ count.wrapping_mul(0x9E3779B97F4A7C15)
+    println!("  {}", render::format_error("denied"));
+    PermissionDecision::Denied(format!(
+        "User denied approval for tool '{}': {}",
+        call.name(),
+        reason
+    ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agent::{Plan, PlanStep, Reversibility};
 
     #[test]
-    fn board_frame_displays_state_and_message_beside_cells() {
-        let board = Board::seeded(WIDTH, HEIGHT, 1);
+    fn backgrounded_tool_line_shows_tool_and_job_id() {
+        let line = render::format_backgrounded("bash", "job-42");
+        assert!(line.contains("bash"));
+        assert!(line.contains("job-42"));
+        assert!(line.contains("background"));
+    }
 
-        let frame = board.render(AgentState::ExecutingTool, "Running requested tool");
+    #[test]
+    fn state_message_shows_label_and_detail() {
+        let message = state_message(AgentState::ExecutingTool);
+        assert!(message.contains("Executing tool"));
+        assert!(message.contains("running tools"));
+    }
 
-        assert!(frame.contains("Agent: Executing tool"));
-        assert!(frame.contains("Running requested tool"));
-        assert!(frame.contains("┌"));
-        assert!(frame.contains("└"));
+    #[test]
+    fn formats_plan_report_and_recommendation_as_filled_panels() {
+        let plan = Plan {
+            goal: "Verify repository status".into(),
+            steps: vec![PlanStep {
+                action: "Run git status".into(),
+                rationale: "Check working tree".into(),
+            }],
+        };
+        let report = Report {
+            report: "The working tree is clean.".into(),
+            recommended_command: NextCommand {
+                cmd: "git status --short".into(),
+                man: "Inspect working tree.".into(),
+                scale: Reversibility::Full,
+            },
+        };
+
+        let rendered_plan = render::format_plan(&plan);
+        assert!(rendered_plan.contains("PLAN"));
+        assert!(rendered_plan.contains("Verify repository status"));
+        assert!(rendered_plan.contains("Run git status"));
+        assert!(rendered_plan.contains("▎"));
+        assert!(
+            rendered_plan.contains("48;2;"),
+            "panel should have a filled background"
+        );
+
+        let rendered_report = render::format_report(&report);
+        assert!(rendered_report.contains("REPORT"));
+        assert!(rendered_report.contains("The working tree is clean."));
+
+        let rendered_cmd = render::format_recommendation(&report.recommended_command);
+        assert!(rendered_cmd.contains("NEXT"));
+        assert!(rendered_cmd.contains("git status --short"));
+        assert!(rendered_cmd.contains("Full reversibility"));
     }
 }

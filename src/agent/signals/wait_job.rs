@@ -113,20 +113,15 @@ impl AgentSignal for WaitJobSignal {
 mod tests {
     use super::*;
     use crate::agent::AgentBuilder;
-    use crate::core::{AgentSession, Model, ModelName};
+    use crate::core::{Model, ModelName};
     use crate::multithreading::{JobEngine, JobState};
     use serde_json::json;
     use std::thread;
 
-    fn run_wait_signal(
-        store: &JobStore,
-        args: Value,
-    ) -> Result<AgentSignalOutcome, ToolError> {
-        let mut session = AgentSession::new(5);
+    fn run_wait_signal(store: &JobStore, args: Value) -> Result<AgentSignalOutcome, ToolError> {
         let mut agent =
             AgentBuilder::base("test", Model::with_default_temp(ModelName::GptOss120B)).build();
         let mut ctx = AgentSignalContext {
-            session: &mut session,
             agent: &mut agent,
             job_store: store,
         };
@@ -141,7 +136,11 @@ mod tests {
         let meta = sig.metadata();
         assert_eq!(meta.name, "wait_job");
         assert!(meta.description.contains("alone"));
-        assert!(meta.parameters["properties"].get("timeout_seconds").is_none());
+        assert!(
+            meta.parameters["properties"]
+                .get("timeout_seconds")
+                .is_none()
+        );
         assert!(sig.prompt_guidance().is_some());
     }
 
@@ -163,9 +162,7 @@ mod tests {
                 Ok("first output".into())
             })
             .await;
-        let id2 = engine
-            .submit(|| Err("second failed".into()))
-            .await;
+        let id2 = engine.submit(|| Err("second failed".into())).await;
 
         let outcome = run_wait_signal(
             &store,
@@ -206,7 +203,11 @@ mod tests {
         let outcome = run_wait_signal(&store, json!({ "job_ids": [slow_id, fast_id] })).unwrap();
         let slow_pos = outcome.result.find("slow-out").unwrap();
         let fast_pos = outcome.result.find("fast-out").unwrap();
-        assert!(slow_pos < fast_pos, "Expected slow-out before fast-out in:\n{}", outcome.result);
+        assert!(
+            slow_pos < fast_pos,
+            "Expected slow-out before fast-out in:\n{}",
+            outcome.result
+        );
     }
 
     #[test]
@@ -224,4 +225,3 @@ mod tests {
         let _ = JobState::Running;
     }
 }
-

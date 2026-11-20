@@ -55,7 +55,7 @@ impl AgentSignal for FinalAnswerSignal {
 mod tests {
     use super::*;
     use crate::agent::AgentBuilder;
-    use crate::core::{AgentSession, Model, ModelName};
+    use crate::core::{Model, ModelName};
     use crate::utils::FlatSchema;
     use schemars::JsonSchema;
     use serde::Deserialize;
@@ -84,12 +84,10 @@ mod tests {
         signal: &FinalAnswerSignal,
         args: Value,
     ) -> Result<AgentSignalOutcome, ToolError> {
-        let mut session = AgentSession::new(5);
         let mut agent =
             AgentBuilder::base("test", Model::with_default_temp(ModelName::GptOss120B)).build();
         let job_store = crate::multithreading::JobStore::new();
         let mut ctx = AgentSignalContext {
-            session: &mut session,
             agent: &mut agent,
             job_store: &job_store,
         };
@@ -154,4 +152,3 @@ mod tests {
         assert_eq!(meta.parameters, schema);
     }
 }
-

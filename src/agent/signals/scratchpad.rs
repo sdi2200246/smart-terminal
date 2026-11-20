@@ -37,11 +37,10 @@ impl AgentSignal for UpdateScratchpadSignal {
                 source: anyhow::anyhow!("invalid scratchpad — {e}"),
             }
         })?;
-        ctx.session.update_scratchpad(sp);
+        ctx.agent.session.update_scratchpad(sp);
         Ok(AgentSignalOutcome {
             result: "scratchpad updated successfully".into(),
             control: AgentLoopControl::Continue,
         })
     }
 }
-

@@ -1,7 +1,7 @@
 use std::env;
 use std::path::PathBuf;
 
-use crate::cli::{MemoryAction, MemoryArgs};
+use crate::cli::{MemoryAction, MemoryArgs, Presenter};
 use crate::core::{Memory, PersistenceError};
 use crate::persistence::NextCmdMemory;
 
@@ -9,7 +9,7 @@ pub async fn run(args: MemoryArgs) {
     let cwd = match env::current_dir() {
         Ok(p) => p,
         Err(e) => {
-            eprintln!("failed to read cwd: {e}");
+            Presenter::render_error(format!("failed to read cwd: {e}"));
             std::process::exit(1);
         }
     };
@@ -24,60 +24,40 @@ pub async fn run(args: MemoryArgs) {
     };
 
     if let Err(e) = result {
-        eprintln!("\x1b[31m✗ {e}\x1b[0m");
+        Presenter::render_error(e.to_string());
         std::process::exit(1);
     }
 }
 
 fn init(memory: &mut NextCmdMemory, cwd: &PathBuf) -> Result<(), PersistenceError> {
     memory.register(cwd)?;
-    println!("\x1b[32m✓ registered\x1b[0m {}", cwd.display());
+    Presenter::render_memory_registered(cwd);
     Ok(())
 }
 
 fn delete(memory: &mut NextCmdMemory, cwd: &PathBuf) -> Result<(), PersistenceError> {
     memory.unregister(cwd)?;
-    println!("\x1b[32m✓ deleted\x1b[0m memory for {}", cwd.display());
+    Presenter::render_memory_deleted(cwd);
     Ok(())
 }
 
 fn clear(memory: &mut NextCmdMemory, cwd: &PathBuf) -> Result<(), PersistenceError> {
     if !memory.load(cwd)? {
-        eprintln!("not registered — run `memory init` first");
+        Presenter::render_memory_unregistered();
         return Ok(());
     }
     memory.clear()?;
-    println!(
-        "\x1b[32m✓ cleared\x1b[0m interactions for {}",
-        cwd.display()
-    );
+    Presenter::render_memory_cleared(cwd);
     Ok(())
 }
 
 fn show(memory: &mut NextCmdMemory, cwd: &PathBuf) -> Result<(), PersistenceError> {
     if !memory.load(cwd)? {
-        println!("not registered — run `memory init` first");
+        Presenter::render_memory_unregistered();
         return Ok(());
     }
 
     let conv = memory.current().expect("loaded");
-    if conv.interactions.is_empty() {
-        println!("no interactions yet for {}", cwd.display());
-        return Ok(());
-    }
-
-    println!(
-        "memory for {} ({} interactions):\n",
-        cwd.display(),
-        conv.interactions.len()
-    );
-    for (i, entry) in conv.interactions.iter().enumerate() {
-        println!(
-            "{:>3}. {} → {}",
-            i + 1,
-            entry.user_input.trim(),
-            entry.predicted_cmd
-        );
-    }
+    Presenter::render_memory_interactions(cwd, &conv.interactions);
     Ok(())
 }

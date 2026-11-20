@@ -5,4 +5,3 @@ mod error;
 
 pub use client::{GoogleClient, GoogleProtocol};
 pub use error::GoogleError;
-

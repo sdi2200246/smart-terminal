@@ -1,7 +1,7 @@
+use super::super::adapters::to_gemini_schema;
 use super::message::Message;
 use super::tool::Tool;
-use super::super::adapters::to_gemini_schema;
-use crate::core::{AgentSession, ConversationEvent};
+use crate::core::{ConversationEvent, CoreAgentSession};
 
 use serde::Serialize;
 use serde_json::Value;
@@ -32,7 +32,7 @@ pub struct GenerationConfig {
 }
 
 impl GeminiRequest {
-    pub fn structured(session: &AgentSession, schema: Value, model: String) -> Self {
+    pub fn structured(session: &CoreAgentSession, schema: Value, model: String) -> Self {
         let mut contents = Vec::new();
         let mut system_instruction = None;
 
@@ -62,14 +62,12 @@ impl GeminiRequest {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::AgentSession;
+    use crate::core::CoreAgentSession;
     use serde_json::json;
 
-    fn session_with(events: Vec<ConversationEvent>) -> AgentSession {
-        AgentSession {
+    fn session_with(events: Vec<ConversationEvent>) -> CoreAgentSession {
+        CoreAgentSession {
             events,
-            steps: 5,
-            final_answer: None,
             scratchpad: None,
         }
     }

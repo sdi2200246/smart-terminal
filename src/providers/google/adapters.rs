@@ -73,10 +73,10 @@ impl From<&ConversationEvent> for Message {
 
 pub fn to_google_model_string(model: ModelName) -> String {
     match model {
-        ModelName::Gemini1_5Pro => "gemini-3.6-flash".into(),
-        ModelName::Gemini1_5Flash => "gemini-3.6-flash".into(),
-        ModelName::Gemini2_5Flash => "gemini-3.6-flash".into(),
-        _ => "gemini-3.6-flash".into(),
+        ModelName::Gemini1_5Pro => "gemini-flash-lite-latest".into(),
+        ModelName::Gemini1_5Flash => "gemini-flash-lite-latest".into(),
+        ModelName::Gemini2_5Flash => "gemini-flash-lite-latest".into(),
+        _ => "gemini-flash-lite-latest".into(),
     }
 }
 

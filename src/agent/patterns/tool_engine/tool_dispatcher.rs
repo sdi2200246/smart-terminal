@@ -1,7 +1,7 @@
 use super::policy::{PermissionDecision, ToolExecutionPolicy};
 use crate::agent::prompts::pending_job_message;
 use crate::agent::{Agent, ToolInvocation, WAIT_JOB_NAME};
-use crate::core::{AgentSession, AgentToolCall, ToolResult, ToolSafety};
+use crate::core::{AgentToolCall, ToolResult, ToolSafety};
 use crate::multithreading::{JobEngine, JobState, JobStore};
 use std::fmt;
 use std::sync::Arc;
@@ -74,7 +74,6 @@ impl ToolDispatcher {
         &self,
         tools: Vec<ToolInvocation>,
         calls: &[AgentToolCall],
-        _session: &mut AgentSession,
         agent: &mut Agent,
     ) -> (Vec<ToolInvocation>, Vec<(usize, ToolResult)>) {
         let mut permitted = Vec::new();
@@ -156,6 +155,7 @@ impl ToolDispatcher {
                 msg
             }
             None | Some(JobState::Running) => {
+                agent.notify_tool_backgrounded(call, job_id);
                 pending_job_message(self.threshold.as_secs(), job_id, WAIT_JOB_NAME)
             }
         };
@@ -211,4 +211,3 @@ impl ToolDispatcher {
         }
     }
 }
-

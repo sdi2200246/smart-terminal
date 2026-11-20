@@ -3,15 +3,14 @@ mod integration {
     use std::print;
 
     use smart_terminal::core::{
-        AgentRequest, AgentSession, LLMProvider, Model, ModelName, ToolMetaData, ToolSafety,
+        AgentRequest, CoreAgentSession, LLMProvider, Model, ModelName, ToolMetaData, ToolSafety,
     };
     use smart_terminal::providers::GoogleClient;
 
-    fn simple_session() -> AgentSession {
-        let mut session = AgentSession::new(5);
-        session.add_system("You are a helpful assistant.");
-        session.add_user("What is 1 + 1?");
-        session
+    fn simple_session() -> CoreAgentSession {
+        CoreAgentSession::new()
+            .with_system("You are a helpful assistant.")
+            .with_user("What is 1 + 1?")
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -43,11 +42,11 @@ mod integration {
 
         let mut client = GoogleClient::default();
 
-        let mut session = AgentSession::new(5);
-        session.add_system(
-            "You are a helpful assistant. Use the get_weather tool when asked about weather.",
-        );
-        session.add_user("What's the weather in Athens?");
+        let session = CoreAgentSession::new()
+            .with_system(
+                "You are a helpful assistant. Use the get_weather tool when asked about weather.",
+            )
+            .with_user("What's the weather in Athens?");
 
         let model = Model::new(ModelName::Gemini2_5Flash, 0.7);
 
@@ -79,15 +78,14 @@ mod integration {
     mod integration_structured_responces {
         use schemars::JsonSchema;
         use serde::Deserialize;
-        use smart_terminal::core::{AgentSession, LLMProvider};
+        use smart_terminal::core::{CoreAgentSession, LLMProvider};
         use smart_terminal::providers::GoogleClient;
         use smart_terminal::utils::FlatSchema;
 
-        fn session(user: &str) -> AgentSession {
-            let mut s = AgentSession::new(5);
-            s.add_system("You are a helpful assistant. Respond only with valid JSON matching the requested schema.");
-            s.add_user(user.to_string());
-            s
+        fn session(user: &str) -> CoreAgentSession {
+            CoreAgentSession::new()
+                .with_system("You are a helpful assistant. Respond only with valid JSON matching the requested schema.")
+                .with_user(user.to_string())
         }
 
         #[derive(JsonSchema, Deserialize, Debug)]

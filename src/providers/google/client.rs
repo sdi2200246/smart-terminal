@@ -2,7 +2,7 @@ use super::api::request::GeminiRequest;
 use super::api::responce::{GeminiResponse, LlmResponse, LlmStructuredOutput};
 use super::error::GoogleError;
 use crate::core::{
-    AgentRequest, AgentResponse, AgentSession, AgentToolCall, LLMProvider, ProviderError,
+    AgentRequest, AgentResponse, AgentToolCall, CoreAgentSession, LLMProvider, ProviderError,
 };
 use crate::providers::{ClientConfig, GenericLlmClient, ProviderCodec};
 use reqwest::StatusCode;
@@ -24,7 +24,7 @@ impl ProviderCodec for GoogleProtocol {
         GeminiRequest::from(req)
     }
 
-    fn build_structured_request(&self, session: &AgentSession, schema: Value) -> Self::Request {
+    fn build_structured_request(&self, session: &CoreAgentSession, schema: Value) -> Self::Request {
         GeminiRequest::structured(session, schema, "gemini-3.6-flash".into())
     }
 
@@ -116,7 +116,7 @@ impl LLMProvider for GoogleClient {
 
     async fn complete_structured(
         &self,
-        session: &AgentSession,
+        session: &CoreAgentSession,
         schema: Value,
     ) -> Result<Value, ProviderError> {
         self.inner.run_complete_structured(session, schema).await

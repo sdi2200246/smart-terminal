@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-pub use super::folder_index::FolderIndex as MemoryIndex;
-use super::session::AgentSession;
+use super::CoreAgentSession;
+pub use crate::core::folder_index::FolderIndex as MemoryIndex;
 
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct Conversation {
@@ -58,32 +58,26 @@ pub trait Memory: Send + Sync {
 #[serde(deny_unknown_fields)]
 pub struct InvestigationSession {
     #[serde(default)]
-    pub planner: Option<AgentSession>,
+    pub planner: Option<CoreAgentSession>,
     #[serde(default)]
-    pub executor: Option<AgentSession>,
-    #[serde(default)]
-    pub completed_reports: Vec<String>,
+    pub executor: Option<CoreAgentSession>,
     #[serde(default)]
     pub absorbed_roots: Vec<PathBuf>,
 }
 
 impl InvestigationSession {
     pub fn is_empty(&self) -> bool {
-        self.planner.is_none()
-            && self.executor.is_none()
-            && self.completed_reports.is_empty()
-            && self.absorbed_roots.is_empty()
+        self.planner.is_none() && self.executor.is_none() && self.absorbed_roots.is_empty()
     }
 
     pub fn merge_history(&mut self, mut other: Self) {
         merge_agent_history(&mut self.planner, other.planner.take());
         merge_agent_history(&mut self.executor, other.executor.take());
-        self.completed_reports.append(&mut other.completed_reports);
         self.absorbed_roots.append(&mut other.absorbed_roots);
     }
 }
 
-fn merge_agent_history(target: &mut Option<AgentSession>, source: Option<AgentSession>) {
+fn merge_agent_history(target: &mut Option<CoreAgentSession>, source: Option<CoreAgentSession>) {
     let Some(mut source) = source else {
         return;
     };
@@ -166,11 +160,10 @@ mod tests {
     }
 
     #[test]
-    fn loads_sessions_saved_before_completed_reports_were_added() {
+    fn empty_session_deserializes_from_null_agents() {
         let session: InvestigationSession =
             serde_json::from_str(r#"{"planner":null,"executor":null}"#).unwrap();
 
-        assert!(session.completed_reports.is_empty());
         assert!(session.is_empty());
     }
 

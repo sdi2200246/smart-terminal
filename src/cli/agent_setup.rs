@@ -32,9 +32,8 @@ mod tests {
     use crate::utils::FlatSchema;
 
     fn print_complete_prompt(name: &str, agent: Agent) {
-        let session = agent.build_session("Prompt preview");
         println!("\n========== {name} ==========");
-        for event in session.events() {
+        for event in agent.session.events() {
             if let ConversationEvent::System(message) = event {
                 println!("{message}");
             }
@@ -49,18 +48,21 @@ mod tests {
             provider.planner_tools(),
             Plan::schema(),
         )
+        .with_user_prompt("Prompt preview")
         .build();
         let executor = AgentBuilder::executor(
             Model::with_default_temp(ModelName::GptOss120B),
             provider.executor_tools(),
             Report::schema(),
         )
+        .with_user_prompt("Prompt preview")
         .build();
         let predictor = AgentBuilder::cmd_predictor(
             Model::with_default_temp(ModelName::GptOss120B),
             provider.cmd_predictor_tools(),
             NextCommand::schema(),
         )
+        .with_user_prompt("Prompt preview")
         .build();
 
         for (agent, schema_name) in [
@@ -68,21 +70,25 @@ mod tests {
             (&executor, "Report"),
             (&predictor, "NextCommand"),
         ] {
-            assert!(agent.system_prompt.contains("[FINAL-ANSWER SCHEMA]"));
+            assert!(agent.system_prompt().contains("[FINAL-ANSWER SCHEMA]"));
             assert!(
                 agent
-                    .system_prompt
+                    .system_prompt()
                     .contains(&format!("\"title\": \"{schema_name}\""))
             );
-            assert!(agent.system_prompt.contains("[AVAILABLE TOOLS]"));
-            assert!(agent.system_prompt.contains("`wait_job`"));
+            assert!(agent.system_prompt().contains("[AVAILABLE TOOLS]"));
+            assert!(agent.system_prompt().contains("`wait_job`"));
             assert!(agent.action_space.get("wait_job").is_some());
         }
-        assert!(executor.system_prompt.contains("`update_scratchpad`"));
-        assert!(executor.system_prompt.contains("[AVAILABLE-TOOL GUIDANCE]"));
-        assert!(!planner.system_prompt.contains("`update_scratchpad`"));
-        assert!(!predictor.system_prompt.contains("`update_scratchpad`"));
-        assert!(executor.system_prompt.contains("complete updated state"));
+        assert!(executor.system_prompt().contains("`update_scratchpad`"));
+        assert!(
+            executor
+                .system_prompt()
+                .contains("[AVAILABLE-TOOL GUIDANCE]")
+        );
+        assert!(!planner.system_prompt().contains("`update_scratchpad`"));
+        assert!(!predictor.system_prompt().contains("`update_scratchpad`"));
+        assert!(executor.system_prompt().contains("complete updated state"));
         for tool in [
             "git_diff_staged",
             "docker",
@@ -90,12 +96,12 @@ mod tests {
             "read_last_error",
         ] {
             assert!(
-                predictor.system_prompt.contains(&format!("`{tool}`")),
+                predictor.system_prompt().contains(&format!("`{tool}`")),
                 "predictor prompt is missing the registered {tool} tool"
             );
         }
-        assert!(predictor.system_prompt.contains("staged changes"));
-        assert!(predictor.system_prompt.contains("captured stderr"));
+        assert!(predictor.system_prompt().contains("staged changes"));
+        assert!(predictor.system_prompt().contains("captured stderr"));
 
         print_complete_prompt("PLANNER", planner);
         print_complete_prompt("EXECUTOR", executor);
@@ -115,13 +121,13 @@ mod tests {
         assert!(executor.action_space.get("update_scratchpad").is_some());
         assert!(
             executor
-                .system_prompt
+                .system_prompt()
                 .contains("Before calling `final_answer`, you MUST call `update_scratchpad`")
         );
-        assert!(executor.system_prompt.contains("complete updated state"));
+        assert!(executor.system_prompt().contains("complete updated state"));
         assert!(
             !executor
-                .system_prompt
+                .system_prompt()
                 .contains("runtime rejects a final answer")
         );
     }

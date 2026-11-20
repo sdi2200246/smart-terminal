@@ -118,26 +118,27 @@ impl InvestigationSessionStore for FileInvestigationSessionStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::{AgentSession, ConversationEvent, ToolCall};
+    use crate::core::{ConversationEvent, CoreAgentSession};
     use tempfile::TempDir;
 
     #[test]
     fn stores_distinct_project_sessions_and_can_clear_them() {
         let temporary = TempDir::new().unwrap();
         let store = FileInvestigationSessionStore::new(temporary.path());
-        let mut planner = AgentSession::builder().user("Question").build();
-        planner.add_tool_calls(vec![
-            ToolCall::new(
-                "inspect",
-                serde_json::json!({"path": "."}),
-                "call-1",
-            )
-            .with_thinking_state(Some("gemini-signature".into())),
-        ]);
+        let mut planner = CoreAgentSession::new().with_user("Question");
+        planner
+            .events
+            .push(crate::core::session::ConversationEvent::ToolCalls(vec![
+                crate::core::session::ToolCall::new(
+                    "inspect",
+                    serde_json::json!({"path": "."}),
+                    "call-1",
+                )
+                .with_thinking_state(Some("gemini-signature".into())),
+            ]));
         let session = InvestigationSession {
             planner: Some(planner),
-            executor: Some(AgentSession::builder().user("Question and plan").build()),
-            completed_reports: vec!["{\"report\":\"finding\"}".into()],
+            executor: Some(CoreAgentSession::new().with_user("Question and plan")),
             absorbed_roots: Vec::new(),
         };
 
@@ -152,10 +153,6 @@ mod tests {
             _ => panic!("expected persisted tool call"),
         }
         assert!(loaded.executor.is_some());
-        assert_eq!(
-            loaded.completed_reports,
-            vec!["{\"report\":\"finding\"}".to_string()]
-        );
         assert!(store.load("/project/b").unwrap().is_none());
 
         store.clear("/project/a").unwrap();
@@ -198,7 +195,7 @@ mod tests {
             .save(
                 &parent.to_string_lossy(),
                 &InvestigationSession {
-                    planner: Some(AgentSession::builder().user("parent question").build()),
+                    planner: Some(CoreAgentSession::new().with_user("parent question")),
                     ..InvestigationSession::default()
                 },
             )
@@ -207,8 +204,7 @@ mod tests {
             .save(
                 &child.to_string_lossy(),
                 &InvestigationSession {
-                    planner: Some(AgentSession::builder().user("child question").build()),
-                    completed_reports: vec!["child finding".into()],
+                    planner: Some(CoreAgentSession::new().with_user("child question")),
                     ..InvestigationSession::default()
                 },
             )
@@ -230,7 +226,6 @@ mod tests {
             ConversationEvent::User(question)
                 if question == "child question"
         ));
-        assert_eq!(migrated.completed_reports, vec!["child finding"]);
         assert_eq!(migrated.absorbed_roots, vec![child.clone()]);
         assert!(store.load(&child.to_string_lossy()).unwrap().is_none());
     }
