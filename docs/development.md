@@ -91,7 +91,7 @@ Key source directories:
 - `src/multithreading` — concurrent background job pool (`JobEngine`) and state store (`JobStore`)
 - `src/persistence` — adapters implementing core storage contracts
 - `src/providers` — LLM provider implementations
-- `src/tools` — environment interaction tools and centralized tool prompts (`src/tools/prompts.rs`)
+- `src/tools` — environment interaction tools; tool descriptions and guidance are declared alongside each tool
 - `scripts/zsh` — shell integration hook
 
 ## Contribution conventions
@@ -117,6 +117,75 @@ The codebase intentionally separates layers. When making changes:
 - keep persistence adapters dependent on core contracts rather than agent workflows; keep file/database details out of core
 - persist planner and executor `AgentSession` histories, including provider metadata; resumed histories must remain compatible with the current provider
 - isolate persistence tests with temporary directories; do not load or write project-local memory/session stores from tests
+
+### Adding an external tool
+
+Tools use the `Capability` contract and normally should be registered in `src/core/capability.rs` through `define_tool!`.
+
+For a typed tool:
+
+```rust
+use super::error::ToolError;
+use crate::core::ToolSafety;
+use schemars::JsonSchema;
+use serde::Deserialize;
+
+#[derive(JsonSchema, Deserialize, Debug)]
+pub struct ExampleArgs {
+    /// Value to process.
+    pub value: String,
+}
+
+define_tool! {
+    pub struct ExampleTool;
+    safety = ToolSafety::Safe;
+    guidance = "Use this tool when the user needs an example result.";
+    /// Process one string value and return the result.
+    fn example(args: ExampleArgs) -> Result<String, ToolError> {
+        Ok(args.value)
+    }
+}
+```
+
+For a no-argument tool:
+
+```rust
+define_tool! {
+    pub struct ExampleTool;
+    /// Return example system information.
+    fn example() -> Result<String, ToolError> {
+        Ok("example".to_string())
+    }
+}
+```
+
+The argument type must implement `JsonSchema` and `Deserialize`. The macro:
+
+- generates `impl Capability for ToolName`;
+- generates a `run` method containing the function body;
+- derives metadata and provider-facing JSON schema;
+- defaults safety to `ToolSafety::Safe`;
+- parses JSON using `parse_tool_arguments()`;
+- converts argument deserialization failures to `ToolError::ArgumentsParsing`.
+
+Keep tool descriptions in doc comments and put optional model guidance in `guidance = "..."`. Mark mutating tools explicitly.
+
+Add the struct to `src/tools/mod.rs`, then expose it through `CliToolProvider` in `src/cli/agent_setup.rs`:
+
+```rust
+fn executor_tools(&self) -> Vec<Box<dyn Capability>> {
+    vec![Box::new(ReadDir), Box::new(ExampleTool)]
+}
+```
+
+Tests should cover the tool body and the generated dispatch contract:
+
+- valid arguments;
+- missing or malformed arguments;
+- null or unexpected arguments where relevant;
+- tool execution failures;
+- mutating/safety behavior;
+- metadata name, description, schema, and safety.
 
 ### Validation before submitting
 
