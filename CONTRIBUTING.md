@@ -31,6 +31,8 @@ You don't need to be a seasoned Rust expert to help out. Here are some high-impa
 - **New Agent Tools**: Add domain-aware tools under `src/tools/` (e.g., `git status` / `git diff` analyzers, package manager inspectors, test runner parsers).
 - **Planner & Executor Prompts**: Fine-tune prompt strategies in `src/agent/prompts/` to make investigation plans tighter and tool loops faster.
 
+When adding an external tool, define a `JsonSchema`/`Deserialize` argument struct and register the tool with `define_tool!` in `src/tools/`. The macro is maintained in `src/core/capability.rs` and generates the `Capability` adapter, metadata, safety, and JSON argument parsing; the macro body should contain tool-specific behavior only. Use `ToolSafety::Mutating` for state-changing operations, export the tool from `src/tools/mod.rs`, register it with `CliToolProvider` in `src/cli/agent_setup.rs`, and add focused tests. See [Adding an external tool](docs/development.md#adding-an-external-tool) for the complete recipe.
+
 ### 4. Performance & UX
 - **Ghost text speed**: Shell suggestions need to feel instantaneous. Profile and optimize startup latency, memory footprint, and background job handling (`src/multithreading`).
 - **Safety heuristic tuning**: Improve command reversibility detection (`Full`, `Mostly`, `Partial`, `Hard`, `Irreversible`).

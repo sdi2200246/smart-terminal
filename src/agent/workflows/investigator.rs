@@ -14,7 +14,7 @@ pub struct Investigator<P: LLMProvider + Clone, F: InvestigatorToolFactory> {
     event_stream: Option<UnboundedSender<AgentEvent>>,
 }
 
-impl<'a, P: LLMProvider + Clone, F: InvestigatorToolFactory> Investigator<P, F> {
+impl<P: LLMProvider + Clone, F: InvestigatorToolFactory> Investigator<P, F> {
     pub fn new(runner: ReactLoop<P>, factory: F) -> Self {
         Self {
             runner,

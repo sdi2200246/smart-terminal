@@ -113,7 +113,7 @@ Responsibilities:
 
 - provide concrete external capabilities available to agents
 - perform actions like shell execution, directory reads, file reads, git inspection, error log inspection, user prompting, and Docker inspection
-- centralize all tool descriptions and supplementary prompt guidance in `src/tools/prompts.rs`
+- keep tool descriptions and supplementary prompt guidance with each concrete tool registration
 
 Examples:
 
@@ -124,13 +124,43 @@ Examples:
 - `src/tools/last_error.rs`
 - `src/tools/ask_user.rs`
 - `src/tools/docker.rs`
-- `src/tools/prompts.rs`
+- prompt guidance is declared directly on tools and/or through the agent prompt builder
 
 Each external tool implements `core::Capability`, while internal control-plane signals (`final_answer`, `update_scratchpad`, `wait_job`) live in `src/agent/signals` and implement `AgentSignal`. `ActionSpace` presents both to the LLM as callable schemas and routes incoming calls to `SignalDispatcher` or `ToolDispatcher`.
 
 Capabilities and signals may also provide optional agent-facing prompt guidance. The prompt builder reads guidance only from actions registered in that agent's `ActionSpace`; this is separate from provider-facing tool metadata. Concrete tools and agent orchestration therefore share only the core contract and do not import each other.
 
-Each role prompt is a constant composed of selected instruction blocks in `src/agent/prompts/roles.rs`. Reusable policy text, signal descriptions, signal guidance, and runtime feedback formatters live in `src/agent/prompts/policies.rs`, while external tool descriptions and guidance live in `src/tools/prompts.rs`. Completion policies support `FINAL_ANSWER_TOOL`, `STRUCTURED_STOP`, or `FINAL_ANSWER_OR_STRUCTURED_STOP` according to the agent's output path. Available-tool names and descriptions are rendered dynamically from registered action metadata; the final-answer schema is generated from the registered `final_answer` signal's parameter schema.
+External tools are registered with `define_tool!`, declared in `src/core/capability.rs`. The macro generates the tool struct, typed `run` method, `Capability` implementation, metadata, safety default, and JSON dispatch adapter. It is intentionally limited to two forms: one with a typed argument and one with no arguments.
+
+The typed argument type must implement `schemars::JsonSchema` and `serde::Deserialize`. `define_tool!` derives provider-facing JSON schema through `FlatSchema` and routes incoming JSON through `parse_tool_arguments()`. Null arguments are converted to an empty JSON object, normal serde deserialization is performed, and failures become `ToolError::ArgumentsParsing`. Concrete tools contain only their domain behavior in the macro body. `ToolSafety::Safe` is the default; mark commands or operations that can alter state with `safety = ToolSafety::Mutating`.
+
+For example:
+
+```rust
+use super::error::ToolError;
+use schemars::JsonSchema;
+use serde::Deserialize;
+
+#[derive(JsonSchema, Deserialize, Debug)]
+pub struct PackageArgs {
+    /// Package name to inspect.
+    pub package: String,
+}
+
+define_tool! {
+    pub struct PackageInfo;
+    /// Return package metadata.
+    fn package_info(args: PackageArgs) -> Result<String, ToolError> {
+        Ok(format!("package: {}", args.package))
+    }
+}
+```
+
+A no-argument tool uses `fn name() -> Result<String, ToolError>` instead. The macro supplies `NoArgs` as its provider-facing schema and ignores JSON arguments during dispatch.
+
+The macro is infrastructure for uniformly shaped tools, not a substitute for `Capability`. Both macro-generated implementations and hand-written implementations are valid `Capability` implementations. Use the macro for normal tools and implement `Capability` manually only when a tool needs behavior that does not fit the two standard dispatch forms.
+
+Each role prompt is a constant composed of selected instruction blocks in `src/agent/prompts/roles.rs`. Reusable policy text and runtime feedback formatters live in `src/agent/prompts/policies.rs`; external tool descriptions and optional guidance are declared with the tool and exposed through `Capability::metadata()` and `Capability::prompt_guidance()`. Available-tool names and descriptions are rendered dynamically from registered action metadata; the final-answer schema is generated from the registered `final_answer` signal's parameter schema.
 
 The `update_scratchpad` signal is registered on the executor agent (`with_scratchpad()`) and its prompt guidance instructs the executor to update the complete summary before completing. Whenever an agent registers at least one external tool, `AgentBuilder` automatically registers the `wait_job` signal (`WaitJobSignal`) so the agent can collect backgrounded tool calls. Google and Groq requests include the current scratchpad state. This provides durable summary state, but conversation-event history is not currently compacted or truncated; implementing compaction must preserve the system prompt, current request, and scratchpad while removing only older history. Do not confuse maintaining a summary with actually compacting history.
 
@@ -231,10 +261,15 @@ This helps keep concrete implementation choices isolated and easier to replace.
 
 ### Adding a new tool
 
-1. Add a new implementation in `src/tools`
-2. Implement the capability contract expected by the core layer
-3. Register the tool in the relevant agent or workflow setup
-4. Validate tool behavior via the existing cmd/feature flow
+1. Create `src/tools/<tool_name>.rs`.
+2. Define a serde-serializable argument struct with `JsonSchema` when the tool accepts arguments. Use `#[serde(deny_unknown_fields)]` only when the provider/model output should reject unknown fields.
+3. Register the tool with `define_tool!` and keep the macro body focused on tool behavior.
+4. Set `ToolSafety::Mutating` for state-changing operations. The default is `ToolSafety::Safe`.
+5. Add concise description doc comments and optional `guidance = "...";` text. Do not duplicate the tool inventory in role prompts.
+6. Export the tool from `src/tools/mod.rs`.
+7. Register it in `CliToolProvider` in `src/cli/agent_setup.rs` for the workflow(s) that should expose it.
+8. Add unit tests for success, argument validation, tool-specific failures, and safety or blocking rules as applicable.
+9. Run `cargo test` and the relevant CLI workflow. External tools must not be added to a workflow until their behavior and safety are understood.
 
 ### Changing persistence backends
 

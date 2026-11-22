@@ -1,11 +1,11 @@
 use super::error::ToolError;
-use super::prompts::BASH_DESCRIPTION;
-use crate::core::{Capability, ToolMetaData, ToolSafety};
-use crate::utils::FlatSchema;
+use crate::core::ToolSafety;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::process::Command;
+
+#[cfg(test)]
+use crate::core::Capability;
 
 const MAX_OUTPUT_LINES: usize = 250;
 
@@ -24,40 +24,76 @@ const BLOCKLIST: &[&str] = &[
     "chmod",
     "chown",
     "truncate",
+    ">",
+    ">>",
+    "| tee",
     "sudo",
     "su ",
-    "kill",
-    "pkill",
+    "su\t",
+    "doas",
+    "apt",
+    "apt-get",
+    "brew",
+    "pacman",
+    "yum",
+    "dnf",
+    "npm install",
+    "npm i ",
+    "npm un",
+    "npm update",
+    "yarn add",
+    "pnpm add",
+    "pip install",
+    "pip uninstall",
+    "cargo install",
+    "gem install",
+    "systemctl",
+    "service",
+    "kill ",
     "killall",
+    "pkill",
     "shutdown",
     "reboot",
-    "halt",
-    "pip install",
-    "npm install",
-    "cargo install",
-    "apt ",
-    "brew ",
-    "yum ",
-    "dnf ",
-    "pacman ",
-    "curl -x",
-    "curl --request",
+    "init ",
+    "curl -X POST",
+    "curl -X PUT",
+    "curl -X DELETE",
+    "curl -X PATCH",
+    "curl --data",
+    "curl -d ",
+    "curl -d\t",
+    "curl -F ",
+    "wget --post-data",
+];
+
+const ALLOWLIST_EXCEPTIONS: &[&str] = &[
+    "> /dev/null",
+    ">/dev/null",
+    "2>&1",
+    "2>",
+    "sed -i", // blocked specifically below; listed here so simple `sed` passes
 ];
 
 fn is_blocked(cmd: &str) -> bool {
     let lower = cmd.to_lowercase();
 
-    if lower.contains(">>")
-        || (lower.contains('>') && !lower.contains("2>&1") && !lower.contains("/dev/null"))
-    {
+    if lower.contains("sed -i") || lower.contains("sed --in-place") {
         return true;
     }
 
-    if lower.contains("sed") && lower.contains("-i") {
-        return true;
+    for pattern in BLOCKLIST {
+        let pat_lower = pattern.to_lowercase();
+        if lower.contains(&pat_lower) {
+            let is_exception = ALLOWLIST_EXCEPTIONS
+                .iter()
+                .any(|exc| lower.contains(exc) && !lower.contains("sed -i"));
+            if !is_exception {
+                return true;
+            }
+        }
     }
 
-    BLOCKLIST.iter().any(|b| lower.contains(b))
+    false
 }
 
 fn truncate(s: &str) -> String {
@@ -65,48 +101,38 @@ fn truncate(s: &str) -> String {
     if lines.len() <= MAX_OUTPUT_LINES {
         return s.to_string();
     }
-    let kept: Vec<&str> = lines[..MAX_OUTPUT_LINES].to_vec();
+
+    let kept = &lines[..MAX_OUTPUT_LINES];
     format!(
-        "{}\n... ({} lines truncated)",
+        "{}\n\n... (truncated: {} more lines omitted)",
         kept.join("\n"),
         lines.len() - MAX_OUTPUT_LINES
     )
 }
 
 #[derive(JsonSchema, Deserialize, Debug)]
-struct BashArgs {
-    /// The shell command to execute. Must be read-only and non-destructive.
+pub struct BashArgs {
+    /// Shell command to run. Read-only commands only.
     pub command: String,
 }
-impl FlatSchema for BashArgs {}
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct BashOutput {
     pub exit_code: i32,
     pub stdout: String,
     pub stderr: String,
 }
 
-pub struct Bash;
-
-impl Capability for Bash {
-    fn name(&self) -> &'static str {
-        "bash"
-    }
-
-    fn metadata(&self) -> ToolMetaData {
-        ToolMetaData {
-            name: self.name().into(),
-            description: BASH_DESCRIPTION.into(),
-            parameters: BashArgs::schema(),
-            safety: ToolSafety::Mutating,
-        }
-    }
-
-    fn execute(&self, args: Value) -> Result<String, ToolError> {
-        let args: BashArgs = serde_json::from_value(args)
-            .map_err(|e| ToolError::ArgumentsParsing { source: e.into() })?;
-
+define_tool! {
+    pub struct Bash;
+    safety = ToolSafety::Mutating;
+    /// Execute a read-only shell command and return JSON with stdout, stderr, and exit code.
+    /// Use for investigation: grep, find, cat, head, tail, awk, sed, wc, sort, uniq,
+    /// git (log, diff, blame, show, branch), docker (ps, logs, inspect),
+    /// ps, lsof, df, du, env, uname, ping, curl (GET/HEAD only), dig, ss.
+    /// Destructive commands are blocked (rm, mv, cp, chmod, sudo, install, write redirects).
+    /// Output capped at 250 lines.
+    fn bash(args: BashArgs) -> Result<String, ToolError> {
         if is_blocked(&args.command) {
             return Err(ToolError::ToolExecution {
                 source: anyhow::anyhow!(
@@ -128,7 +154,7 @@ impl Capability for Bash {
             stderr: truncate(&String::from_utf8_lossy(&output.stderr)),
         };
 
-        Ok(serde_json::to_string(&result).unwrap())
+        super::json_output(&result)
     }
 }
 
@@ -141,24 +167,20 @@ mod tests {
         Bash.execute(json!({ "command": cmd }))
     }
 
-    fn parse(result: &str) -> BashOutput {
-        serde_json::from_str(result).unwrap()
-    }
-
     #[test]
     fn runs_simple_command() {
         let result = run("echo hello").unwrap();
-        let out = parse(&result);
-        assert_eq!(out.exit_code, 0);
-        assert!(out.stdout.contains("hello"));
+        let output: BashOutput = serde_json::from_str(&result).unwrap();
+        assert_eq!(output.exit_code, 0);
+        assert!(output.stdout.contains("hello"));
     }
 
     #[test]
     fn captures_stderr() {
         let result = run("ls /nonexistent_path_xyz").unwrap();
-        let out = parse(&result);
-        assert_ne!(out.exit_code, 0);
-        assert!(!out.stderr.is_empty());
+        let output: BashOutput = serde_json::from_str(&result).unwrap();
+        assert_ne!(output.exit_code, 0);
+        assert!(!output.stderr.is_empty());
     }
 
     #[test]
@@ -187,13 +209,19 @@ mod tests {
     fn allows_sed_without_inplace() {
         let result = run("echo 'hello world' | sed 's/hello/hi/'");
         assert!(result.is_ok());
-        let out = parse(&result.unwrap());
-        assert!(out.stdout.contains("hi world"));
+        let output: BashOutput = serde_json::from_str(&result.unwrap()).unwrap();
+        assert!(output.stdout.contains("hi world"));
     }
 
     #[test]
     fn blocks_mv() {
         assert!(run("mv a.txt b.txt").is_err());
+    }
+
+    #[test]
+    fn rejects_missing_command_argument() {
+        let result = Bash.execute(json!({}));
+        assert!(matches!(result, Err(ToolError::ArgumentsParsing { .. })));
     }
 
     #[test]
@@ -216,16 +244,16 @@ mod tests {
     #[test]
     fn allows_grep() {
         let result = run("grep -r 'fn main' src/ --include='*.rs' -l").unwrap();
-        let out = parse(&result);
-        assert_eq!(out.exit_code, 0);
+        let output: BashOutput = serde_json::from_str(&result).unwrap();
+        assert!(output.stdout.contains("src/"));
     }
 
     #[test]
     fn truncates_long_output() {
         let cmd = format!("seq 1 {}", MAX_OUTPUT_LINES + 100);
         let result = run(&cmd).unwrap();
-        let out = parse(&result);
-        assert!(out.stdout.contains("truncated"));
+        let output: BashOutput = serde_json::from_str(&result).unwrap();
+        assert!(output.stdout.contains("truncated"));
     }
 
     #[test]

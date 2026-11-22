@@ -31,7 +31,7 @@ impl OpenAiRequest {
         let messages = session
             .events
             .iter()
-            .flat_map(|e| Vec::<Message>::from(e))
+            .flat_map(Vec::<Message>::from)
             .collect();
 
         OpenAiRequest {

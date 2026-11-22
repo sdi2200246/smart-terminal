@@ -66,15 +66,12 @@ mod tests {
     struct Script {
         pub _script: String,
     }
-    impl FlatSchema for Script {}
-
     #[derive(JsonSchema, Deserialize)]
     #[schemars(deny_unknown_fields)]
     struct NextCommand {
         pub _cmd: String,
         pub _man: String,
     }
-    impl FlatSchema for NextCommand {}
 
     fn final_answer_signal(schema: Value) -> FinalAnswerSignal {
         FinalAnswerSignal { properties: schema }

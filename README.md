@@ -142,7 +142,7 @@ Useful for anything you'd normally answer by poking around — what does this co
 | `src/multithreading` | Standalone producer-consumer background job pool (`JobEngine`, `JobStore`) executing blocking tool closures concurrently with semaphore bounding, panic isolation, and read-once eviction. |
 | `src/persistence` | File-backed implementations of core memory and investigation-session contracts. |
 | `src/providers` | `groq` and `google` clients, both built on the shared `providers::client::GenericLlmClient<ProviderCodec>` codec layer. |
-| `src/tools` | `Bash`, `ReadDir`, `ReadFile`, `Docker`, `GitDiff`, `AskUser`, `ReadLastError` — all implement `core::Capability`, with centralized LLM prompt descriptions and guidance in `src/tools/prompts.rs`. |
+| `src/tools` | `Bash`, `ReadDir`, `ReadFile`, `Docker`, `GitDiff`, `AskUser`, `ReadLastError` — all implement `core::Capability`. Normal tools use `define_tool!` from `src/core/capability.rs`; descriptions and optional guidance stay with each tool. |
 | `memory/` | Persistent JSON storage: next-command memory and separate project-keyed investigator conversations. |
 
 ### High-Level Code Flow

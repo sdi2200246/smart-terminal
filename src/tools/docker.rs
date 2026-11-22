@@ -1,14 +1,14 @@
 use super::error::ToolError;
-use super::prompts::{DOCKER_DESCRIPTION, DOCKER_GUIDANCE};
-use crate::core::{Capability, ToolMetaData, ToolSafety};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::path::Path;
 use std::process::Command;
 
+#[cfg(test)]
+use crate::core::Capability;
+
 const MAX_CONTAINERS: usize = 30;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 struct ContainerInfo {
     pub name: String,
     pub image: String,
@@ -16,7 +16,7 @@ struct ContainerInfo {
     pub ports: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 struct DockerStatus {
     pub docker_available: bool,
     pub daemon_running: bool,
@@ -24,87 +24,61 @@ struct DockerStatus {
     pub compose_in_cwd: bool,
 }
 
-pub struct Docker;
+define_tool! {
+    pub struct Docker;
+    guidance = "Call this tool if the user's intent involves Docker, Compose, containers, or names that act like containers (for example, 'restart db').";
+    /// Get the current Docker state on this machine: running and stopped
+    /// containers (name, image, status, ports), whether the docker daemon is up,
+    /// and whether a docker-compose file exists in the current directory. Returns
+    /// these details as a JSON object.
+    fn docker() -> Result<String, ToolError> {
+        let compose_in_cwd = Path::new("docker-compose.yml").exists()
+            || Path::new("compose.yml").exists()
+            || Path::new("docker-compose.yaml").exists();
 
-impl Capability for Docker {
-    fn name(&self) -> &'static str {
-        "docker"
-    }
+        // Probe the CLI. `docker version --format` is cheap and reports daemon status non-fatally.
+        let version_check = Command::new("docker")
+            .arg("version")
+            .arg("--format")
+            .arg("{{.Server.Version}}")
+            .output();
 
-    fn metadata(&self) -> ToolMetaData {
-        ToolMetaData {
-            name: self.name().into(),
-            description: DOCKER_DESCRIPTION.into(),
-            parameters: serde_json::json!({
-                "type": "object",
-                "properties": {}
-            }),
-            safety: ToolSafety::Safe,
-        }
-    }
+        let (docker_available, daemon_running) = match version_check {
+            Ok(out) => {
+                let stdout = String::from_utf8_lossy(&out.stdout);
+                let daemon_up = out.status.success() && !stdout.trim().is_empty();
+                (true, daemon_up)
+            }
+            Err(_) => (false, false),
+        };
 
-    fn prompt_guidance(&self) -> Option<&'static str> {
-        Some(DOCKER_GUIDANCE)
-    }
+        let containers = if docker_available && daemon_running {
+            let ps_output = Command::new("docker")
+                .args([
+                    "ps",
+                    "-a",
+                    "--format",
+                    "{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}",
+                ])
+                .output()
+                .map_err(|e| ToolError::ToolExecution {
+                    source: anyhow::anyhow!("[ERROR] {}", e),
+                })?;
 
-    fn execute(&self, args: Value) -> Result<String, ToolError> {
-        docker_status(args)
-    }
-}
+            parse_ps_output(&String::from_utf8_lossy(&ps_output.stdout))
+        } else {
+            Vec::new()
+        };
 
-pub fn docker_status(_args: Value) -> Result<String, ToolError> {
-    let compose_in_cwd = Path::new("docker-compose.yml").exists()
-        || Path::new("compose.yml").exists()
-        || Path::new("docker-compose.yaml").exists();
-
-    // Probe the CLI. `docker version --format` is cheap and reports daemon status non-fatally.
-    let version_check = Command::new("docker")
-        .arg("version")
-        .arg("--format")
-        .arg("{{.Server.Version}}")
-        .output();
-
-    let (docker_available, daemon_running) = match version_check {
-        Ok(out) => {
-            let stdout = String::from_utf8_lossy(&out.stdout);
-            let daemon_up = out.status.success() && !stdout.trim().is_empty();
-            (true, daemon_up)
-        }
-        Err(_) => (false, false),
-    };
-
-    if !docker_available || !daemon_running {
         let status = DockerStatus {
             docker_available,
             daemon_running,
-            containers: Vec::new(),
+            containers,
             compose_in_cwd,
         };
-        return Ok(serde_json::to_string(&status).unwrap());
+
+        super::json_output(&status)
     }
-
-    let ps_output = Command::new("docker")
-        .args([
-            "ps",
-            "-a",
-            "--format",
-            "{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}",
-        ])
-        .output()
-        .map_err(|e| ToolError::ToolExecution {
-            source: anyhow::anyhow!("[ERROR] {}", e),
-        })?;
-
-    let containers = parse_ps_output(&String::from_utf8_lossy(&ps_output.stdout));
-
-    let status = DockerStatus {
-        docker_available,
-        daemon_running,
-        containers,
-        compose_in_cwd,
-    };
-
-    Ok(serde_json::to_string(&status).unwrap())
 }
 
 fn parse_ps_output(raw: &str) -> Vec<ContainerInfo> {
@@ -129,11 +103,7 @@ fn parse_ps_output(raw: &str) -> Vec<ContainerInfo> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
-
-    fn parse(result: &str) -> DockerStatus {
-        serde_json::from_str(result).unwrap()
-    }
+    use serde_json::{Value, json};
 
     #[test]
     fn parses_ps_tab_format() {
@@ -150,6 +120,58 @@ mod tests {
         assert_eq!(containers[1].name, "db");
         assert!(containers[1].status.contains("Exited"));
         assert!(containers[1].ports.is_empty());
+    }
+
+    #[test]
+    fn serializes_docker_status_and_container_details() {
+        let status = DockerStatus {
+            docker_available: true,
+            daemon_running: true,
+            containers: vec![ContainerInfo {
+                name: "web".to_string(),
+                image: "nginx:latest".to_string(),
+                status: "Up 2 hours".to_string(),
+                ports: "0.0.0.0:80->80/tcp".to_string(),
+            }],
+            compose_in_cwd: false,
+        };
+
+        let result = crate::tools::json_output(&status).unwrap();
+        assert_eq!(
+            serde_json::from_str::<Value>(&result).unwrap(),
+            json!({
+                "docker_available": true,
+                "daemon_running": true,
+                "compose_in_cwd": false,
+                "containers": [{
+                    "name": "web",
+                    "image": "nginx:latest",
+                    "status": "Up 2 hours",
+                    "ports": "0.0.0.0:80->80/tcp"
+                }]
+            })
+        );
+    }
+
+    #[test]
+    fn serializes_when_docker_is_unavailable() {
+        let status = DockerStatus {
+            docker_available: false,
+            daemon_running: false,
+            containers: Vec::new(),
+            compose_in_cwd: true,
+        };
+
+        let result = crate::tools::json_output(&status).unwrap();
+        assert_eq!(
+            serde_json::from_str::<Value>(&result).unwrap(),
+            json!({
+                "docker_available": false,
+                "daemon_running": false,
+                "compose_in_cwd": true,
+                "containers": []
+            })
+        );
     }
 
     #[test]
@@ -176,26 +198,15 @@ mod tests {
     #[ignore]
     fn live_docker_status() {
         let result = Docker.execute(json!({})).unwrap();
-        let status = parse(&result);
-
-        println!("docker_available: {}", status.docker_available);
-        println!("daemon_running:   {}", status.daemon_running);
-        println!("compose_in_cwd:   {}", status.compose_in_cwd);
-        println!("containers ({}):", status.containers.len());
-        for c in &status.containers {
-            println!(
-                "  • {} [{}] — {} | ports: {}",
-                c.name, c.image, c.status, c.ports
-            );
-        }
+        println!("{result}");
     }
 
     #[test]
     #[ignore]
-    fn returns_well_formed_json_when_daemon_down() {
+    fn returns_json_status_when_daemon_down() {
         // Just check that execute() never panics regardless of environment.
         let result = Docker.execute(json!({}));
         assert!(result.is_ok());
-        let _: DockerStatus = serde_json::from_str(&result.unwrap()).unwrap();
+        assert!(serde_json::from_str::<Value>(&result.unwrap()).is_ok());
     }
 }

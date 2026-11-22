@@ -1,3 +1,5 @@
+#[macro_use]
+mod macros;
 mod action_space;
 mod final_answer;
 mod scratchpad;

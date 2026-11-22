@@ -105,7 +105,6 @@ mod integration {
             pub man: String,
             pub scale: Reversibility,
         }
-        impl FlatSchema for NextCommand {}
 
         #[tokio::test]
         #[ignore = "requires GOOGLE_API_KEY"]

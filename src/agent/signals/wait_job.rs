@@ -1,12 +1,9 @@
-use super::{AgentLoopControl, AgentSignal, AgentSignalContext, AgentSignalOutcome};
-use crate::agent::prompts::{WAIT_JOB_DESCRIPTION, WAIT_JOB_GUIDANCE};
-use crate::core::{ToolMetaData, ToolSafety};
+use super::{AgentLoopControl, AgentSignalOutcome};
+use crate::agent::prompts::WAIT_JOB_GUIDANCE;
 use crate::multithreading::{JobStore, WaitOutcome};
 use crate::tools::ToolError;
-use crate::utils::FlatSchema;
 use schemars::JsonSchema;
 use serde::Deserialize;
-use serde_json::Value;
 use std::time::Duration;
 
 pub const WAIT_JOB_NAME: &str = "wait_job";
@@ -14,32 +11,39 @@ pub const WAIT_JOB_NAME: &str = "wait_job";
 #[derive(JsonSchema, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
-struct WaitJobArgs {
+pub struct WaitJobArgs {
     /// List of pending background Job IDs to wait for until they finish.
     #[schemars(length(min = 1))]
-    pub job_ids: Vec<String>,
+    job_ids: Vec<String>,
 }
-impl FlatSchema for WaitJobArgs {}
-
-pub struct WaitJobSignal;
-
-impl WaitJobSignal {
-    fn parse_args(args: Value) -> Result<WaitJobArgs, ToolError> {
-        let parsed = serde_json::from_value::<WaitJobArgs>(args).map_err(|e| {
-            ToolError::ArgumentsParsing {
-                source: anyhow::anyhow!("invalid wait_job arguments — {e}"),
-            }
-        })?;
-
-        if parsed.job_ids.is_empty() {
+define_signal! {
+    pub struct WaitJobSignal;
+    guidance = WAIT_JOB_GUIDANCE;
+    must_run_alone = true;
+    /// Block until one or more background jobs finish. Must be called alone — do not
+    /// combine with other signals in the same turn. Submit job IDs from previously
+    /// dispatched background tasks.
+    fn wait_job(args: WaitJobArgs, ctx: &mut AgentSignalContext<'_>) -> Result<AgentSignalOutcome, ToolError> {
+        if args.job_ids.is_empty() {
             return Err(ToolError::ArgumentsParsing {
                 source: anyhow::anyhow!("'job_ids' must not be empty"),
             });
         }
 
-        Ok(parsed)
-    }
+        let store = ctx.job_store.clone();
+        let outcomes = tokio::task::block_in_place(move || {
+            tokio::runtime::Handle::current().block_on(Self::wait_for_all(store, args.job_ids))
+        });
 
+        let text = Self::format_outcomes(&outcomes);
+        Ok(AgentSignalOutcome {
+            result: text,
+            control: AgentLoopControl::Continue,
+        })
+    }
+}
+
+impl WaitJobSignal {
     async fn wait_for_all(store: JobStore, job_ids: Vec<String>) -> Vec<(String, WaitOutcome)> {
         let mut out = Vec::with_capacity(job_ids.len());
         for id in job_ids {
@@ -67,55 +71,16 @@ impl WaitJobSignal {
     }
 }
 
-impl AgentSignal for WaitJobSignal {
-    fn name(&self) -> &'static str {
-        WAIT_JOB_NAME
-    }
-
-    fn must_run_alone(&self) -> bool {
-        true
-    }
-
-    fn metadata(&self) -> ToolMetaData {
-        ToolMetaData {
-            name: self.name().into(),
-            description: WAIT_JOB_DESCRIPTION.into(),
-            parameters: WaitJobArgs::schema(),
-            safety: ToolSafety::Safe,
-        }
-    }
-
-    fn prompt_guidance(&self) -> Option<&'static str> {
-        Some(WAIT_JOB_GUIDANCE)
-    }
-
-    fn handle(
-        &self,
-        args: Value,
-        ctx: &mut AgentSignalContext<'_>,
-    ) -> Result<AgentSignalOutcome, ToolError> {
-        let parsed = Self::parse_args(args)?;
-        let store = ctx.job_store.clone();
-
-        let outcomes = tokio::task::block_in_place(move || {
-            tokio::runtime::Handle::current().block_on(Self::wait_for_all(store, parsed.job_ids))
-        });
-
-        let text = Self::format_outcomes(&outcomes);
-        Ok(AgentSignalOutcome {
-            result: text,
-            control: AgentLoopControl::Continue,
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::agent::AgentBuilder;
+    use crate::agent::AgentSignal;
+    use crate::agent::AgentSignalContext;
     use crate::core::{Model, ModelName};
     use crate::multithreading::{JobEngine, JobState};
     use serde_json::json;
+    use serde_json::Value;
     use std::thread;
 
     fn run_wait_signal(store: &JobStore, args: Value) -> Result<AgentSignalOutcome, ToolError> {

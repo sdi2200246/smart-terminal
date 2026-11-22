@@ -121,7 +121,7 @@ async fn completes_partial_git_commit_openrouter() {
 
     let _ = run_case(
         "partial_commit_openrouter",
-        "git commit ",
+        "git commit -m",
         OpenRouterClient::pooled(),
     )
     .await;
