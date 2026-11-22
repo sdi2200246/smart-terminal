@@ -1,9 +1,6 @@
 use std::fmt;
-
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-
-use crate::utils::FlatSchema;
 
 #[derive(JsonSchema, Deserialize, Serialize, Debug)]
 #[schemars(deny_unknown_fields)]
@@ -25,7 +22,6 @@ pub struct NextCommand {
     /// How reversible the command is, given the current environment.
     pub scale: Reversibility,
 }
-impl FlatSchema for NextCommand {}
 
 impl fmt::Display for NextCommand {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -51,8 +47,6 @@ pub struct Plan {
     /// ordered, atomic investigation steps grounded in directory paths verified to exist.
     pub steps: Vec<PlanStep>,
 }
-impl FlatSchema for Plan {}
-
 impl fmt::Display for Plan {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let json = serde_json::to_string_pretty(self).map_err(|_| fmt::Error)?;
@@ -68,7 +62,6 @@ pub struct Report {
     /// The most likely next command the user wants to run, grounded in the investigation.
     pub recommended_command: NextCommand,
 }
-impl FlatSchema for Report {}
 
 impl fmt::Display for Report {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

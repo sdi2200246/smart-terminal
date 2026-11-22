@@ -3,13 +3,17 @@ use schemars::generate::SchemaSettings;
 use serde_json::Value;
 
 pub trait FlatSchema: JsonSchema {
+    fn schema() -> Value;
+}
+
+impl<T: JsonSchema> FlatSchema for T {
     fn schema() -> Value {
         let settings = SchemaSettings::draft07().with(|s| {
             s.inline_subschemas = true;
         });
-        let r#gen = settings.into_generator();
-        let schema = r#gen.into_root_schema_for::<Self>();
-        serde_json::to_value(schema).unwrap()
+        let generator = settings.into_generator();
+        let schema = generator.into_root_schema_for::<Self>();
+        serde_json::to_value(schema).unwrap_or(Value::Null)
     }
 }
 
@@ -32,9 +36,7 @@ mod tests {
         inner: Inner,
         list: Vec<Inner>,
     }
-
-    impl FlatSchema for Outer {}
-
+    
     #[test]
     fn strict_schema_adds_additional_properties_everywhere() {
         let schema = Outer::schema();

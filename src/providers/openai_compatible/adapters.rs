@@ -122,7 +122,7 @@ pub fn build_openai_structured_request(
     let messages = session
         .events
         .iter()
-        .flat_map(|e| Vec::<Message>::from(e))
+        .flat_map(Vec::<Message>::from)
         .collect();
 
     OpenAiRequest {

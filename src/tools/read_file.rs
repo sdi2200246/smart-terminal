@@ -1,14 +1,12 @@
 use super::error::ToolError;
-use super::prompts::READ_FILE_DESCRIPTION;
-use crate::core::{Capability, ToolMetaData, ToolSafety};
-use crate::utils::FlatSchema;
+use crate::core::{Capability, ToolMetaData};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
 
 #[derive(JsonSchema, Deserialize, Debug)]
-struct ReadFileArgs {
+pub struct ReadFileArgs {
     /// Path to the file to read, relative to cwd.
     pub path: String,
     /// First line to include (1-indexed). Defaults to 1.
@@ -16,37 +14,21 @@ struct ReadFileArgs {
     /// Last line to include (1-indexed, inclusive). Defaults to end of file.
     pub end: Option<usize>,
 }
-impl FlatSchema for ReadFileArgs {}
 
-#[derive(Serialize, Deserialize)]
-struct ReadFileOutput {
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ReadFileOutput {
     pub content: String,
     pub total_lines: usize,
     pub range: [usize; 2],
 }
 
-pub struct ReadFile;
-
-impl Capability for ReadFile {
-    fn name(&self) -> &'static str {
-        "read_file"
-    }
-
-    fn metadata(&self) -> ToolMetaData {
-        ToolMetaData {
-            name: self.name().into(),
-            description: READ_FILE_DESCRIPTION.into(),
-            parameters: ReadFileArgs::schema(),
-            safety: ToolSafety::Safe,
-        }
-    }
-
-    fn execute(&self, args: Value) -> Result<String, ToolError> {
-        let args: ReadFileArgs =
-            serde_json::from_value(args).map_err(|e| ToolError::ArgumentsParsing {
-                source: anyhow::anyhow!("[ERROR] {}", e),
-            })?;
-
+define_tool! {
+    pub struct ReadFile;
+    /// Read lines from a file. Returns the content within the requested
+    /// line range, total line count, and selected range as JSON. Use start/end
+    /// to window into large files.
+    /// Lines are 1-indexed and inclusive.
+    fn read_file(args: ReadFileArgs) -> Result<String, ToolError> {
         let raw = fs::read_to_string(&args.path).map_err(|e| ToolError::ToolExecution {
             source: anyhow::anyhow!("[ERROR] {}", e),
         })?;
@@ -63,7 +45,7 @@ impl Capability for ReadFile {
                 total_lines,
                 range: [start, end],
             };
-            return Ok(serde_json::to_string(&output).unwrap());
+            return super::json_output(&output);
         }
 
         let content = lines[(start - 1)..end].join("\n");
@@ -74,7 +56,7 @@ impl Capability for ReadFile {
             range: [start, end],
         };
 
-        Ok(serde_json::to_string(&output).unwrap())
+        super::json_output(&output)
     }
 }
 
@@ -83,6 +65,10 @@ mod tests {
     use super::*;
     use serde_json::json;
     use std::io::Write;
+
+    fn parse(result: &str) -> ReadFileOutput {
+        serde_json::from_str(result).unwrap()
+    }
 
     fn temp_file(content: &str) -> tempfile::NamedTempFile {
         let mut f = tempfile::NamedTempFile::new().unwrap();
@@ -97,11 +83,11 @@ mod tests {
         let result = tool
             .execute(json!({ "path": f.path().to_str().unwrap() }))
             .unwrap();
-        let out: ReadFileOutput = serde_json::from_str(&result).unwrap();
-        assert_eq!(out.total_lines, 5);
-        assert_eq!(out.range, [1, 5]);
-        assert!(out.content.contains("line1"));
-        assert!(out.content.contains("line5"));
+        let output = parse(&result);
+        assert_eq!(output.total_lines, 5);
+        assert_eq!(output.range, [1, 5]);
+        assert!(output.content.contains("line1"));
+        assert!(output.content.contains("line5"));
     }
 
     #[test]
@@ -115,10 +101,10 @@ mod tests {
                 "end": 4
             }))
             .unwrap();
-        let out: ReadFileOutput = serde_json::from_str(&result).unwrap();
-        assert_eq!(out.total_lines, 6);
-        assert_eq!(out.range, [2, 4]);
-        assert_eq!(out.content, "b\nc\nd");
+        let output = parse(&result);
+        assert_eq!(output.total_lines, 6);
+        assert_eq!(output.range, [2, 4]);
+        assert_eq!(output.content, "b\nc\nd");
     }
 
     #[test]
@@ -132,9 +118,10 @@ mod tests {
                 "end": 100
             }))
             .unwrap();
-        let out: ReadFileOutput = serde_json::from_str(&result).unwrap();
-        assert_eq!(out.total_lines, 3);
-        assert_eq!(out.range, [1, 3]);
+        let output = parse(&result);
+        assert_eq!(output.total_lines, 3);
+        assert_eq!(output.range, [1, 3]);
+        assert_eq!(output.content, "x\ny\nz");
     }
 
     #[test]
@@ -147,15 +134,16 @@ mod tests {
                 "start": 50
             }))
             .unwrap();
-        let out: ReadFileOutput = serde_json::from_str(&result).unwrap();
-        assert_eq!(out.total_lines, 2);
-        assert!(out.content.is_empty());
+        let output = parse(&result);
+        assert_eq!(output.total_lines, 2);
+        assert_eq!(output.range, [50, 2]);
+        assert!(output.content.is_empty());
     }
 
     #[test]
     fn nonexistent_file_errors() {
         let tool = ReadFile;
-        let result = tool.execute(json!({ "path": "/no/such/file.txt" }));
+        let result = tool.execute(json!({ "path": "/nonexistent/file/path" }));
         assert!(result.is_err());
     }
 }

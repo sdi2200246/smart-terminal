@@ -1,13 +1,12 @@
 use super::error::ToolError;
-use super::prompts::{READ_LAST_ERROR_DESCRIPTION, READ_LAST_ERROR_GUIDANCE};
-use crate::core::{Capability, ToolMetaData, ToolSafety};
+use crate::core::{Capability, ToolMetaData};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
 
 const MAX_CHARS: usize = 200;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct ReadLastErrorOutput {
     /// The actual error content.
     pub content: String,
@@ -15,30 +14,14 @@ struct ReadLastErrorOutput {
     pub truncated: bool,
 }
 
-pub struct ReadLastError;
-
-impl Capability for ReadLastError {
-    fn name(&self) -> &'static str {
-        "read_last_error"
-    }
-
-    fn metadata(&self) -> ToolMetaData {
-        ToolMetaData {
-            name: self.name().into(),
-            description: READ_LAST_ERROR_DESCRIPTION.into(),
-            parameters: serde_json::json!({
-                "type": "object",
-                "properties": {}
-            }),
-            safety: ToolSafety::Safe,
-        }
-    }
-
-    fn prompt_guidance(&self) -> Option<&'static str> {
-        Some(READ_LAST_ERROR_GUIDANCE)
-    }
-
-    fn execute(&self, _args: Value) -> Result<String, ToolError> {
+define_tool! {
+    pub struct ReadLastError;
+    guidance = "Read the captured stderr before answering when the user asks why a command failed, retries a likely failed command, or says a previously suggested command did not work. Base the correction on the captured error rather than guessing.";
+    /// Read the stderr output of the user's last shell command.
+    /// Returns JSON with the last 200 characters at most. `truncated` indicates
+    /// whether earlier output was cut off. Empty content means the last command
+    /// produced no errors.
+    fn read_last_error() -> Result<String, ToolError> {
         let path = std::env::var("ERR_LAST").map_err(|_| ToolError::ToolExecution {
             source: anyhow::anyhow!(
                 "[ERROR] ERR_LAST env var not set — is the shell hook installed?"
@@ -61,8 +44,7 @@ impl Capability for ReadLastError {
         };
 
         let output = ReadLastErrorOutput { content, truncated };
-
-        Ok(serde_json::to_string(&output).unwrap())
+        super::json_output(&output)
     }
 }
 
@@ -71,48 +53,73 @@ mod tests {
     use super::*;
     use serde_json::json;
     use std::io::Write;
+    use std::sync::Mutex;
 
-    fn temp_file(content: &str) -> tempfile::NamedTempFile {
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    fn write_temp(content: &str) -> tempfile::NamedTempFile {
         let mut f = tempfile::NamedTempFile::new().unwrap();
         f.write_all(content.as_bytes()).unwrap();
         f
     }
 
-    // NOTE: these tests mutate a process-global env var, so they can race
-    // under cargo test's parallel runner. Run with --test-threads=1
-    // or serialize them with the serial_test crate.
+    #[test]
+    fn missing_env_var_errors() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        unsafe { std::env::remove_var("ERR_LAST") };
+        let tool = ReadLastError;
+        let result = tool.execute(json!({}));
+        assert!(result.is_err());
+    }
 
     #[test]
     fn returns_full_content_when_under_limit() {
-        let f = temp_file("zsh: command not found: l\n");
-        unsafe {
-            std::env::set_var("ERR_LAST", f.path());
-        }
-        let result = ReadLastError.execute(json!({})).unwrap();
-        let out: ReadLastErrorOutput = serde_json::from_str(&result).unwrap();
-        assert!(!out.truncated);
-        assert!(out.content.contains("command not found"));
+        let _lock = ENV_LOCK.lock().unwrap();
+        let f = write_temp("short error message");
+        unsafe { std::env::set_var("ERR_LAST", f.path()) };
+
+        let tool = ReadLastError;
+        let result = tool.execute(json!({})).unwrap();
+        let output: ReadLastErrorOutput = serde_json::from_str(&result).unwrap();
+
+        assert_eq!(output.content, "short error message");
+        assert!(!output.truncated);
+
+        unsafe { std::env::remove_var("ERR_LAST") };
     }
 
     #[test]
     fn truncates_to_last_200_chars() {
-        let long = "a".repeat(300) + &"b".repeat(200);
-        let f = temp_file(&long);
-        unsafe {
-            std::env::set_var("ERR_LAST", f.path());
-        }
-        let result = ReadLastError.execute(json!({})).unwrap();
-        let out: ReadLastErrorOutput = serde_json::from_str(&result).unwrap();
-        assert!(out.truncated);
-        assert_eq!(out.content, "b".repeat(200));
+        let _lock = ENV_LOCK.lock().unwrap();
+        let prefix = "a".repeat(100);
+        let tail = "b".repeat(200);
+        let full = format!("{}{}", prefix, tail);
+
+        let f = write_temp(&full);
+        unsafe { std::env::set_var("ERR_LAST", f.path()) };
+
+        let tool = ReadLastError;
+        let result = tool.execute(json!({})).unwrap();
+        let output: ReadLastErrorOutput = serde_json::from_str(&result).unwrap();
+
+        assert_eq!(output.content, tail);
+        assert_eq!(output.content.chars().count(), 200);
+        assert!(output.truncated);
+
+        unsafe { std::env::remove_var("ERR_LAST") };
     }
 
     #[test]
-    fn missing_env_var_errors() {
-        unsafe {
-            std::env::remove_var("ERR_LAST");
-        }
-        let result = ReadLastError.execute(json!({}));
-        assert!(result.is_err());
+    fn serializes_empty_error_output() {
+        let output = ReadLastErrorOutput {
+            content: String::new(),
+            truncated: false,
+        };
+
+        let result = crate::tools::json_output(&output).unwrap();
+        assert_eq!(
+            serde_json::from_str::<Value>(&result).unwrap(),
+            serde_json::json!({"content": "", "truncated": false})
+        );
     }
 }

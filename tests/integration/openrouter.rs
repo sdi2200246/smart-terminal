@@ -114,8 +114,6 @@ mod integration {
         pub scale: Reversibility,
     }
 
-    impl FlatSchema for NextCommand {}
-
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     #[ignore = "requires OPENROUTER_API_KEY"]
     async fn structured_returns_valid_next_command() {

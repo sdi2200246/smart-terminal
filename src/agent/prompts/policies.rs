@@ -39,8 +39,6 @@ pub const SCRATCHPAD_DESCRIPTION: &str =
 
 pub const SCRATCHPAD_GUIDANCE: &str = "Before calling `final_answer`, you MUST call `update_scratchpad` with the complete updated state. Update it after every meaningful investigation milestone. Maintain a concise, durable summary of the main goal, completed milestones, current focus, and vital findings so the investigation can resume from it. Always submit the full updated scratchpad, not a partial patch. The scratchpad is working state, not the final response.";
 
-pub const WAIT_JOB_DESCRIPTION: &str = "Waits for all specified background job_ids to finish and returns their outputs in the order requested. Only call this after you have no other independent tool calls left to run. Must be called alone in its turn, never alongside other tool calls.";
-
 pub const WAIT_JOB_GUIDANCE: &str = "Do NOT call `wait_job` immediately after receiving a pending `Job ID` if you still have other independent investigation steps to perform. Continue calling other tools while the background job runs so slow commands do not stall your progress. Call `wait_job` only when you are blocked on the pending job's result or ready to finalize, and ALWAYS call it alone in its turn with no other tool or signal calls.";
 
 pub fn pending_job_message(threshold_secs: u64, job_id: &str, wait_job_name: &str) -> String {

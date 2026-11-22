@@ -48,7 +48,7 @@ impl FileInvestigationSessionStore {
             .load(&parent_root.to_string_lossy())?
             .unwrap_or_default();
         for child_root in &child_roots {
-            if merged.absorbed_roots.contains(&child_root) {
+            if merged.absorbed_roots.contains(child_root) {
                 continue;
             }
             if let Some(child_session) = self.load(&child_root.to_string_lossy())? {

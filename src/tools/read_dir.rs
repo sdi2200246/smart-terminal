@@ -1,40 +1,25 @@
 use super::error::ToolError;
-use super::prompts::READ_DIR_DESCRIPTION;
-use crate::core::{Capability, ToolMetaData, ToolSafety};
-use crate::utils::FlatSchema;
+use crate::core::{Capability, ToolMetaData};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::Value;
 
 #[derive(JsonSchema, Deserialize, Debug)]
-struct ReadDirArgs {
+pub struct ReadDirArgs {
     /// The directory path to read. Use '.' for current directory.
     pub path: String,
     /// Whether to read recursively. Defaults to false.
     pub recursive: bool,
 }
-impl FlatSchema for ReadDirArgs {}
 
-pub struct ReadDir;
-
-impl Capability for ReadDir {
-    fn name(&self) -> &'static str {
-        "read_dir"
-    }
-
-    fn metadata(&self) -> ToolMetaData {
-        ToolMetaData {
-            name: self.name().into(),
-            description: READ_DIR_DESCRIPTION.into(),
-            parameters: ReadDirArgs::schema(),
-            safety: ToolSafety::Safe,
-        }
-    }
-
-    fn execute(&self, args: Value) -> Result<String, ToolError> {
-        let args: ReadDirArgs = serde_json::from_value(args)
-            .map_err(|e| ToolError::ToolExecution { source: e.into() })?;
-
+define_tool! {
+    pub struct ReadDir;
+    /// Read the contents of a directory.
+    /// Set recursive to true to include all subdirectories.
+    /// Automatically excludes target/ and .git/ directories.
+    /// Only for reading directory structure — not for reading file contents.
+    /// Returns an error if the path is a file;
+    fn read_dir(args: ReadDirArgs) -> Result<String, ToolError> {
         let metadata = std::fs::metadata(&args.path).map_err(|e| ToolError::ToolExecution {
             source: anyhow::anyhow!("cannot access '{}': {}", args.path, e),
         })?;
@@ -87,7 +72,7 @@ mod tests {
         let tool = ReadDir;
         let result = tool.execute(json!({ "path": ".", "recursive": false }));
         assert!(result.is_ok());
-        println!("{}", result.unwrap());
+        assert!(!result.unwrap().is_empty());
     }
 
     #[test]
@@ -95,7 +80,7 @@ mod tests {
         let tool = ReadDir;
         let result = tool.execute(json!({ "path": "./src", "recursive": true }));
         assert!(result.is_ok());
-        println!("{}", result.unwrap());
+        assert!(!result.unwrap().is_empty());
     }
 
     #[test]
