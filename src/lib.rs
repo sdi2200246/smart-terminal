@@ -1,5 +1,6 @@
 pub mod agent;
 pub mod cli;
+#[macro_use]
 pub mod core;
 pub mod multithreading;
 pub mod persistence;

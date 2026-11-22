@@ -208,7 +208,9 @@ mod tests {
         Agent, AgentBuilder, AgentEvent, AgentLoopControl, AgentSignal, AgentSignalContext,
         AgentSignalOutcome, UpdateScratchpadSignal,
     };
-    use crate::core::{Capability, ConversationEvent, Model, ModelName, ToolMetaData, ToolSafety};
+    use crate::core::{Capability, ConversationEvent, Model, ModelName, NoArgs, ToolMetaData, ToolSafety};
+    use crate::define_tool;
+    use crate::define_signal;
     use crate::tools::ToolError;
     use serde_json::json;
     use std::sync::{
@@ -234,20 +236,10 @@ mod tests {
         }
     }
 
-    struct Boom;
-    impl Capability for Boom {
-        fn name(&self) -> &'static str {
-            "boom"
-        }
-        fn metadata(&self) -> ToolMetaData {
-            ToolMetaData {
-                name: self.name().into(),
-                description: "always fails".into(),
-                parameters: json!({"type":"object","properties":{}}),
-                safety: ToolSafety::Safe,
-            }
-        }
-        fn execute(&self, _args: Value) -> Result<String, ToolError> {
+    define_tool! {
+        pub struct Boom;
+        /// always fails
+        fn boom() -> Result<String, ToolError> {
             Err(ToolError::ToolExecution {
                 source: anyhow::anyhow!("boom failed"),
             })
@@ -279,20 +271,11 @@ mod tests {
         }
     }
 
-    struct Dangerous;
-    impl Capability for Dangerous {
-        fn name(&self) -> &'static str {
-            "bash"
-        }
-        fn metadata(&self) -> ToolMetaData {
-            ToolMetaData {
-                name: self.name().into(),
-                description: "dangerous mutating command".into(),
-                parameters: json!({"type":"object","properties":{}}),
-                safety: ToolSafety::Mutating,
-            }
-        }
-        fn execute(&self, _args: Value) -> Result<String, ToolError> {
+    define_tool! {
+        pub struct Dangerous;
+        safety = ToolSafety::Mutating;
+        /// dangerous mutating command
+        fn bash() -> Result<String, ToolError> {
             Ok("executed dangerous command".into())
         }
     }
@@ -671,24 +654,11 @@ mod tests {
         assert_eq!(agent.session.final_answer, Some(json!({"ok": true})));
     }
 
-    struct FailingSignal;
-    impl AgentSignal for FailingSignal {
-        fn name(&self) -> &'static str {
-            "failing_sig"
-        }
-        fn metadata(&self) -> ToolMetaData {
-            ToolMetaData {
-                name: self.name().into(),
-                description: "always fails".into(),
-                parameters: json!({"type":"object","properties":{}}),
-                safety: ToolSafety::Safe,
-            }
-        }
-        fn handle(
-            &self,
-            _args: Value,
-            _ctx: &mut AgentSignalContext<'_>,
-        ) -> Result<AgentSignalOutcome, ToolError> {
+    define_signal! {
+        pub struct FailingSignal;
+        /// always fails
+        fn failing_sig(args: NoArgs, ctx: &mut AgentSignalContext<'_>) -> Result<AgentSignalOutcome, ToolError> {
+            let _ = (args, ctx);
             Err(ToolError::ArgumentsParsing {
                 source: anyhow::anyhow!("signal bad input"),
             })
@@ -950,20 +920,10 @@ mod tests {
         }
     }
 
-    struct PanicTool;
-    impl Capability for PanicTool {
-        fn name(&self) -> &'static str {
-            "panic_tool"
-        }
-        fn metadata(&self) -> ToolMetaData {
-            ToolMetaData {
-                name: self.name().into(),
-                description: "always panics".into(),
-                parameters: json!({"type":"object","properties":{}}),
-                safety: ToolSafety::Safe,
-            }
-        }
-        fn execute(&self, _args: Value) -> Result<String, ToolError> {
+    define_tool! {
+        pub struct PanicTool;
+        /// always panics
+        fn panic_tool() -> Result<String, ToolError> {
             panic!("boom panic inside tool");
         }
     }

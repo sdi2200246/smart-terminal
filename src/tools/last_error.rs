@@ -1,8 +1,9 @@
 use super::error::ToolError;
-use crate::core::{Capability, ToolMetaData};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::fs;
+
+#[cfg(test)]
+use crate::core::Capability;
 
 const MAX_CHARS: usize = 200;
 
@@ -51,7 +52,7 @@ define_tool! {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
+    use serde_json::{Value, json};
     use std::io::Write;
     use std::sync::Mutex;
 

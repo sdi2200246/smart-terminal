@@ -1,8 +1,6 @@
-use super::{AgentLoopControl, AgentSignal, AgentSignalContext, AgentSignalOutcome};
+use super::{AgentLoopControl, AgentSignalOutcome};
 use crate::agent::prompts::SCRATCHPAD_GUIDANCE;
-use crate::core::{Scratchpad, ToolMetaData};
-use crate::tools::ToolError;
-use serde_json::Value;
+use crate::core::Scratchpad;
 
 define_signal! {
     pub struct UpdateScratchpadSignal;

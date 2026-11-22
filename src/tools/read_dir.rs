@@ -1,8 +1,9 @@
 use super::error::ToolError;
-use crate::core::{Capability, ToolMetaData};
 use schemars::JsonSchema;
 use serde::Deserialize;
-use serde_json::Value;
+
+#[cfg(test)]
+use crate::core::Capability;
 
 #[derive(JsonSchema, Deserialize, Debug)]
 pub struct ReadDirArgs {

@@ -1,11 +1,9 @@
-use super::{AgentLoopControl, AgentSignal, AgentSignalContext, AgentSignalOutcome};
+use super::{AgentLoopControl, AgentSignalOutcome};
 use crate::agent::prompts::WAIT_JOB_GUIDANCE;
-use crate::core::ToolMetaData;
 use crate::multithreading::{JobStore, WaitOutcome};
 use crate::tools::ToolError;
 use schemars::JsonSchema;
 use serde::Deserialize;
-use serde_json::Value;
 use std::time::Duration;
 
 pub const WAIT_JOB_NAME: &str = "wait_job";
@@ -13,7 +11,7 @@ pub const WAIT_JOB_NAME: &str = "wait_job";
 #[derive(JsonSchema, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 #[schemars(deny_unknown_fields)]
-struct WaitJobArgs {
+pub struct WaitJobArgs {
     /// List of pending background Job IDs to wait for until they finish.
     #[schemars(length(min = 1))]
     job_ids: Vec<String>,
@@ -77,9 +75,12 @@ impl WaitJobSignal {
 mod tests {
     use super::*;
     use crate::agent::AgentBuilder;
+    use crate::agent::AgentSignal;
+    use crate::agent::AgentSignalContext;
     use crate::core::{Model, ModelName};
     use crate::multithreading::{JobEngine, JobState};
     use serde_json::json;
+    use serde_json::Value;
     use std::thread;
 
     fn run_wait_signal(store: &JobStore, args: Value) -> Result<AgentSignalOutcome, ToolError> {

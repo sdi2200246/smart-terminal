@@ -1,9 +1,11 @@
 use super::error::ToolError;
-use crate::core::{Capability, ToolMetaData, ToolSafety};
+use crate::core::ToolSafety;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::process::Command;
+
+#[cfg(test)]
+use crate::core::Capability;
 
 const MAX_OUTPUT_LINES: usize = 250;
 
@@ -214,6 +216,12 @@ mod tests {
     #[test]
     fn blocks_mv() {
         assert!(run("mv a.txt b.txt").is_err());
+    }
+
+    #[test]
+    fn rejects_missing_command_argument() {
+        let result = Bash.execute(json!({}));
+        assert!(matches!(result, Err(ToolError::ArgumentsParsing { .. })));
     }
 
     #[test]

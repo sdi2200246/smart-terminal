@@ -1,9 +1,10 @@
 use super::error::ToolError;
-use crate::core::{Capability, ToolMetaData};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::fs;
+
+#[cfg(test)]
+use crate::core::Capability;
 
 #[derive(JsonSchema, Deserialize, Debug)]
 pub struct ReadFileArgs {

@@ -1,3 +1,4 @@
+#[macro_use]
 pub mod capability;
 pub mod error;
 pub mod folder_index;
@@ -7,7 +8,9 @@ pub mod model;
 pub mod responce;
 pub mod session;
 
-pub use capability::{Capability, ToolMetaData, ToolSafety};
+pub use capability::{
+    Capability, NoArgs, ToolMetaData, ToolSafety, parse_tool_arguments,
+};
 pub use error::{InternalError, ProviderError};
 pub use folder_index::FolderIndex;
 pub use llm_client::{AgentRequest, LLMProvider};

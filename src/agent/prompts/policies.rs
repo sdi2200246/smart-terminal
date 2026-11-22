@@ -10,14 +10,6 @@ pub const FINAL_ANSWER_TOOL: &str = r####"
 When you have completed the task, call `final_answer` once with the complete result in the required output shape. Do not call more tools after submitting the final answer.
 "####;
 
-pub const STRUCTURED_STOP: &str = r####"
-When you have completed the task, return the complete result in the required output shape and finish normally. Do not call `final_answer`; the runtime will pass the final payload through its structured-output flow.
-"####;
-
-pub const FINAL_ANSWER_OR_STRUCTURED_STOP: &str = r####"
-When you have completed the task, submit the complete result exactly once. If the `final_answer` tool is available, call it with the required output shape. Otherwise, return the complete result in the required output shape and finish normally so the runtime can use its structured-output flow. Do not submit the same result through both paths.
-"####;
-
 pub const STRUCTURING_SYSTEM_PROMPT: &str =
     "Your one and ONLY job is to return the following text into the scheema provided to you";
 
@@ -33,9 +25,6 @@ Treat provided context values as ground truth. Use only the fields present in th
 "####;
 
 pub const FINAL_ANSWER_DESCRIPTION: &str = "Submits the final, structured JSON response to the user. Use this tool when you have successfully gathered all required information and are ready to end the loop.";
-
-pub const SCRATCHPAD_DESCRIPTION: &str =
-    "Overwrite the working scratchpad with its complete updated state.";
 
 pub const SCRATCHPAD_GUIDANCE: &str = "Before calling `final_answer`, you MUST call `update_scratchpad` with the complete updated state. Update it after every meaningful investigation milestone. Maintain a concise, durable summary of the main goal, completed milestones, current focus, and vital findings so the investigation can resume from it. Always submit the full updated scratchpad, not a partial patch. The scratchpad is working state, not the final response.";
 
@@ -72,20 +61,4 @@ mod tests {
         assert!(FINAL_ANSWER_TOOL.contains("required output shape"));
     }
 
-    #[test]
-    fn structured_stop_policy_selects_the_runtime_structuring_flow() {
-        assert!(STRUCTURED_STOP.contains("Do not call `final_answer`"));
-        assert!(STRUCTURED_STOP.contains("structured-output flow"));
-    }
-
-    #[test]
-    fn combined_completion_policy_selects_one_supported_path() {
-        assert!(
-            FINAL_ANSWER_OR_STRUCTURED_STOP.contains("If the `final_answer` tool is available")
-        );
-        assert!(
-            FINAL_ANSWER_OR_STRUCTURED_STOP
-                .contains("Do not submit the same result through both paths")
-        );
-    }
 }

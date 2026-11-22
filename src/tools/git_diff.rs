@@ -1,7 +1,8 @@
 use super::error::ToolError;
-use crate::core::{Capability, ToolMetaData};
-use serde_json::Value;
 use std::process::Command;
+
+#[cfg(test)]
+use crate::core::Capability;
 
 define_tool! {
     pub struct GitDiffStaged;
