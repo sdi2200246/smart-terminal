@@ -15,8 +15,51 @@ The project is organized around a clean separation of concerns:
 - CLI entrypoints and command parsing
 - core abstractions for LLM providers, capabilities, and session state
 - workflow logic for each feature
-- provider-specific adapters for Groq and Google Gemini
+- provider-specific adapters for Groq, OpenRouter, and Google Gemini (with a shared OpenAI-compatible protocol layer)
 - reusable shell and filesystem tools
+
+## Architecture diagrams
+
+### Dependency & Layering Graph
+
+```mermaid
+flowchart TB
+    CLI["CLI Layer (src/cli) - Composition Root & Presenter"]
+    Agent["Agent Layer (src/agent) - Workflows, ReactLoop & ActionSpace"]
+    Jobs["Job Pool (src/multithreading) - Background Execution"]
+    Providers["Providers (src/providers) - Google, Groq & OpenRouter"]
+    Persistence["Persistence (src/persistence) - Memory & Sessions"]
+    Tools["Tools (src/tools) - Bash, Filesystem, Git, Docker"]
+    Core["Core (src/core) - Contracts & Domain Types"]
+
+    CLI --> Agent
+    CLI --> Providers
+    CLI --> Persistence
+    CLI --> Tools
+
+    Agent --> Jobs
+    Agent --> Core
+    Providers --> Core
+    Persistence --> Core
+    Tools --> Core
+```
+
+### Runtime & Tool Execution Flow
+
+```mermaid
+flowchart LR
+    Input["CLI Input"] --> Router["Router & Workflow"]
+    Router --> Agent["ReactLoop + ActionSpace"]
+    Agent --> LLM["LLM Provider"]
+    LLM --> Engine["ToolExecutionEngine"]
+
+    Engine -->|Signals| Signals["Control Signals (final_answer, scratchpad, wait_job)"]
+    Engine -->|Tools| Pool["JobEngine (<=1s inline, >1s Job ID)"]
+
+    Pool --> Agent
+    Signals -->|continue| Agent
+    Signals -->|final_answer| Output["Presenter & Zsh Handoff"]
+```
 
 ## High-level layering
 
@@ -33,9 +76,13 @@ Responsibilities:
 
 Main files:
 
-- `src/cli/cli.rs` — top-level command definitions
+- `src/main.rs`, `src/bin/sterm.rs` — `smart-terminal` and `sterm` binary entrypoints
+- `src/cli/cli.rs` — top-level command definitions (`next-cmd`, `memory`, `investigate` / `ask`)
+- `src/cli/entrypoint.rs` — Tokio runtime setup and `Router::dispatch`
+- `src/cli/agent_setup.rs` — `CliToolProvider` wiring concrete tools into workflows
 - `src/cli/cmds/*.rs` — command-specific execution entrypoints
-- `src/cli/presenters/*.rs` — output rendering
+- `src/cli/presenters/*.rs` — unified terminal rendering (`render.rs`), spinner, and approval prompts
+- `src/cli/suggestion_handoff.rs` — Zsh command handoff via `SMART_TERMINAL_SUGGESTION_DIR`
 
 ### 2. Core layer
 Location: `src/core`
@@ -101,10 +148,12 @@ Responsibilities:
 
 Current providers:
 
-- `src/providers/groq/*`
-- `src/providers/google/*`
+- `src/providers/groq/*` — Groq client and protocol (built on `openai_compatible`)
+- `src/providers/openrouter/*` — OpenRouter client and protocol (built on `openai_compatible`)
+- `src/providers/openai_compatible/*` — shared OpenAI-compatible request/response protocol, adapters, and errors
+- `src/providers/google/*` — Google Gemini client and protocol
 
-Both provider implementations share a codec/client abstraction via `providers::client`.
+All provider implementations share a codec/client abstraction (`GenericLlmClient<ProviderCodec>`) via `src/providers/client.rs`.
 
 ### 6. Tool layer
 Location: `src/tools`

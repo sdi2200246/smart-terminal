@@ -2,7 +2,7 @@
  
 An AI-powered shell companion that predicts your next command and investigates your codebase and shell environment.
  
-Built in Rust. Uses provider-specific LLMs via Groq and Google Gemini.
+Built in Rust. Uses provider-specific LLMs via Groq, OpenRouter, and Google Gemini.
 
 <img width="1088" height="60" alt="image" src="https://github.com/user-attachments/assets/daada4f4-38dd-44af-a8cc-31634c140816" />
 
@@ -141,7 +141,7 @@ Useful for anything you'd normally answer by poking around — what does this co
 | `src/agent` | `agent::workflows` (NextCmd, Investigator), `agent::agents` (`AgentBuilder`, planner, executor, cmd_predictor), `agent::signals` (`ActionSpace`, `final_answer`, `update_scratchpad`, `wait_job`), reusable prompt composition in `agent::prompts`, and loop/execution patterns (`ReactLoop`, `ToolExecutionEngine`, `SignalDispatcher`, `ToolDispatcher`). |
 | `src/multithreading` | Standalone producer-consumer background job pool (`JobEngine`, `JobStore`) executing blocking tool closures concurrently with semaphore bounding, panic isolation, and read-once eviction. |
 | `src/persistence` | File-backed implementations of core memory and investigation-session contracts. |
-| `src/providers` | `groq` and `google` clients, both built on the shared `providers::client::GenericLlmClient<ProviderCodec>` codec layer. |
+| `src/providers` | `groq`, `openrouter`, and `google` clients built on `providers::client::GenericLlmClient<ProviderCodec>`, with `groq` and `openrouter` sharing `openai_compatible`. |
 | `src/tools` | `Bash`, `ReadDir`, `ReadFile`, `Docker`, `GitDiff`, `AskUser`, `ReadLastError` — all implement `core::Capability`. Normal tools use `define_tool!` from `src/core/capability.rs`; descriptions and optional guidance stay with each tool. |
 | `memory/` | Persistent JSON storage: next-command memory and separate project-keyed investigator conversations. |
 
