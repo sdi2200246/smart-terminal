@@ -82,88 +82,38 @@ $ smart-terminal memory delete
 ```
 
 ### `investigate` — answer questions about your project
- 
+
 Pose a question; a planner agent forms a plan, an executor agent runs it against your filesystem and shell, and you get a grounded answer.
 
-Investigation resumes the project's saved planner and executor conversations by default, including their tool calls, results, and Gemini thought signatures. This initial implementation uses the current Gemini provider and does not support switching providers/models for a saved session. Use `--one-off` to avoid loading or changing the saved conversation:
+Investigation resumes the project's saved session by default (using Google Gemini). Use `--one-off` to run without loading or saving history, or `sterm ask` as a shorter alias:
 
 ```bash
 $ smart-terminal investigate --one-off "What does this repository do?"
+$ sterm ask "Why is this test failing?"
 $ smart-terminal investigate session clear
 ```
 
-You can also use the shorter `sterm` executable name and `ask` command alias:
-
-```bash
-$ sterm ask --one-off "What does this repository do?"
-```
-
-The original `smart-terminal investigate` command remains supported.
-
-The conversation is stored separately from `next-cmd` memory and keyed by the project path. A resumed run receives a fresh tool-step budget; old calls do not count against it.
- 
-
 https://github.com/user-attachments/assets/5ac577fa-13b1-421b-a1a2-649fb0c95211
- 
-The planner uses `read_dir` to orient and emits a structured plan as JSON. The executor consumes that plan and runs it with `bash`, `read_dir`, and `read_file`, maintaining a durable scratchpad summary with `update_scratchpad` as it investigates. Its prompt instructs the executor to update the scratchpad before completing; this is prompt guidance, not runtime enforcement.
 
-The saved scratchpad is sent to the model on subsequent requests, but conversation history is not automatically compacted yet. The summary is available to support future compaction; it does not currently replace or truncate older conversation events.
+Every investigation also suggests a follow-up command (shown as ghost text with the Zsh integration, or printed after the report). Useful for exploring unfamiliar codebases, checking git state, debugging failing tests, or comparing branches.
 
-Every investigation includes the command the executor predicts you are most likely to run next, based on the findings and context. It can include state-changing commands when those best match your intent. With the Zsh integration loaded, it appears as ghost text after the report; press `^F` to accept it or `^B` to dismiss it. It is never run automatically: after accepting, review it and press Enter to execute. Without the integration, the command is printed normally after the report.
-
-#### Zsh integration notes
-
-- The integration must be loaded in the **interactive shell that runs the command**. After changing `scripts/zsh/smart-terminal.zsh`, source it again or start a new shell.
-- The executable and shell script must use the same version of the `next-cmd` output protocol. If the shell reports `outdated next-cmd output`, rebuild/reinstall `smart-terminal` and reload the script.
-- The output protocol sends a version marker, a one-line explanation, and the reversibility level first; all remaining output is the command. This allows multiline commands and here-documents. Do not add output after the command payload.
-- `^F` accepts the command only. The explanation and reversibility color are display metadata and are not inserted into the command buffer.
-- Investigator handoff uses the same fields and protocol in a private temporary directory. Zsh consumes the handoff on the next prompt; it is not extracted from or mixed into the printed report.
- 
-Useful for anything you'd normally answer by poking around — what does this codebase do, where is X implemented, what's installed on this machine, what's the git state, why is this test failing, what changed between two branches.
- 
-> Under active development. The planner sometimes over- or under-scopes, the executor occasionally repeats steps. Both will sharpen.
-> **Provider rate limits**: `investigate` uses Google Gemini and chains multiple LLM calls across the planner and executor, while `next-cmd` uses Groq and may make additional calls when inspecting git diffs or Docker state. Simple `next-cmd` completions stay fast. If a provider rate limit is reached, wait a few seconds and retry or review that provider's plan.
+> [!NOTE]
+> `investigate` chains multiple Gemini calls per run, while `next-cmd` uses Groq. If you hit a provider rate limit, wait a few seconds and retry.
+> For Zsh integration internals and session/scratchpad details, see [docs/architecture.md](docs/architecture.md).
 
 ## Architecture Overview
 
-<p align="center">
-<img width="680" height="540" alt="smart_terminal_dependency_graph_v4" src="https://github.com/user-attachments/assets/9c5cfc28-c376-4fa0-882f-1890f519d46c" />
-</p>
+`smart-terminal` separates terminal presentation (`src/cli`), agent reasoning (`src/agent`), background job execution (`src/multithreading`), LLM providers (`src/providers`), persistence (`src/persistence`), and system tools (`src/tools`) behind provider-agnostic contracts in `src/core`.
 
-`smart-terminal` is organized into a modular, layered architecture that separates terminal interaction, reasoning workflows, LLM integration, and system tooling. `src/cli` is the sole composition root — the only layer that wires concrete providers, tools, and memory together.
+- [Dependency & Layering Graph](docs/architecture.md#dependency--layering-graph)
+- [Runtime & Tool Execution Flow](docs/architecture.md#runtime--tool-execution-flow)
 
-### Core Layers
-
-| Layer | Responsibility |
-|---|---|
-| `src/cli` | Parses commands (`investigate`, `next_cmd`, `memory`) and streams tool-call output via `cli::presenters`. |
-| `src/core` | Provider-agnostic contracts: `LLMProvider`, `Capability`, `AgentSession`, `Model`, `Memory`, `InvestigationSessionStore`, error types. Never imports `agent`, `persistence`, `tools`, or `providers`. |
-| `src/agent` | `agent::workflows` (NextCmd, Investigator), `agent::agents` (`AgentBuilder`, planner, executor, cmd_predictor), `agent::signals` (`ActionSpace`, `final_answer`, `update_scratchpad`, `wait_job`), reusable prompt composition in `agent::prompts`, and loop/execution patterns (`ReactLoop`, `ToolExecutionEngine`, `SignalDispatcher`, `ToolDispatcher`). |
-| `src/multithreading` | Standalone producer-consumer background job pool (`JobEngine`, `JobStore`) executing blocking tool closures concurrently with semaphore bounding, panic isolation, and read-once eviction. |
-| `src/persistence` | File-backed implementations of core memory and investigation-session contracts. |
-| `src/providers` | `groq`, `openrouter`, and `google` clients built on `providers::client::GenericLlmClient<ProviderCodec>`, with `groq` and `openrouter` sharing `openai_compatible`. |
-| `src/tools` | `Bash`, `ReadDir`, `ReadFile`, `Docker`, `GitDiff`, `AskUser`, `ReadLastError` — all implement `core::Capability`. Normal tools use `define_tool!` from `src/core/capability.rs`; descriptions and optional guidance stay with each tool. |
-| `memory/` | Persistent JSON storage: next-command memory and separate project-keyed investigator conversations. |
-
-### High-Level Code Flow
-Every command follows the same call stack. `cli` is the composition root — it constructs the command's configured provider (`GroqClient` for `next-cmd`, `GoogleClient` for `investigate`) and hands it to the workflow. The workflow builds its agents via `AgentBuilder`, registering external tools (`Capability`) and internal control-plane signals (`AgentSignal`) into a unified `ActionSpace`, and delegates execution to `ReactLoop`.
-
-Inside each turn, `ToolExecutionEngine` decodes incoming model calls through `ActionSpace` and partitions the batch into control-plane signals (`SignalDispatcher`) and external tools (`ToolDispatcher`):
-- **Control-Plane Signals (`src/agent/signals`)**: Built-in runtime transitions (`final_answer`, `update_scratchpad`, `wait_job`) that mutate `AgentSession` or query `JobStore` directly without going through external tool permissions. Signals with `must_run_alone` (like `wait_job`) are enforced as synchronization barriers at decode time.
-- **Concurrent Background Tool Execution (`src/multithreading/job_pool`)**: `ToolDispatcher` dispatches approved tool calls concurrently to `JobEngine` and waits up to a 1-second threshold (`TOOL_WAIT_THRESHOLD`). Fast tools return their output in the same turn; slow tools (such as test suites or builds) stay running in the background and return a `Job ID` immediately, allowing the agent to continue reading files and advancing the investigation before calling `wait_job` to collect the result.
- 
-Persistence is composed by the CLI through core contracts. Investigation resumes from serialized planner and executor conversations, while next-command history remains a separate store. Core and workflows do not depend on the file format or storage backend.
- 
-The only thing that varies per command is what happens inside the workflow box:
- 
-| Command | Agents | Loop |
+| Command | Workflow | Provider |
 |---|---|---|
-| `next-cmd` | 1 — `cmd_predictor` | `ReactLoop` |
-| `investigate` | 2 — `planner` then `executor` | `ReactLoop` (shared) |
+| `next-cmd` | Single `cmd_predictor` agent (`ReactLoop`) | Groq |
+| `investigate` (`ask`) | `planner` → `executor` (`ReactLoop`) | Google Gemini |
 
-<p align="center">
-<img height="500" alt="smart_terminal_runtime_flow_clean" src="https://github.com/user-attachments/assets/17b9772b-a549-493f-aade-7859b931ac56" />
-</p>
+> Full layer breakdown, provider codec details (`groq`, `openrouter`, `google`), and extension points live in [docs/architecture.md](docs/architecture.md).
 
 ### Design Goals
 
